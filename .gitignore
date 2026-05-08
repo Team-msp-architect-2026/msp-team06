@@ -41,3 +41,12 @@ app-example
 # generated native folders
 /ios
 /android
+
+# 카카오맵 SDK 주입 스크립트 결과물
+dist/
+
+# 환경변수
+.env
+
+# serve 설정
+dist/serve.json

@@ -1,13 +1,19 @@
-// HomeLens AI - 메인화면 컴포넌트
-// 뉴스 데이터 실제 API 연동 완료
-// 지도/검색 API 연동은 카카오맵 도메인 등록 후 진행 예정
+// 메인화면 - 검색, 지도 탭, 뉴스 목록
 
-import React, { useEffect, useRef } from "react";
+import React, { useRef } from "react";
+import {
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+} from "react-native";
 import DropdownItem from "../components/DropdownItem";
 import IssueRow from "../components/IssueRow";
+import KakaoMap from "../components/KakaoMap";
 import { COLORS } from "../constants/colors";
 import { MAP_TAB_LABELS } from "../constants/mockData";
-import { S } from "../constants/styles";
 import { useNewsHighlights } from "../hooks/useNews";
 import { useRegionSearch } from "../hooks/useRegions";
 import { useAppStore } from "../store/useAppStore";
@@ -19,8 +25,14 @@ interface HomeScreenProps {
   go: (s: Screen) => void;
 }
 
+const NEWS_CATEGORY_LABELS: Record<string, string> = {
+  market: "시장",
+  policy: "정책",
+  development: "개발",
+  law: "법률",
+};
+
 const HomeScreen: React.FC<HomeScreenProps> = ({ mapTab, setMapTab, go }) => {
-  // Zustand 전역 상태에서 검색어 관리
   const {
     searchVal,
     setSearchVal,
@@ -29,139 +41,82 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ mapTab, setMapTab, go }) => {
     setListSearchVal,
   } = useAppStore();
 
-  const mapRef = useRef<HTMLDivElement | null>(null);
-
-  useEffect(() => {
-    if (!mapRef.current) return;
-
-    const initMap = () => {
-      const kakao = (window as any).kakao;
-      if (!kakao || !mapRef.current) return;
-      kakao.maps.load(() => {
-        const options = {
-          center: new kakao.maps.LatLng(37.5665, 126.978), // 서울 중심
-          level: 8,
-        };
-        new kakao.maps.Map(mapRef.current!, options);
-      });
-    };
-
-    if ((window as any).kakao) {
-      initMap();
-    } else {
-      setTimeout(initMap, 1000);
-    }
-  }, []);
+  const scrollRef = useRef<ScrollView>(null);
 
   const showDD = searchVal.length > 0;
-  // 실제 카카오맵 API 자동완성 검색
+
   const { data: searchData, isLoading: searchLoading } =
     useRegionSearch(searchVal);
 
-  // 실제 뉴스 API 데이터 조회
   const { data: newsData, isLoading: newsLoading } = useNewsHighlights();
 
-  const NEWS_CATEGORY_LABELS: Record<string, string> = {
-    market: "시장",
-    policy: "정책",
-    development: "개발",
-    law: "법률",
+  const handleSearch = async () => {
+    if (searchVal.trim().length === 0) return;
+    try {
+      const res = await fetch(
+        `http://10.0.2.2:8000/api/v1/regions/search?q=${encodeURIComponent(searchVal.trim())}&limit=1`,
+      );
+      const data = await res.json();
+      if (data && data.length > 0) {
+        const first = data[0];
+        if (first.propertyType === "area" && first.name === searchVal.trim()) {
+          setSelectedRegion({
+            regionId: first.regionId,
+            name: first.name,
+            fullAddress: first.fullAddress,
+            lat: first.lat,
+            lng: first.lng,
+          });
+          addRecentSearch(first.name);
+          setSearchVal("");
+          go("area");
+          return;
+        }
+      }
+    } catch (err) {
+      console.error(err);
+    }
+    setListSearchVal(searchVal);
+    go("list");
   };
 
   return (
-    <div style={S.scr}>
-      <div style={S.bar}>
-        <span style={S.logo}>HomeLens</span>
-      </div>
-      <div style={S.sc}>
-        <div style={{ padding: "14px 16px 4px" }}>
-          <div
-            style={{
-              fontSize: 17,
-              fontWeight: 500,
-              color: COLORS.textPrimary,
-              marginBottom: 3,
-            }}
-          >
-            어디서 살고 싶으세요?
-          </div>
-          <div style={{ fontSize: 12, color: COLORS.textSecondary }}>
-            동 이름이나 아파트명으로 검색
-          </div>
-        </div>
-        <div style={S.sb}>
-          <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
-            <circle
-              cx="6.5"
-              cy="6.5"
-              r="5"
-              stroke={COLORS.textTertiary}
-              strokeWidth="1.5"
-            />
-            <line
-              x1="10.5"
-              y1="10.5"
-              x2="14"
-              y2="14"
-              stroke={COLORS.textTertiary}
-              strokeWidth="1.5"
-              strokeLinecap="round"
-            />
-          </svg>
-          <input
-            style={S.sbInput}
+    <View style={styles.scr}>
+      {/* 상단 헤더 */}
+      <View style={styles.bar}>
+        <Text style={styles.logo}>HomeLens</Text>
+      </View>
+
+      <ScrollView
+        ref={scrollRef}
+        style={styles.sc}
+        showsVerticalScrollIndicator={false}
+        scrollEventThrottle={16}
+      >
+        {/* 검색 안내 텍스트 */}
+        <View style={{ padding: 14, paddingBottom: 4 }}>
+          <Text style={styles.title}>어디서 살고 싶으세요?</Text>
+          <Text style={styles.subtitle}>동 이름이나 아파트명으로 검색</Text>
+        </View>
+
+        {/* 검색창 */}
+        <View style={styles.sb}>
+          <TextInput
+            style={styles.sbInput}
             placeholder="성수동, 성수 롯데캐슬 파크..."
+            placeholderTextColor={COLORS.textTertiary}
             value={searchVal}
-            onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-              setSearchVal(e.target.value)
-            }
-            onKeyDown={async (e: React.KeyboardEvent<HTMLInputElement>) => {
-              if (e.key === "Enter" && searchVal.trim().length > 0) {
-                try {
-                  const res = await fetch(
-                    `http://localhost:8000/api/v1/regions/search?q=${encodeURIComponent(searchVal.trim())}&limit=1`,
-                  );
-                  const data = await res.json();
-                  if (data && data.length > 0) {
-                    const first = data[0];
-                    if (
-                      first.propertyType === "area" &&
-                      first.name === searchVal.trim()
-                    ) {
-                      setSelectedRegion({
-                        regionId: first.regionId,
-                        name: first.name,
-                        fullAddress: first.fullAddress,
-                        lat: first.lat,
-                        lng: first.lng,
-                      });
-                      addRecentSearch(first.name);
-                      setSearchVal("");
-                      go("area");
-                      return;
-                    }
-                  }
-                } catch (err) {
-                  console.error(err);
-                }
-                setListSearchVal(searchVal);
-                go("list");
-              }
-            }}
+            onChangeText={setSearchVal}
+            onSubmitEditing={handleSearch}
+            returnKeyType="search"
           />
-        </div>
+        </View>
+
+        {/* 자동완성 드롭다운 */}
         {showDD && (
-          <div style={S.dd}>
+          <View style={styles.dd}>
             {searchLoading && (
-              <div
-                style={{
-                  padding: "10px 12px",
-                  fontSize: 11,
-                  color: COLORS.textTertiary,
-                }}
-              >
-                검색 중...
-              </div>
+              <Text style={styles.loadingText}>검색 중...</Text>
             )}
             {searchData?.map((item, i) => (
               <DropdownItem
@@ -183,39 +138,52 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ mapTab, setMapTab, go }) => {
                 }}
               />
             ))}
-          </div>
+          </View>
         )}
-        <div style={S.mclb}>
-          <span style={S.mct}>{MAP_TAB_LABELS[mapTab]}</span>
-          <span style={S.mcs}>단지 단위 · 탭하면 분석 이동</span>
-        </div>
-        <div style={S.mtab}>
+
+        {/* 지도 탭 라벨 */}
+        <View style={styles.mclb}>
+          <Text style={styles.mct}>{MAP_TAB_LABELS[mapTab]}</Text>
+          <Text style={styles.mcs}>단지 단위 · 탭하면 분석 이동</Text>
+        </View>
+
+        {/* 지도 탭 버튼 */}
+        <View style={styles.mtab}>
           {["매매 거래량", "전세가율 낮은 곳", "월세 부담 낮은 곳"].map(
             (t, i) => (
-              <div
+              <TouchableOpacity
                 key={i}
-                style={{ ...S.mt, ...(mapTab === i ? S.mtOn : {}) }}
-                onClick={() => setMapTab(i)}
+                style={[styles.mt, mapTab === i && styles.mtOn]}
+                onPress={() => setMapTab(i)}
               >
-                {t}
-              </div>
+                <Text style={[styles.mtText, mapTab === i && styles.mtTextOn]}>
+                  {t}
+                </Text>
+              </TouchableOpacity>
             ),
           )}
-        </div>
-        <div ref={mapRef} style={{ ...S.mw, height: 192 }} />
+        </View>
 
-        <div style={S.sec}>
-          <div style={S.st}>최근 주요 이슈</div>
+        {/* 지도 영역 - 터치 시 스크롤 고정 */}
+        <View
+          onTouchStart={() =>
+            scrollRef.current?.setNativeProps({ scrollEnabled: false })
+          }
+          onTouchEnd={() =>
+            scrollRef.current?.setNativeProps({ scrollEnabled: true })
+          }
+          onTouchCancel={() =>
+            scrollRef.current?.setNativeProps({ scrollEnabled: true })
+          }
+        >
+          <KakaoMap lat={37.5665} lng={126.978} level={8} />
+        </View>
+
+        {/* 뉴스 목록 */}
+        <View style={styles.sec}>
+          <Text style={styles.st}>최근 주요 이슈</Text>
           {newsLoading && (
-            <div
-              style={{
-                fontSize: 11,
-                color: COLORS.textTertiary,
-                padding: "8px 0",
-              }}
-            >
-              뉴스 불러오는 중...
-            </div>
+            <Text style={styles.loadingText}>뉴스 불러오는 중...</Text>
           )}
           {newsData?.items.map((item, i) => (
             <IssueRow
@@ -230,11 +198,84 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ mapTab, setMapTab, go }) => {
               publishedAt={item.publishedAt}
             />
           ))}
-        </div>
-        <div style={{ height: 16 }} />
-      </div>
-    </div>
+        </View>
+        <View style={{ height: 16 }} />
+      </ScrollView>
+    </View>
   );
 };
+
+const styles = StyleSheet.create({
+  scr: { flex: 1, backgroundColor: "#F0EEE6" },
+  bar: {
+    paddingHorizontal: 16,
+    paddingVertical: 13,
+    borderBottomWidth: 0.5,
+    borderBottomColor: "#E8E5DA",
+    backgroundColor: "#FAF9F5",
+  },
+  logo: { fontSize: 19, fontWeight: "500", color: "#1A1A18" },
+  sc: { flex: 1 },
+  title: { fontSize: 17, fontWeight: "500", color: "#1A1A18", marginBottom: 3 },
+  subtitle: { fontSize: 12, color: "#6B6B66" },
+  sb: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#FAF9F5",
+    borderWidth: 1,
+    borderColor: "#D9D6CB",
+    borderRadius: 11,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    marginHorizontal: 16,
+    marginTop: 14,
+  },
+  sbInput: { flex: 1, fontSize: 13, color: "#1A1A18" },
+  dd: {
+    marginHorizontal: 16,
+    backgroundColor: "#FAF9F5",
+    borderWidth: 1,
+    borderColor: "#D9D6CB",
+    borderRadius: 11,
+    marginTop: 4,
+  },
+  loadingText: { fontSize: 11, color: "#9B9B95", padding: 10 },
+  mclb: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginHorizontal: 16,
+    marginTop: 10,
+  },
+  mct: { fontSize: 12, fontWeight: "500", color: "#1A1A18" },
+  mcs: { fontSize: 10, color: "#9B9B95" },
+  mtab: {
+    flexDirection: "row",
+    backgroundColor: "#F0EEE6",
+    borderRadius: 10,
+    padding: 3,
+    marginHorizontal: 16,
+    marginTop: 6,
+  },
+  mt: { flex: 1, alignItems: "center", paddingVertical: 6, borderRadius: 8 },
+  mtOn: {
+    backgroundColor: "#FAF9F5",
+    borderWidth: 0.5,
+    borderColor: "#E8E5DA",
+  },
+  mtText: { fontSize: 10, color: "#6B6B66" },
+  mtTextOn: { color: "#1A1A18", fontWeight: "500" },
+  mapPlaceholder: {
+    marginHorizontal: 16,
+    marginTop: 6,
+    height: 192,
+    backgroundColor: "#E8EEE4",
+    borderRadius: 14,
+    borderWidth: 0.5,
+    borderColor: "#E8E5DA",
+  },
+  sec: { marginTop: 10, paddingHorizontal: 16 },
+  st: { fontSize: 13, fontWeight: "500", color: "#1A1A18", marginBottom: 7 },
+});
 
 export default HomeScreen;

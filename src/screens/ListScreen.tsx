@@ -1,9 +1,14 @@
-// HomeLens AI - 검색 목록 화면 컴포넌트
+// 검색 목록 화면 - 검색어 기반 지역/단지 결과 목록 표시
 
 import React from "react";
+import {
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
 import DropdownItem from "../components/DropdownItem";
-import { COLORS } from "../constants/colors";
-import { S } from "../constants/styles";
 import { useRegionSearch } from "../hooks/useRegions";
 import { useAppStore } from "../store/useAppStore";
 import { Screen } from "../types";
@@ -18,28 +23,23 @@ const ListScreen: React.FC<ListScreenProps> = ({ go }) => {
   const { data: searchData, isLoading } = useRegionSearch(listSearchVal);
 
   return (
-    <div style={S.scr}>
-      <div style={S.bar}>
-        <span style={S.bk} onClick={() => go("home")}>
-          ‹
-        </span>
-        <span
-          style={{ fontSize: 13, fontWeight: 500, color: COLORS.textPrimary }}
-        >
-          &ldquo;{listSearchVal}&rdquo; 검색 결과
-        </span>
-      </div>
-      <div style={S.sc}>
-        <div
-          style={{
-            fontSize: 11,
-            color: COLORS.textSecondary,
-            padding: "8px 16px",
-          }}
-        >
+    <View style={styles.scr}>
+      {/* 상단 헤더 */}
+      <View style={styles.bar}>
+        <TouchableOpacity onPress={() => go("home")}>
+          <Text style={styles.bk}>‹</Text>
+        </TouchableOpacity>
+        <Text style={styles.title}>{`"${listSearchVal}" 검색 결과`}</Text>
+      </View>
+
+      <ScrollView style={styles.sc} showsVerticalScrollIndicator={false}>
+        {/* 검색 결과 수 */}
+        <Text style={styles.count}>
           {isLoading ? "검색 중..." : `총 ${searchData?.length || 0}개 결과`}
-        </div>
-        <div style={{ padding: "0 16px 16px" }}>
+        </Text>
+
+        {/* 검색 결과 목록 */}
+        <View style={styles.list}>
           {searchData?.map((item, i) => (
             <DropdownItem
               key={i}
@@ -61,21 +61,37 @@ const ListScreen: React.FC<ListScreenProps> = ({ go }) => {
             />
           ))}
           {!isLoading && (!searchData || searchData.length === 0) && (
-            <div
-              style={{
-                fontSize: 12,
-                color: COLORS.textTertiary,
-                textAlign: "center",
-                padding: "24px 0",
-              }}
-            >
-              검색 결과가 없습니다
-            </div>
+            <Text style={styles.empty}>검색 결과가 없습니다</Text>
           )}
-        </div>
-      </div>
-    </div>
+        </View>
+      </ScrollView>
+    </View>
   );
 };
+
+const styles = StyleSheet.create({
+  scr: { flex: 1, backgroundColor: "#F0EEE6" },
+  bar: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 16,
+    paddingVertical: 13,
+    borderBottomWidth: 0.5,
+    borderBottomColor: "#E8E5DA",
+    backgroundColor: "#FAF9F5",
+    gap: 10,
+  },
+  bk: { fontSize: 22, color: "#1A1A18" },
+  title: { fontSize: 13, fontWeight: "500", color: "#1A1A18" },
+  sc: { flex: 1 },
+  count: { fontSize: 11, color: "#6B6B66", padding: 8, paddingHorizontal: 16 },
+  list: { paddingHorizontal: 16, paddingBottom: 16 },
+  empty: {
+    fontSize: 12,
+    color: "#9B9B95",
+    textAlign: "center",
+    paddingVertical: 24,
+  },
+});
 
 export default ListScreen;

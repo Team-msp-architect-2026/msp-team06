@@ -19,12 +19,15 @@
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
       "edgeToEdgeEnabled": true,
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "package": "com.anonymous.homelens"
     },
     "web": {
       "output": "static",
       "favicon": "./assets/images/favicon.png",
-      "inject": ["./public/index.html"]
+      "inject": [
+        "./public/index.html"
+      ]
     },
     "plugins": [
       "expo-router",

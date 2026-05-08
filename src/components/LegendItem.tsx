@@ -1,8 +1,7 @@
-// HomeLens AI - 지도 색상 범례 아이템 컴포넌트
-// 단지 지도 하단 인프라 범례에서 사용
+// 지도 색상 범례 아이템 - 인프라 마커 범례에서 사용
 
 import React from "react";
-import { S } from "../constants/styles";
+import { StyleSheet, Text, View } from "react-native";
 
 interface LegendItemProps {
   color: string;
@@ -10,10 +9,16 @@ interface LegendItemProps {
 }
 
 const LegendItem: React.FC<LegendItemProps> = ({ color, label }) => (
-  <div style={S.legendItem}>
-    <span style={{ ...S.legendDot, background: color }} />
-    <span style={S.legendLabel}>{label}</span>
-  </div>
+  <View style={styles.legendItem}>
+    <View style={[styles.legendDot, { backgroundColor: color }]} />
+    <Text style={styles.legendLabel}>{label}</Text>
+  </View>
 );
+
+const styles = StyleSheet.create({
+  legendItem: { flexDirection: "row", alignItems: "center", marginRight: 10 },
+  legendDot: { width: 8, height: 8, borderRadius: 4, marginRight: 4 },
+  legendLabel: { fontSize: 10, color: "#6B6B66" },
+});
 
 export default LegendItem;

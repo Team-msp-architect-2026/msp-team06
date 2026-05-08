@@ -1,23 +1,34 @@
-// HomeLens AI - 최저/평균/최고가 3박스 통계 컴포넌트
-// 가격 분석 탭 차트 하단에 표시
+// 최저/평균/최고가 3박스 통계 - 가격 분석 탭 차트 하단에 표시
 
 import React from "react";
-import { S } from "../constants/styles";
+import { StyleSheet, Text, View } from "react-native";
 
 interface Stats3Props {
   items: [string, string][];
 }
 
 const Stats3: React.FC<Stats3Props> = ({ items }) => (
-  <div style={S.s3}>
-    {/* 통계 박스 렌더링 ([레이블, 값] 배열) */}
+  <View style={styles.s3}>
     {items.map(([l, v], i) => (
-      <div key={i} style={S.s3b}>
-        <div style={S.s3l}>{l}</div>
-        <div style={S.s3v}>{v}</div>
-      </div>
+      <View key={i} style={styles.s3b}>
+        <Text style={styles.s3l}>{l}</Text>
+        <Text style={styles.s3v}>{v}</Text>
+      </View>
     ))}
-  </div>
+  </View>
 );
+
+const styles = StyleSheet.create({
+  s3: { flexDirection: "row", gap: 6, marginTop: 8 },
+  s3b: {
+    flex: 1,
+    backgroundColor: "#F0EEE6",
+    borderRadius: 8,
+    padding: 8,
+    alignItems: "center",
+  },
+  s3l: { fontSize: 10, color: "#6B6B66", marginBottom: 2 },
+  s3v: { fontSize: 13, fontWeight: "600", color: "#1A1A18" },
+});
 
 export default Stats3;

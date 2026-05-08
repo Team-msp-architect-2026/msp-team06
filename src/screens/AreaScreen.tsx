@@ -1,11 +1,17 @@
-// HomeLens AI - 동 단위 결과 화면 컴포넌트
+// 동 단위 결과 화면 - 가격 정보, 지하철 노선, 지도, 이슈/AI리포트 탭
 
-import React, { useEffect, useRef } from "react";
+import React, { useRef } from "react";
+import {
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
 import AIReport from "../components/AIReport";
 import IssueCard from "../components/IssueCard";
-import { COLORS } from "../constants/colors";
+import KakaoMap from "../components/KakaoMap";
 import { RA_REPORT } from "../constants/mockData";
-import { S } from "../constants/styles";
 import { useIssues } from "../hooks/useAnalysis";
 import { useMapMarkers } from "../hooks/useMap";
 import { useAppStore } from "../store/useAppStore";
@@ -35,6 +41,8 @@ const AreaScreen: React.FC<AreaScreenProps> = ({
 }) => {
   const { selectedRegion } = useAppStore();
 
+  const scrollRef = useRef<ScrollView>(null);
+
   const { data: issuesData, isLoading: issuesLoading } = useIssues(
     selectedRegion?.regionId || "",
     selectedRegion?.name || "",
@@ -48,104 +56,7 @@ const AreaScreen: React.FC<AreaScreenProps> = ({
     2000,
   );
 
-  const mapRef = useRef<HTMLDivElement | null>(null);
-
-  useEffect(() => {
-    if (!selectedRegion?.lat || !selectedRegion?.lng || !mapRef.current) return;
-
-    const initMap = () => {
-      const kakao = (window as any).kakao;
-      if (!kakao || !mapRef.current) return;
-      kakao.maps.load(() => {
-        const options = {
-          center: new kakao.maps.LatLng(selectedRegion.lat, selectedRegion.lng),
-          level: 5,
-        };
-        const map = new kakao.maps.Map(mapRef.current!, options);
-
-        new kakao.maps.Marker({
-          position: new kakao.maps.LatLng(
-            selectedRegion.lat,
-            selectedRegion.lng,
-          ),
-          map,
-        });
-
-        if (markerData?.markers) {
-          markerData.markers
-            .filter((marker) => marker.markerType === "subway")
-            .forEach((marker) => {
-              if (marker.markerId.endsWith("_none")) return;
-              if (!marker.lat || !marker.lng) return;
-
-              const markerColors: Record<string, string> = {
-                subway: "#3CB44B",
-                mart: "#E67E22",
-                department: "#9B59B6",
-                hospital: "#E74C3C",
-                school: "#3498DB",
-              };
-
-              const color = markerColors[marker.markerType] || "#888";
-
-              const dotContent = document.createElement("div");
-              dotContent.style.cssText = `
-            width:12px;
-            height:12px;
-            background:${color};
-            border-radius:50%;
-            border:2px solid white;
-            box-shadow:0 1px 3px rgba(0,0,0,0.4);
-            cursor:pointer;
-          `;
-
-              const pos = new kakao.maps.LatLng(marker.lat, marker.lng);
-              const overlay = new kakao.maps.CustomOverlay({
-                position: pos,
-                content: dotContent,
-                yAnchor: 1,
-              });
-              overlay.setMap(map);
-
-              dotContent.addEventListener("click", () => {
-                const existing = document.getElementById(
-                  `area-label-${marker.markerId}`,
-                );
-                if (existing) {
-                  existing.remove();
-                  return;
-                }
-                const label = document.createElement("div");
-                label.id = `area-label-${marker.markerId}`;
-                label.style.cssText = `
-              position:absolute;
-              background:white;
-              border:1px solid #ddd;
-              border-radius:6px;
-              padding:3px 7px;
-              font-size:11px;
-              white-space:nowrap;
-              box-shadow:0 1px 4px rgba(0,0,0,0.2);
-              transform:translate(-50%, -130%);
-              pointer-events:none;
-            `;
-                label.innerText = marker.name;
-                dotContent.style.position = "relative";
-                dotContent.appendChild(label);
-              });
-            });
-        }
-      });
-    };
-
-    if ((window as any).kakao) {
-      initMap();
-    } else {
-      setTimeout(initMap, 1000);
-    }
-  }, [selectedRegion, markerData]);
-
-  // 지하철 노선만 추출 (중복 제거)
+  // 지하철 노선명 추출 (중복 제거)
   const subwayLines = Array.from(
     new Set(
       markerData?.markers
@@ -163,117 +74,129 @@ const AreaScreen: React.FC<AreaScreenProps> = ({
   );
 
   return (
-    <div style={S.scr}>
-      <div style={S.bar}>
-        <span style={S.bk} onClick={() => go("home")}>
-          ‹
-        </span>
-        <div>
-          <div
-            style={{ fontSize: 14, fontWeight: 500, color: COLORS.textPrimary }}
-          >
-            {selectedRegion?.name || ""}
-          </div>
-          <div style={{ fontSize: 10, color: COLORS.textSecondary }}>
+    <View style={styles.scr}>
+      {/* 상단 헤더 */}
+      <View style={styles.bar}>
+        <TouchableOpacity onPress={() => go("home")}>
+          <Text style={styles.bk}>‹</Text>
+        </TouchableOpacity>
+        <View>
+          <Text style={styles.regionName}>{selectedRegion?.name || ""}</Text>
+          <Text style={styles.regionAddr}>
             {selectedRegion?.fullAddress || ""}
-          </div>
-        </div>
-      </div>
-      <div style={S.sc}>
-        {/* 동 단위 가격 정보 카드 (매매/전세/월세/거래량) */}
-        <div style={S.scard}>
-          <div style={S.sr}>
-            <div style={S.si}>
-              <div style={S.sl}>매매 평균가</div>
-              <div style={S.sv}>8억 2천</div>
-              <div style={S.sd}>▲ 전월 +1.2%</div>
-            </div>
-            <div style={S.sp} />
-            <div style={S.si}>
-              <div style={S.sl}>전세 평균가</div>
-              <div style={S.sv}>5억 1천</div>
-            </div>
-          </div>
-          <div style={S.sdv} />
-          <div style={S.sr}>
-            <div style={S.si}>
-              <div style={S.sl}>월세 평균</div>
-              <div style={S.svsm}>보증금 1천/월 85만</div>
-            </div>
-            <div style={S.sp} />
-            <div style={S.si}>
-              <div style={S.sl}>이번달 거래량</div>
-              <div style={S.sv}>23건</div>
-              <div style={S.sd}>▲ 전월 +5건</div>
-            </div>
-          </div>
-          <div style={S.sdv} />
-          <div style={S.sl}>지하철 노선</div>
-          <div
-            style={{ display: "flex", gap: 5, marginTop: 5, flexWrap: "wrap" }}
-          >
+          </Text>
+        </View>
+      </View>
+
+      <ScrollView
+        ref={scrollRef}
+        style={styles.sc}
+        showsVerticalScrollIndicator={false}
+        scrollEventThrottle={16}
+      >
+        {/* 가격 정보 카드 */}
+        <View style={styles.scard}>
+          <View style={styles.sr}>
+            <View style={styles.si}>
+              <Text style={styles.sl}>매매 평균가</Text>
+              <Text style={styles.sv}>8억 2천</Text>
+              <Text style={styles.sd}>▲ 전월 +1.2%</Text>
+            </View>
+            <View style={styles.sp} />
+            <View style={styles.si}>
+              <Text style={styles.sl}>전세 평균가</Text>
+              <Text style={styles.sv}>5억 1천</Text>
+            </View>
+          </View>
+          <View style={styles.sdv} />
+          <View style={styles.sr}>
+            <View style={styles.si}>
+              <Text style={styles.sl}>월세 평균</Text>
+              <Text style={styles.svsm}>보증금 1천/월 85만</Text>
+            </View>
+            <View style={styles.sp} />
+            <View style={styles.si}>
+              <Text style={styles.sl}>이번달 거래량</Text>
+              <Text style={styles.sv}>23건</Text>
+              <Text style={styles.sd}>▲ 전월 +5건</Text>
+            </View>
+          </View>
+          <View style={styles.sdv} />
+
+          {/* 지하철 노선 */}
+          <Text style={styles.sl}>지하철 노선</Text>
+          <View style={styles.subwayRow}>
             {markerLoading ? (
-              <span style={{ fontSize: 11, color: COLORS.textTertiary }}>
-                불러오는 중...
-              </span>
+              <Text style={styles.loadingText}>불러오는 중...</Text>
             ) : subwayLines.length > 0 ? (
               subwayLines.map((line, i) => (
-                <span key={i} style={S.subwayTag}>
-                  {line} 통과
-                </span>
+                <View key={i} style={styles.subwayTag}>
+                  <Text style={styles.subwayTagText}>{line} 통과</Text>
+                </View>
               ))
             ) : (
-              <span style={{ fontSize: 11, color: COLORS.textTertiary }}>
-                반경 내 지하철 없음
-              </span>
+              <Text style={styles.loadingText}>반경 내 지하철 없음</Text>
             )}
-          </div>
-        </div>
+          </View>
+        </View>
 
-        {/* 카카오맵 SDK */}
-        <div ref={mapRef} style={{ ...S.mw, marginTop: 10, height: 180 }} />
+        {/* 지도 영역 - 터치 시 스크롤 고정 */}
+        <View
+          onTouchStart={() =>
+            scrollRef.current?.setNativeProps({ scrollEnabled: false })
+          }
+          onTouchEnd={() =>
+            scrollRef.current?.setNativeProps({ scrollEnabled: true })
+          }
+          onTouchCancel={() =>
+            scrollRef.current?.setNativeProps({ scrollEnabled: true })
+          }
+        >
+          <KakaoMap
+            lat={selectedRegion?.lat || 37.5665}
+            lng={selectedRegion?.lng || 126.978}
+            level={5}
+            markers={markerData?.markers
+              .filter((m) => m.markerType === "subway")
+              .map((m) => ({
+                lat: m.lat,
+                lng: m.lng,
+                type: m.markerType,
+                name: m.name,
+                markerId: m.markerId,
+              }))}
+          />
+        </View>
 
-        {/* 동 내 단지 목록 */}
-        <div style={S.cp}>
-          <div style={S.cpt}>아파트 목록</div>
-          <div style={S.cps}>거래량 순</div>
-          <div
-            style={{
-              fontSize: 11,
-              color: COLORS.textTertiary,
-              padding: "8px 0",
-            }}
-          >
+        {/* 아파트 목록 */}
+        <View style={styles.cp}>
+          <Text style={styles.cpt}>아파트 목록</Text>
+          <Text style={styles.cps}>
             국토부 API 연동 후 실제 단지 목록 표시 예정
-          </div>
-        </div>
+          </Text>
+        </View>
 
-        {/* 이슈 분석 / AI 리포트 탭 전환 */}
-        <div style={S.tabbar}>
+        {/* 탭 버튼 */}
+        <View style={styles.tabbar}>
           {["이슈 분석", "AI 리포트"].map((t, i) => (
-            <div
+            <TouchableOpacity
               key={i}
-              style={{ ...S.ti, ...(areaTab === i ? S.tiOn : {}) }}
-              onClick={() => setAreaTab(i)}
+              style={[styles.ti, areaTab === i && styles.tiOn]}
+              onPress={() => setAreaTab(i)}
             >
-              {t}
-            </div>
+              <Text style={[styles.tiText, areaTab === i && styles.tiTextOn]}>
+                {t}
+              </Text>
+            </TouchableOpacity>
           ))}
-        </div>
-        <div style={S.tc}>
-          {/* 이슈 분석 탭 */}
+        </View>
+
+        {/* 탭 콘텐츠 */}
+        <View style={styles.tc}>
           {areaTab === 0 && (
-            <div>
+            <View>
               {issuesLoading && (
-                <div
-                  style={{
-                    fontSize: 11,
-                    color: COLORS.textTertiary,
-                    padding: "8px 0",
-                  }}
-                >
-                  불러오는 중...
-                </div>
+                <Text style={styles.loadingText}>불러오는 중...</Text>
               )}
               {issuesData?.items.map((issue, i) => (
                 <IssueCard
@@ -292,20 +215,10 @@ const AreaScreen: React.FC<AreaScreenProps> = ({
               ))}
               {!issuesLoading &&
                 (!issuesData?.items || issuesData.items.length === 0) && (
-                  <div
-                    style={{
-                      fontSize: 12,
-                      color: COLORS.textTertiary,
-                      textAlign: "center",
-                      padding: "24px 0",
-                    }}
-                  >
-                    관련 이슈가 없습니다
-                  </div>
+                  <Text style={styles.emptyText}>관련 이슈가 없습니다</Text>
                 )}
-            </div>
+            </View>
           )}
-          {/* AI 리포트 탭 */}
           {areaTab === 1 && (
             <AIReport
               report={RA_REPORT}
@@ -313,10 +226,89 @@ const AreaScreen: React.FC<AreaScreenProps> = ({
               onGenerate={() => generate("ra")}
             />
           )}
-        </div>
-      </div>
-    </div>
+        </View>
+      </ScrollView>
+    </View>
   );
 };
+
+const styles = StyleSheet.create({
+  scr: { flex: 1, backgroundColor: "#F0EEE6" },
+  bar: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 16,
+    paddingVertical: 13,
+    borderBottomWidth: 0.5,
+    borderBottomColor: "#E8E5DA",
+    backgroundColor: "#FAF9F5",
+    gap: 10,
+  },
+  bk: { fontSize: 22, color: "#1A1A18" },
+  regionName: { fontSize: 14, fontWeight: "500", color: "#1A1A18" },
+  regionAddr: { fontSize: 10, color: "#6B6B66" },
+  sc: { flex: 1 },
+  scard: {
+    backgroundColor: "#FAF9F5",
+    borderRadius: 14,
+    borderWidth: 0.5,
+    borderColor: "#E8E5DA",
+    padding: 14,
+    margin: 10,
+    marginBottom: 0,
+  },
+  sr: { flexDirection: "row", alignItems: "flex-start" },
+  si: { flex: 1 },
+  sp: { width: 0.5, backgroundColor: "#E8E5DA", marginHorizontal: 10 },
+  sdv: { height: 0.5, backgroundColor: "#E8E5DA", marginVertical: 10 },
+  sl: { fontSize: 10, color: "#6B6B66", marginBottom: 2 },
+  sv: { fontSize: 16, fontWeight: "600", color: "#1A1A18" },
+  svsm: { fontSize: 12, fontWeight: "500", color: "#1A1A18" },
+  sd: { fontSize: 10, color: "#27AE60", marginTop: 1 },
+  subwayRow: { flexDirection: "row", flexWrap: "wrap", gap: 5, marginTop: 5 },
+  subwayTag: {
+    backgroundColor: "#E8F5E9",
+    borderRadius: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+  },
+  subwayTagText: { fontSize: 11, color: "#27AE60", fontWeight: "500" },
+  loadingText: { fontSize: 11, color: "#9B9B95" },
+  mapPlaceholder: {
+    margin: 10,
+    marginBottom: 0,
+    height: 180,
+    backgroundColor: "#E8EEE4",
+    borderRadius: 14,
+    borderWidth: 0.5,
+    borderColor: "#E8E5DA",
+  },
+  cp: { margin: 10, marginBottom: 0 },
+  cpt: { fontSize: 13, fontWeight: "500", color: "#1A1A18" },
+  cps: { fontSize: 11, color: "#9B9B95", marginTop: 4 },
+  tabbar: {
+    flexDirection: "row",
+    margin: 10,
+    marginBottom: 0,
+    backgroundColor: "#F0EEE6",
+    borderRadius: 10,
+    padding: 3,
+  },
+  ti: { flex: 1, alignItems: "center", paddingVertical: 7, borderRadius: 8 },
+  tiOn: {
+    backgroundColor: "#FAF9F5",
+    borderWidth: 0.5,
+    borderColor: "#E8E5DA",
+  },
+  tiText: { fontSize: 12, color: "#6B6B66" },
+  tiTextOn: { color: "#1A1A18", fontWeight: "500" },
+  tc: { padding: 10 },
+  emptyText: {
+    fontSize: 12,
+    color: "#9B9B95",
+    textAlign: "center",
+    paddingVertical: 24,
+  },
+});
 
 export default AreaScreen;

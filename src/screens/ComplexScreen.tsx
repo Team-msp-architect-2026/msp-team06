@@ -1,13 +1,19 @@
-// HomeLens AI - 단지 단위 결과 화면 컴포넌트
+// 단지 단위 결과 화면 - 가격 정보, 인프라 목록, 지도, 가격분석/이슈/AI리포트 탭
 
-import React, { useEffect, useRef } from "react";
+import React, { useRef } from "react";
+import {
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
 import AIReport from "../components/AIReport";
 import BarChart from "../components/BarChart";
 import IssueCard from "../components/IssueCard";
+import KakaoMap from "../components/KakaoMap";
 import Stats3 from "../components/Stats3";
-import { COLORS } from "../constants/colors";
 import { RC_REPORT } from "../constants/mockData";
-import { S } from "../constants/styles";
 import { useIssues } from "../hooks/useAnalysis";
 import { useMapMarkers } from "../hooks/useMap";
 import { useAppStore } from "../store/useAppStore";
@@ -64,6 +70,8 @@ const ComplexScreen: React.FC<ComplexScreenProps> = ({
 }) => {
   const { selectedRegion } = useAppStore();
 
+  const scrollRef = useRef<ScrollView>(null);
+
   const { data: markerData, isLoading: markerLoading } = useMapMarkers(
     selectedRegion?.regionId || "",
     selectedRegion?.lat || 0,
@@ -76,167 +84,62 @@ const ComplexScreen: React.FC<ComplexScreenProps> = ({
     selectedRegion?.name || "",
   );
 
-  const mapRef = useRef<HTMLDivElement | null>(null);
-
-  useEffect(() => {
-    if (!selectedRegion?.lat || !selectedRegion?.lng || !mapRef.current) return;
-
-    const initMap = () => {
-      const kakao = (window as any).kakao;
-      if (!kakao || !mapRef.current) return;
-      kakao.maps.load(() => {
-        const options = {
-          center: new kakao.maps.LatLng(selectedRegion.lat, selectedRegion.lng),
-          level: 3,
-        };
-        const map = new kakao.maps.Map(mapRef.current!, options);
-
-        // 단지 중심 마커
-        new kakao.maps.Marker({
-          position: new kakao.maps.LatLng(
-            selectedRegion.lat,
-            selectedRegion.lng,
-          ),
-          map,
-        });
-
-        // 인프라 마커
-        if (markerData?.markers) {
-          markerData.markers.forEach((marker) => {
-            if (marker.markerId.endsWith("_none")) return;
-            if (!marker.lat || !marker.lng) return;
-
-            const markerColors: Record<string, string> = {
-              subway: "#3CB44B",
-              mart: "#E67E22",
-              department: "#9B59B6",
-              hospital: "#E74C3C",
-              school: "#3498DB",
-            };
-
-            const color = markerColors[marker.markerType] || "#888";
-
-            const dotContent = document.createElement("div");
-            dotContent.style.cssText = `
-              width:12px;
-              height:12px;
-              background:${color};
-              border-radius:50%;
-              border:2px solid white;
-              box-shadow:0 1px 3px rgba(0,0,0,0.4);
-              cursor:pointer;
-            `;
-
-            const pos = new kakao.maps.LatLng(marker.lat, marker.lng);
-
-            const overlay = new kakao.maps.CustomOverlay({
-              position: pos,
-              content: dotContent,
-              yAnchor: 1,
-            });
-            overlay.setMap(map);
-
-            dotContent.addEventListener("click", () => {
-              // 기존 라벨 제거
-              const existing = document.getElementById(
-                `label-${marker.markerId}`,
-              );
-              if (existing) {
-                existing.remove();
-                return;
-              }
-
-              const label = document.createElement("div");
-              label.id = `label-${marker.markerId}`;
-              label.style.cssText = `
-                position:absolute;
-                background:white;
-                border:1px solid #ddd;
-                border-radius:6px;
-                padding:3px 7px;
-                font-size:11px;
-                white-space:nowrap;
-                box-shadow:0 1px 4px rgba(0,0,0,0.2);
-                transform:translate(-50%, -130%);
-                pointer-events:none;
-              `;
-              label.innerText = marker.name;
-              dotContent.style.position = "relative";
-              dotContent.appendChild(label);
-            });
-          });
-        }
-      });
-    };
-
-    if ((window as any).kakao) {
-      initMap();
-    } else {
-      setTimeout(initMap, 1000);
-    }
-  }, [selectedRegion, markerData]);
-
   return (
-    <div style={S.scr}>
-      <div style={S.bar}>
-        <span style={S.bk} onClick={() => go("area")}>
-          ‹
-        </span>
-        <div>
-          <div
-            style={{ fontSize: 14, fontWeight: 500, color: COLORS.textPrimary }}
-          >
-            {selectedRegion?.name || ""}
-          </div>
-          <div style={{ fontSize: 10, color: COLORS.textSecondary }}>
+    <View style={styles.scr}>
+      {/* 상단 헤더 */}
+      <View style={styles.bar}>
+        <TouchableOpacity onPress={() => go("area")}>
+          <Text style={styles.bk}>‹</Text>
+        </TouchableOpacity>
+        <View>
+          <Text style={styles.regionName}>{selectedRegion?.name || ""}</Text>
+          <Text style={styles.regionAddr}>
             {selectedRegion?.fullAddress || ""}
-          </div>
-        </div>
-      </div>
-      <div style={S.sc}>
-        {/* 단지 가격 정보 카드 */}
-        <div style={S.scard}>
-          <div style={S.sr}>
-            <div style={S.si}>
-              <div style={S.sl}>매매 평균가</div>
-              <div style={S.sv}>15억 2천</div>
-              <div style={S.sd}>▲ 전월 +2.1%</div>
-            </div>
-            <div style={S.sp} />
-            <div style={S.si}>
-              <div style={S.sl}>전세 평균가</div>
-              <div style={S.sv}>8억 5천</div>
-              <div
-                style={{
-                  fontSize: 10,
-                  color: COLORS.textTertiary,
-                  marginTop: 1,
-                }}
-              >
-                전세가율 56%
-              </div>
-            </div>
-          </div>
-          <div style={S.sdv} />
-          <div style={S.sr}>
-            <div style={S.si}>
-              <div style={S.sl}>월세 평균</div>
-              <div style={S.svsm}>보증금 2천/월 130만</div>
-            </div>
-            <div style={S.sp} />
-            <div style={S.si}>
-              <div style={S.sl}>이번달 거래량</div>
-              <div style={S.sv}>3건</div>
-              <div style={S.sd}>▲ 전월 +1건</div>
-            </div>
-          </div>
-          <div style={S.sdv} />
-          <div style={S.sl}>주변 인프라 (반경 1.5km)</div>
-          <div style={S.amenityList}>
+          </Text>
+        </View>
+      </View>
+
+      <ScrollView
+        ref={scrollRef}
+        style={styles.sc}
+        showsVerticalScrollIndicator={false}
+        scrollEventThrottle={16}
+      >
+        {/* 가격 정보 카드 */}
+        <View style={styles.scard}>
+          <View style={styles.sr}>
+            <View style={styles.si}>
+              <Text style={styles.sl}>매매 평균가</Text>
+              <Text style={styles.sv}>15억 2천</Text>
+              <Text style={styles.sd}>▲ 전월 +2.1%</Text>
+            </View>
+            <View style={styles.sp} />
+            <View style={styles.si}>
+              <Text style={styles.sl}>전세 평균가</Text>
+              <Text style={styles.sv}>8억 5천</Text>
+              <Text style={styles.tertiary}>전세가율 56%</Text>
+            </View>
+          </View>
+          <View style={styles.sdv} />
+          <View style={styles.sr}>
+            <View style={styles.si}>
+              <Text style={styles.sl}>월세 평균</Text>
+              <Text style={styles.svsm}>보증금 2천/월 130만</Text>
+            </View>
+            <View style={styles.sp} />
+            <View style={styles.si}>
+              <Text style={styles.sl}>이번달 거래량</Text>
+              <Text style={styles.sv}>3건</Text>
+              <Text style={styles.sd}>▲ 전월 +1건</Text>
+            </View>
+          </View>
+          <View style={styles.sdv} />
+
+          {/* 인프라 목록 */}
+          <Text style={styles.sl}>주변 인프라 (반경 1.5km)</Text>
+          <View style={styles.amenityList}>
             {markerLoading && (
-              <div style={{ fontSize: 11, color: COLORS.textTertiary }}>
-                불러오는 중...
-              </div>
+              <Text style={styles.loadingText}>불러오는 중...</Text>
             )}
             {markerData?.markers.map((marker, i) => {
               const isNone = marker.markerId.endsWith("_none");
@@ -256,67 +159,93 @@ const ComplexScreen: React.FC<ComplexScreenProps> = ({
                   : `${marker.distanceM}m`
                 : "";
               return (
-                <div key={i} style={S.amenityRow}>
-                  <span
-                    style={{
-                      ...S.amenityDot,
-                      background: isNone ? "#ccc" : color,
-                    }}
+                <View key={i} style={styles.amenityRow}>
+                  <View
+                    style={[
+                      styles.amenityDot,
+                      { backgroundColor: isNone ? "#ccc" : color },
+                    ]}
                   />
-                  <span style={S.amenityCat}>{label}</span>
-                  <span style={S.amenityName}>
+                  <Text style={styles.amenityCat}>{label}</Text>
+                  <Text style={styles.amenityName}>
                     {isNone ? "반경 내 없음" : marker.name}
-                  </span>
-                  <span style={S.amenityDist}>{dist}</span>
-                </div>
+                  </Text>
+                  <Text style={styles.amenityDist}>{dist}</Text>
+                </View>
               );
             })}
-          </div>
-        </div>
+          </View>
+        </View>
 
-        {/* 단지 지도 SVG 주석처리 */}
-        {/*
-        <div style={{ ...S.mw, marginTop: 10 }}>
-          <svg width="288" height="180" viewBox="0 0 288 180">
-            ...
-          </svg>
-          <div style={S.legend}>...</div>
-        </div>
-        */}
+        {/* 지도 영역 - 터치 시 스크롤 고정 */}
+        <View
+          onTouchStart={() =>
+            scrollRef.current?.setNativeProps({ scrollEnabled: false })
+          }
+          onTouchEnd={() =>
+            scrollRef.current?.setNativeProps({ scrollEnabled: true })
+          }
+          onTouchCancel={() =>
+            scrollRef.current?.setNativeProps({ scrollEnabled: true })
+          }
+        >
+          <KakaoMap
+            lat={selectedRegion?.lat || 37.5665}
+            lng={selectedRegion?.lng || 126.978}
+            level={3}
+            markers={markerData?.markers.map((m) => ({
+              lat: m.lat,
+              lng: m.lng,
+              type: m.markerType,
+              name: m.name,
+              markerId: m.markerId,
+            }))}
+          />
+        </View>
 
-        {/* 카카오맵 SDK */}
-        <div ref={mapRef} style={{ ...S.mw, marginTop: 10, height: 180 }} />
-
-        {/* 가격 분석 / 이슈 분석 / AI 리포트 탭 전환 */}
-        <div style={S.tabbar}>
+        {/* 탭 버튼 */}
+        <View style={styles.tabbar}>
           {["가격 분석", "이슈 분석", "AI 리포트"].map((t, i) => (
-            <div
+            <TouchableOpacity
               key={i}
-              style={{ ...S.ti, ...(cxTab === i ? S.tiOn : {}) }}
-              onClick={() => setCxTab(i)}
+              style={[styles.ti, cxTab === i && styles.tiOn]}
+              onPress={() => setCxTab(i)}
             >
-              {t}
-            </div>
+              <Text style={[styles.tiText, cxTab === i && styles.tiTextOn]}>
+                {t}
+              </Text>
+            </TouchableOpacity>
           ))}
-        </div>
-        <div style={S.tc}>
+        </View>
+
+        {/* 탭 콘텐츠 */}
+        <View style={styles.tc}>
           {/* 가격 분석 탭 */}
           {cxTab === 0 && (
-            <>
-              <div style={S.ptog}>
+            <View>
+              <View style={styles.ptog}>
                 {["매매", "전세", "월세"].map((p, i) => (
-                  <button
+                  <TouchableOpacity
                     key={i}
-                    style={{ ...S.ptb, ...(priceTab === i ? S.ptbOn : {}) }}
-                    onClick={() => setPriceTab(i)}
+                    style={[styles.ptb, priceTab === i && styles.ptbOn]}
+                    onPress={() => setPriceTab(i)}
                   >
-                    {p}
-                  </button>
+                    <Text
+                      style={[
+                        styles.ptbText,
+                        priceTab === i && styles.ptbTextOn,
+                      ]}
+                    >
+                      {p}
+                    </Text>
+                  </TouchableOpacity>
                 ))}
-              </div>
+              </View>
               {priceTab === 0 && (
-                <div>
-                  <div style={S.chartTitle}>매매가 추이 (최근 6개월)</div>
+                <View>
+                  <Text style={styles.chartTitle}>
+                    매매가 추이 (최근 6개월)
+                  </Text>
                   <BarChart idx={0} />
                   <Stats3
                     items={[
@@ -325,11 +254,13 @@ const ComplexScreen: React.FC<ComplexScreenProps> = ({
                       ["최고가", "15.2억"],
                     ]}
                   />
-                </div>
+                </View>
               )}
               {priceTab === 1 && (
-                <div>
-                  <div style={S.chartTitle}>전세가 추이 (최근 6개월)</div>
+                <View>
+                  <Text style={styles.chartTitle}>
+                    전세가 추이 (최근 6개월)
+                  </Text>
                   <BarChart idx={1} />
                   <Stats3
                     items={[
@@ -338,24 +269,33 @@ const ComplexScreen: React.FC<ComplexScreenProps> = ({
                       ["최고가", "8.5억"],
                     ]}
                   />
-                </div>
+                </View>
               )}
               {priceTab === 2 && (
-                <div>
-                  <div style={S.rtog}>
+                <View>
+                  <View style={styles.rtog}>
                     {["월세 추이", "보증금 추이"].map((r, i) => (
-                      <button
+                      <TouchableOpacity
                         key={i}
-                        style={{ ...S.rtb, ...(rentTab === i ? S.rtbOn : {}) }}
-                        onClick={() => setRentTab(i)}
+                        style={[styles.rtb, rentTab === i && styles.rtbOn]}
+                        onPress={() => setRentTab(i)}
                       >
-                        {r}
-                      </button>
+                        <Text
+                          style={[
+                            styles.rtbText,
+                            rentTab === i && styles.rtbTextOn,
+                          ]}
+                        >
+                          {r}
+                        </Text>
+                      </TouchableOpacity>
                     ))}
-                  </div>
+                  </View>
                   {rentTab === 0 ? (
-                    <div>
-                      <div style={S.chartTitle}>월세 추이 (최근 6개월)</div>
+                    <View>
+                      <Text style={styles.chartTitle}>
+                        월세 추이 (최근 6개월)
+                      </Text>
                       <BarChart idx={2} />
                       <Stats3
                         items={[
@@ -364,10 +304,12 @@ const ComplexScreen: React.FC<ComplexScreenProps> = ({
                           ["최고", "165만"],
                         ]}
                       />
-                    </div>
+                    </View>
                   ) : (
-                    <div>
-                      <div style={S.chartTitle}>보증금 추이 (최근 6개월)</div>
+                    <View>
+                      <Text style={styles.chartTitle}>
+                        보증금 추이 (최근 6개월)
+                      </Text>
                       <BarChart idx={3} />
                       <Stats3
                         items={[
@@ -376,25 +318,18 @@ const ComplexScreen: React.FC<ComplexScreenProps> = ({
                           ["최고", "5,000만"],
                         ]}
                       />
-                    </div>
+                    </View>
                   )}
-                </div>
+                </View>
               )}
-            </>
+            </View>
           )}
+
           {/* 이슈 분석 탭 */}
           {cxTab === 1 && (
-            <div>
+            <View>
               {issuesLoading && (
-                <div
-                  style={{
-                    fontSize: 11,
-                    color: COLORS.textTertiary,
-                    padding: "8px 0",
-                  }}
-                >
-                  불러오는 중...
-                </div>
+                <Text style={styles.loadingText}>불러오는 중...</Text>
               )}
               {issuesData?.items.map((issue, i) => (
                 <IssueCard
@@ -413,19 +348,11 @@ const ComplexScreen: React.FC<ComplexScreenProps> = ({
               ))}
               {!issuesLoading &&
                 (!issuesData?.items || issuesData.items.length === 0) && (
-                  <div
-                    style={{
-                      fontSize: 12,
-                      color: COLORS.textTertiary,
-                      textAlign: "center",
-                      padding: "24px 0",
-                    }}
-                  >
-                    관련 이슈가 없습니다
-                  </div>
+                  <Text style={styles.emptyText}>관련 이슈가 없습니다</Text>
                 )}
-            </div>
+            </View>
           )}
+
           {/* AI 리포트 탭 */}
           {cxTab === 2 && (
             <AIReport
@@ -434,10 +361,112 @@ const ComplexScreen: React.FC<ComplexScreenProps> = ({
               onGenerate={() => generate("rc")}
             />
           )}
-        </div>
-      </div>
-    </div>
+        </View>
+      </ScrollView>
+    </View>
   );
 };
+
+const styles = StyleSheet.create({
+  scr: { flex: 1, backgroundColor: "#F0EEE6" },
+  bar: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 16,
+    paddingVertical: 13,
+    borderBottomWidth: 0.5,
+    borderBottomColor: "#E8E5DA",
+    backgroundColor: "#FAF9F5",
+    gap: 10,
+  },
+  bk: { fontSize: 22, color: "#1A1A18" },
+  regionName: { fontSize: 14, fontWeight: "500", color: "#1A1A18" },
+  regionAddr: { fontSize: 10, color: "#6B6B66" },
+  sc: { flex: 1 },
+  scard: {
+    backgroundColor: "#FAF9F5",
+    borderRadius: 14,
+    borderWidth: 0.5,
+    borderColor: "#E8E5DA",
+    padding: 14,
+    margin: 10,
+    marginBottom: 0,
+  },
+  sr: { flexDirection: "row", alignItems: "flex-start" },
+  si: { flex: 1 },
+  sp: { width: 0.5, backgroundColor: "#E8E5DA", marginHorizontal: 10 },
+  sdv: { height: 0.5, backgroundColor: "#E8E5DA", marginVertical: 10 },
+  sl: { fontSize: 10, color: "#6B6B66", marginBottom: 2 },
+  sv: { fontSize: 16, fontWeight: "600", color: "#1A1A18" },
+  svsm: { fontSize: 12, fontWeight: "500", color: "#1A1A18" },
+  sd: { fontSize: 10, color: "#27AE60", marginTop: 1 },
+  tertiary: { fontSize: 10, color: "#9B9B95", marginTop: 1 },
+  loadingText: { fontSize: 11, color: "#9B9B95" },
+  amenityList: { marginTop: 6 },
+  amenityRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 4,
+  },
+  amenityDot: { width: 8, height: 8, borderRadius: 4, marginRight: 6 },
+  amenityCat: { fontSize: 11, color: "#6B6B66", width: 50 },
+  amenityName: { flex: 1, fontSize: 11, color: "#1A1A18", fontWeight: "500" },
+  amenityDist: { fontSize: 11, color: "#9B9B95" },
+  mapPlaceholder: {
+    margin: 10,
+    marginBottom: 0,
+    height: 180,
+    backgroundColor: "#E8EEE4",
+    borderRadius: 14,
+    borderWidth: 0.5,
+    borderColor: "#E8E5DA",
+  },
+  tabbar: {
+    flexDirection: "row",
+    margin: 10,
+    marginBottom: 0,
+    backgroundColor: "#F0EEE6",
+    borderRadius: 10,
+    padding: 3,
+  },
+  ti: { flex: 1, alignItems: "center", paddingVertical: 7, borderRadius: 8 },
+  tiOn: {
+    backgroundColor: "#FAF9F5",
+    borderWidth: 0.5,
+    borderColor: "#E8E5DA",
+  },
+  tiText: { fontSize: 12, color: "#6B6B66" },
+  tiTextOn: { color: "#1A1A18", fontWeight: "500" },
+  tc: { padding: 10 },
+  ptog: { flexDirection: "row", marginBottom: 10 },
+  ptb: {
+    flex: 1,
+    alignItems: "center",
+    paddingVertical: 6,
+    borderRadius: 8,
+    backgroundColor: "#F0EEE6",
+  },
+  ptbOn: { backgroundColor: "#1A1A18" },
+  ptbText: { fontSize: 12, color: "#6B6B66" },
+  ptbTextOn: { color: "white", fontWeight: "500" },
+  rtog: { flexDirection: "row", marginBottom: 10 },
+  rtb: {
+    flex: 1,
+    alignItems: "center",
+    paddingVertical: 6,
+    borderRadius: 8,
+    backgroundColor: "#F0EEE6",
+  },
+  rtbOn: { backgroundColor: "#1A1A18" },
+  rtbText: { fontSize: 12, color: "#6B6B66" },
+  rtbTextOn: { color: "white", fontWeight: "500" },
+  chartTitle: { fontSize: 12, color: "#6B6B66", marginBottom: 8 },
+  emptyText: {
+    fontSize: 12,
+    color: "#9B9B95",
+    textAlign: "center",
+    paddingVertical: 24,
+  },
+});
 
 export default ComplexScreen;
