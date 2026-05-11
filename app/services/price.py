@@ -2,15 +2,15 @@
 # 국토부 실거래가 API 연동 및 데이터 가공
 
 import httpx
+import xmltodict
 from app.core.config import settings
 
-# 국토부 API 엔드포인트
 MOLIT_SALE_URL = "http://apis.data.go.kr/1613000/RTMSDataSvcAptTradeDev"
 MOLIT_RENT_URL = "https://apis.data.go.kr/1613000/RTMSDataSvcAptRent"
 
 
 async def fetch_sale_price(lawd_cd: str, deal_ymd: str) -> dict:
-    # 아파트 매매 실거래가 조회
+    # 아파트 매매 실거래가 조회 (XML 응답 파싱)
     params = {
         "serviceKey": settings.molit_api_key,
         "LAWD_CD": lawd_cd,
@@ -18,14 +18,14 @@ async def fetch_sale_price(lawd_cd: str, deal_ymd: str) -> dict:
         "numOfRows": 1000,
         "pageNo": 1,
     }
-    async with httpx.AsyncClient() as client:
+    async with httpx.AsyncClient(timeout=30.0) as client:
         response = await client.get(MOLIT_SALE_URL, params=params)
         response.raise_for_status()
-        return response.json()
+        return xmltodict.parse(response.text)
 
 
 async def fetch_rent_price(lawd_cd: str, deal_ymd: str) -> dict:
-    # 아파트 전월세 실거래가 조회
+    # 아파트 전월세 실거래가 조회 (XML 응답 파싱)
     params = {
         "serviceKey": settings.molit_api_key,
         "LAWD_CD": lawd_cd,
@@ -33,7 +33,7 @@ async def fetch_rent_price(lawd_cd: str, deal_ymd: str) -> dict:
         "numOfRows": 1000,
         "pageNo": 1,
     }
-    async with httpx.AsyncClient() as client:
+    async with httpx.AsyncClient(timeout=30.0) as client:
         response = await client.get(MOLIT_RENT_URL, params=params)
         response.raise_for_status()
-        return response.json()
+        return xmltodict.parse(response.text)
