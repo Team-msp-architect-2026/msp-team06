@@ -8,7 +8,7 @@ AWS_REGION = os.environ.get("AWS_REGION", "eu-west-3")
 S3_BUCKET = os.environ.get("S3_BUCKET", "")
 
 s3_client = boto3.client("s3", region_name=AWS_REGION)
-secretsmanager = boto3.client("secretmanager", region_news=AWS_REGION)
+secretsmanager = boto3.client("secretsmanager", region_name=AWS_REGION)
 
 
 def get_db_connection():
@@ -59,11 +59,33 @@ def parse_prices(price_data: list, deal_type: str) -> dict:
     if not prices:
         return {}
 
+    min_p = min(prices)
+    max_p = max(prices)
+    avg_p = sum(prices) // len(prices)
+    mid_p = (min_p + max_p) / 2
+
+    volatility = (max_p - min_p) / avg_p if avg_p else 0
+    if volatility < 0.2:
+        price_stability_grade = "stable"
+    elif volatility < 0.5:
+        price_stability_grade = "normal"
+    else:
+        price_stability_grade = "volatile"
+
+    if avg_p < mid_p * 0.9:
+        price_level = "low"
+    elif avg_p > mid_p * 1.1:
+        price_level = "high"
+    else:
+        price_level = "avg"
+
     return {
-        "min_price": min(prices),
-        "max_price": max(prices),
-        "avg_price": sum(prices) // len(prices),
+        "min_price": min_p,
+        "max_price": max_p,
+        "avg_price": avg_p,
         "trade_count": len(prices),
+        "price_stability_grade": price_stability_grade,
+        "price_level": price_level,
         "trade_signal": (
             "active" if len(prices) >= 10
             else "normal" if len(prices) >= 3
@@ -89,8 +111,8 @@ def save_price_snapshot(conn, region_id: str, stats: dict, deal_type: str, data_
                 region_id,
                 stats["avg_price"],
                 stats["trade_count"],
-                "normal",
-                "avg",
+                stats["price_stability_grade"],
+                stats["price_level"],
                 data_base_date,
             ))
         elif deal_type == "jeonse":
@@ -106,8 +128,8 @@ def save_price_snapshot(conn, region_id: str, stats: dict, deal_type: str, data_
                 region_id,
                 stats["avg_price"],
                 stats["trade_count"],
-                "normal",
-                "avg",
+                stats["price_stability_grade"],
+                stats["price_level"],
                 data_base_date,
             ))
         elif deal_type == "monthly":
@@ -123,8 +145,8 @@ def save_price_snapshot(conn, region_id: str, stats: dict, deal_type: str, data_
                 region_id,
                 stats["avg_price"],
                 stats["trade_count"],
-                "normal",
-                "avg",
+                stats["price_stability_grade"],
+                stats["price_level"],
                 data_base_date,
             ))
 

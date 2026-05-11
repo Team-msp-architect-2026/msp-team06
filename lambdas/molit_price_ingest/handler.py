@@ -6,9 +6,11 @@ molit_price_ingest/handler.py
 - price-ingest-queue로 DB 저장 요청 전송
 - timeout: 900s (Lambda 최대)
 
-TODO: API 신청 후 아래 항목 입력 필요
-- 공공데이터포털(data.go.kr)에서 API 키 발급
-- Secrets Manager에 키 저장
+배포 전 1회 수동 작업:
+  공공데이터포털(data.go.kr)에서 API 키 발급 후 Secrets Manager에 저장
+  aws secretsmanager put-secret-value \
+    --secret-id homelens/{env}/molit/real-estate-api \
+    --secret-string '{"api_key":"발급받은키"}'
 """
 import json
 import os
@@ -28,12 +30,9 @@ s3_client = boto3.client("s3", region_name=AWS_REGION)
 sqs_client = boto3.client("sqs", region_name=AWS_REGION)
 secretsmanager = boto3.client("secretsmanager", region_name=AWS_REGION)
 
-# ── 국토부 API 엔드포인트 ──────────────────────────────────────
-# TODO: 공공데이터포털(data.go.kr) 신청 후 실제 URL 입력
-# 1. 국토교통부_아파트매매 실거래 상세 자료 검색 후 엔드포인트 확인
-# 2. 국토교통부_아파트 전월세 자료 검색 후 엔드포인트 확인
+# 국토부 실거래가 API 엔드포인트 (공공데이터포털 RTMSDataSvc 계열)
 MOLIT_API_URLS = {
-    "sale":    "http://apis.data.go.kr/1613000/RTMSDataSvcAptTradeDev",   # 매매
+    "sale":    "https://apis.data.go.kr/1613000/RTMSDataSvcAptTradeDev",  # 매매
     "jeonse":  "https://apis.data.go.kr/1613000/RTMSDataSvcAptRent",      # 전세
     "monthly": "https://apis.data.go.kr/1613000/RTMSDataSvcAptRent",      # 월세 (같은 엔드포인트)
 }
