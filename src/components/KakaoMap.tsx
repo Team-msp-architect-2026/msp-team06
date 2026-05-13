@@ -47,6 +47,16 @@ const KakaoMap: React.FC<KakaoMapProps> = ({
           var pos = new kakao.maps.LatLng(${m.lat}, ${m.lng});
           var overlay = new kakao.maps.CustomOverlay({ position: pos, content: el, yAnchor: 1 });
           overlay.setMap(map);
+
+          // 단지 중심에서 인프라까지 점선 연결
+          new kakao.maps.Polyline({
+            path: [new kakao.maps.LatLng(${lat}, ${lng}), pos],
+            strokeWeight: 2.5,
+            strokeColor: '${color}',
+            strokeOpacity: 0.7,
+            strokeStyle: 'shortdot',
+          }).setMap(map);
+
           el.addEventListener('click', function() {
             var existing = document.getElementById('label-${m.markerId}');
             if (existing) { existing.remove(); return; }
@@ -157,4 +167,4 @@ const styles = StyleSheet.create({
   map: { flex: 1 },
 });
 
-export default KakaoMap;
+export default React.memo(KakaoMap);

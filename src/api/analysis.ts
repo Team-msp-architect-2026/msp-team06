@@ -4,7 +4,7 @@
 // GET /api/v1/analysis/price/stats
 // GET /api/v1/analysis/issues
 
-import { apiGet } from './client';
+import { apiGet } from "./client";
 
 export interface PriceResponse {
   avgSalePrice: number | null;
@@ -60,13 +60,15 @@ export interface IssueResponse {
 // 가격 현황 조회
 export async function getPrice(
   regionId: string,
-  lawdCd: string,
+  lat: number,
+  lng: number,
   dealYmd: string,
-  dealType: string = 'all'
+  dealType: string = "all",
 ): Promise<PriceResponse> {
-  return apiGet<PriceResponse>('/analysis/price', {
+  return apiGet<PriceResponse>("/analysis/price", {
     regionId,
-    lawdCd,
+    lat,
+    lng,
     dealYmd,
     dealType,
   });
@@ -75,10 +77,10 @@ export async function getPrice(
 // 가격 추이 조회
 export async function getPriceTrend(
   regionId: string,
-  period: string = '1y',
-  dealType: string = 'all'
+  period: string = "1y",
+  dealType: string = "all",
 ): Promise<PriceTrendResponse> {
-  return apiGet<PriceTrendResponse>('/analysis/price/trend', {
+  return apiGet<PriceTrendResponse>("/analysis/price/trend", {
     regionId,
     period,
     dealType,
@@ -90,10 +92,10 @@ export async function getPriceStats(
   regionId: string,
   lawdCd: string,
   dealYmd: string,
-  dealType: string = 'all',
-  period: string = '1m'
+  dealType: string = "all",
+  period: string = "1m",
 ): Promise<PriceStatResponse> {
-  return apiGet<PriceStatResponse>('/analysis/price/stats', {
+  return apiGet<PriceStatResponse>("/analysis/price/stats", {
     regionId,
     lawdCd,
     dealYmd,
@@ -106,9 +108,9 @@ export async function getPriceStats(
 export async function getIssues(
   regionId: string,
   regionName: string,
-  limit: number = 20
+  limit: number = 20,
 ): Promise<IssueResponse> {
-  return apiGet<IssueResponse>('/analysis/issues', {
+  return apiGet<IssueResponse>("/analysis/issues", {
     regionId,
     regionName,
     limit,

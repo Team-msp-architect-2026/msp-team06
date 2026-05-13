@@ -14,7 +14,7 @@ import IssueCard from "../components/IssueCard";
 import KakaoMap from "../components/KakaoMap";
 import Stats3 from "../components/Stats3";
 import { RC_REPORT } from "../constants/mockData";
-import { useIssues } from "../hooks/useAnalysis";
+import { useIssues, usePrice } from "../hooks/useAnalysis";
 import { useMapMarkers } from "../hooks/useMap";
 import { useAppStore } from "../store/useAppStore";
 import { ReportStatus, ReportTarget, Screen } from "../types";
@@ -68,7 +68,7 @@ const ComplexScreen: React.FC<ComplexScreenProps> = ({
   generate,
   go,
 }) => {
-  const { selectedRegion } = useAppStore();
+  const { selectedRegion, prevScreen } = useAppStore();
 
   const scrollRef = useRef<ScrollView>(null);
 
@@ -77,6 +77,16 @@ const ComplexScreen: React.FC<ComplexScreenProps> = ({
     selectedRegion?.lat || 0,
     selectedRegion?.lng || 0,
     "infra",
+  );
+
+  const now = new Date();
+  const dealYmd = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}`;
+
+  const { data: priceData, isLoading: priceLoading } = usePrice(
+    selectedRegion?.regionId || "",
+    selectedRegion?.lat || 0,
+    selectedRegion?.lng || 0,
+    dealYmd,
   );
 
   const { data: issuesData, isLoading: issuesLoading } = useIssues(
@@ -88,7 +98,7 @@ const ComplexScreen: React.FC<ComplexScreenProps> = ({
     <View style={styles.scr}>
       {/* 상단 헤더 */}
       <View style={styles.bar}>
-        <TouchableOpacity onPress={() => go("area")}>
+        <TouchableOpacity onPress={() => go(prevScreen)}>
           <Text style={styles.bk}>‹</Text>
         </TouchableOpacity>
         <View>
@@ -110,27 +120,51 @@ const ComplexScreen: React.FC<ComplexScreenProps> = ({
           <View style={styles.sr}>
             <View style={styles.si}>
               <Text style={styles.sl}>매매 평균가</Text>
-              <Text style={styles.sv}>15억 2천</Text>
-              <Text style={styles.sd}>▲ 전월 +2.1%</Text>
+              <Text style={styles.sv}>
+                {priceLoading
+                  ? "조회 중..."
+                  : priceData?.avgSalePrice
+                    ? `${Math.round(priceData.avgSalePrice / 10000)}억 ${Math.round((priceData.avgSalePrice % 10000) / 1000)}천`
+                    : "데이터 없음"}
+              </Text>
             </View>
             <View style={styles.sp} />
             <View style={styles.si}>
               <Text style={styles.sl}>전세 평균가</Text>
-              <Text style={styles.sv}>8억 5천</Text>
-              <Text style={styles.tertiary}>전세가율 56%</Text>
+              <Text style={styles.sv}>
+                {priceLoading
+                  ? "조회 중..."
+                  : priceData?.avgJeonsePrice
+                    ? `${Math.round(priceData.avgJeonsePrice / 10000)}억 ${Math.round((priceData.avgJeonsePrice % 10000) / 1000)}천`
+                    : "데이터 없음"}
+              </Text>
+              <Text style={styles.tertiary}>
+                {priceData?.jeonseRatio
+                  ? `전세가율 ${priceData.jeonseRatio}%`
+                  : ""}
+              </Text>
             </View>
           </View>
           <View style={styles.sdv} />
           <View style={styles.sr}>
             <View style={styles.si}>
               <Text style={styles.sl}>월세 평균</Text>
-              <Text style={styles.svsm}>보증금 2천/월 130만</Text>
+              <Text style={styles.svsm}>
+                {priceLoading
+                  ? "조회 중..."
+                  : priceData?.avgMonthlyRent
+                    ? `보증금 ${Math.round((priceData.avgMonthlyDeposit || 0) / 1000)}천/월 ${priceData.avgMonthlyRent}만`
+                    : "데이터 없음"}
+              </Text>
             </View>
             <View style={styles.sp} />
             <View style={styles.si}>
               <Text style={styles.sl}>이번달 거래량</Text>
-              <Text style={styles.sv}>3건</Text>
-              <Text style={styles.sd}>▲ 전월 +1건</Text>
+              <Text style={styles.sv}>
+                {priceLoading
+                  ? "조회 중..."
+                  : `${priceData?.recentTradeCount ?? 0}건`}
+              </Text>
             </View>
           </View>
           <View style={styles.sdv} />
