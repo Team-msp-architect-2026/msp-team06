@@ -29,6 +29,11 @@ variable "eks_node_sg_id" {
   type        = string
 }
 
+variable "alb_sg_id" {
+  description = "ALB security group ID — cluster SG ingress 규칙에 사용"
+  type        = string
+}
+
 variable "ami_type" {
   description = "AMI type for EKS managed node groups"
   type        = string

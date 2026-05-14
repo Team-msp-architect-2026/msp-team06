@@ -63,6 +63,7 @@ module "eks" {
   cluster_version           = var.cluster_version
   private_subnet_ids        = module.networking.private_subnet_ids
   eks_node_sg_id            = module.networking.eks_node_sg_id
+  alb_sg_id                 = module.networking.alb_sg_id
 
   api_node_instance_type    = var.api_node_instance_type
   api_node_min_size         = var.api_node_min_size
@@ -191,6 +192,7 @@ module "monitoring" {
   source       = "../../modules/monitoring"
   project_name = var.project_name
   env          = var.environment
+  aws_region   = var.aws_region
 
   alb_arn_suffix = module.alb.alb_arn_suffix
 }

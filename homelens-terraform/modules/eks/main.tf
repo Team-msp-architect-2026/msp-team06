@@ -136,6 +136,20 @@ resource "aws_eks_node_group" "worker" {
 }
 
 # ---------------------------------------------------------------------------
+# ALB → EKS cluster SG ingress 규칙
+# 노드에는 eks_node_sg가 아닌 EKS auto-created cluster SG가 붙으므로 여기서 관리
+# ---------------------------------------------------------------------------
+resource "aws_security_group_rule" "cluster_sg_from_alb" {
+  type                     = "ingress"
+  description              = "From ALB on port 8080"
+  from_port                = 8080
+  to_port                  = 8080
+  protocol                 = "tcp"
+  security_group_id        = aws_eks_cluster.main.vpc_config[0].cluster_security_group_id
+  source_security_group_id = var.alb_sg_id
+}
+
+# ---------------------------------------------------------------------------
 # OIDC Provider (IRSA용)
 # ---------------------------------------------------------------------------
 data "tls_certificate" "eks" {

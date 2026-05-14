@@ -152,41 +152,42 @@ resource "helm_release" "keda" {
 }
 
 # ---------------------------------------------------------------------------
-# KEDA ScaledObject — report-generation-queue 깊이 기준 자동 스케일
-# KEDA 오퍼레이터가 클러스터에 설치된 후 적용됨
+# KEDA ScaledObject — null_resource + kubectl
+# kubernetes_manifest은 plan 단계에서 CRD 검증 → KEDA 설치 전 실패하므로 kubectl 사용
 # ---------------------------------------------------------------------------
-resource "kubernetes_manifest" "keda_scaled_object" {
-  manifest = {
-    apiVersion = "keda.sh/v1alpha1"
-    kind       = "ScaledObject"
-
-    metadata = {
-      name      = "${local.app_label}-scaledobject"
-      namespace = local.namespace
-    }
-
-    spec = {
-      scaleTargetRef = {
-        name = kubernetes_deployment.celery_worker.metadata[0].name
-      }
-
-      minReplicaCount = var.environment == "prod" ? 1 : 0
-      maxReplicaCount = var.environment == "prod" ? 10 : 4
-      cooldownPeriod  = 60
-
-      triggers = [
-        {
-          type = "aws-sqs-queue"
-          metadata = {
-            queueURL                = var.sqs_queue_url
-            queueLength             = "5"
-            awsRegion               = var.aws_region
-            identityOwner           = "operator"
-          }
-        }
-      ]
-    }
+resource "null_resource" "keda_scaled_object" {
+  triggers = {
+    queue_url    = var.sqs_queue_url
+    aws_region   = var.aws_region
+    environment  = var.environment
+    max_replicas = var.environment == "prod" ? 10 : 4
   }
 
-  depends_on = [kubernetes_deployment.celery_worker]
+  provisioner "local-exec" {
+    command = <<-EOF
+      aws eks update-kubeconfig --name ${var.eks_cluster_name} --region ${var.aws_region}
+      kubectl apply -f - <<YAML
+      apiVersion: keda.sh/v1alpha1
+      kind: ScaledObject
+      metadata:
+        name: ${local.app_label}-scaledobject
+        namespace: ${local.namespace}
+      spec:
+        scaleTargetRef:
+          name: ${kubernetes_deployment.celery_worker.metadata[0].name}
+        minReplicaCount: ${var.environment == "prod" ? 1 : 0}
+        maxReplicaCount: ${var.environment == "prod" ? 10 : 4}
+        cooldownPeriod: 60
+        triggers:
+        - type: aws-sqs-queue
+          metadata:
+            queueURL: ${var.sqs_queue_url}
+            queueLength: "5"
+            awsRegion: ${var.aws_region}
+            identityOwner: operator
+      YAML
+    EOF
+  }
+
+  depends_on = [helm_release.keda, kubernetes_deployment.celery_worker]
 }
