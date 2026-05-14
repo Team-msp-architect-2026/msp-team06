@@ -196,6 +196,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ mapTab, setMapTab, go }) => {
                 ?.replace(/&quot;/g, '"')
                 .replace(/&amp;/g, "&")}
               publishedAt={item.publishedAt}
+              url={item.url || ""}
             />
           ))}
         </View>

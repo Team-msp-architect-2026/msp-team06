@@ -378,6 +378,7 @@ const ComplexScreen: React.FC<ComplexScreenProps> = ({
                     ?.replace(/&quot;/g, '"')
                     .replace(/&amp;/g, "&")}
                   publishedAt={issue.publishedAt}
+                  url={issue.url || ""}
                 />
               ))}
               {!issuesLoading &&
