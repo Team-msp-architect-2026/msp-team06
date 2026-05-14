@@ -1,7 +1,8 @@
 // 이슈 행 컴포넌트 - 메인화면 최근 주요 이슈 목록에서 사용
 
 import React from "react";
-import { StyleSheet, Text, View } from "react-native";
+import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import InAppBrowser from "react-native-inappbrowser-reborn";
 import { formatRelativeDate } from "../utils/formatDate";
 
 interface IssueRowProps {
@@ -11,6 +12,7 @@ interface IssueRowProps {
   text: string;
   summary?: string;
   publishedAt?: string;
+  url?: string;
 }
 
 const IssueRow: React.FC<IssueRowProps> = ({
@@ -20,22 +22,47 @@ const IssueRow: React.FC<IssueRowProps> = ({
   text,
   summary,
   publishedAt,
-}) => (
-  <View style={styles.ir}>
-    <View style={styles.meta}>
-      <View style={[styles.ibWrap, { backgroundColor: badgeBg }]}>
-        <Text style={[styles.ib, { color: badgeColor }]}>{badge}</Text>
+  url,
+}) => {
+  const handlePress = async () => {
+    if (!url) return;
+    try {
+      if (await InAppBrowser.isAvailable()) {
+        await InAppBrowser.open(url, {
+          toolbarColor: "#FAF9F5",
+          secondaryToolbarColor: "#1A1A18",
+          navigationBarColor: "#FAF9F5",
+          showTitle: true,
+          enableUrlBarHiding: true,
+          enableDefaultShare: true,
+        });
+      }
+    } catch (e) {
+      console.log("브라우저 오류:", e);
+    }
+  };
+
+  return (
+    <TouchableOpacity
+      style={styles.ir}
+      onPress={handlePress}
+      activeOpacity={url ? 0.7 : 1}
+    >
+      <View style={styles.meta}>
+        <View style={[styles.ibWrap, { backgroundColor: badgeBg }]}>
+          <Text style={[styles.ib, { color: badgeColor }]}>{badge}</Text>
+        </View>
+        {publishedAt && (
+          <Text style={styles.date}>{formatRelativeDate(publishedAt)}</Text>
+        )}
+        <Text style={styles.text} numberOfLines={1}>
+          {text}
+        </Text>
       </View>
-      {publishedAt && (
-        <Text style={styles.date}>{formatRelativeDate(publishedAt)}</Text>
-      )}
-      <Text style={styles.text} numberOfLines={1}>
-        {text}
-      </Text>
-    </View>
-    {summary && <Text style={styles.summary}>{summary}</Text>}
-  </View>
-);
+      {summary && <Text style={styles.summary}>{summary}</Text>}
+    </TouchableOpacity>
+  );
+};
 
 const styles = StyleSheet.create({
   ir: {
