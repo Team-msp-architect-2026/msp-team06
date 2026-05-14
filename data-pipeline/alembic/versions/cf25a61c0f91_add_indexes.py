@@ -1,3 +1,4 @@
+
 """add_indexes
 
 Revision ID: cf25a61c0f91
@@ -98,14 +99,20 @@ def upgrade() -> None:
         'reports',
         ['region_id', 'data_base_date']
     )
-
+    
     # ── report_sections ───────────────────────────────────────
     op.create_index('ix_report_sections_report_id', 'report_sections', ['report_id'])
     op.create_index('ix_report_sections_section_key', 'report_sections', ['section_key'])
-
+    op.create_index(
+        'uq_reports_region_date',
+        'reports',
+        ['region_id', 'data_base_date'],
+        unique=True
+    )
 
 def downgrade() -> None:
     # ── report_sections ───────────────────────────────────────
+    op.drop_index('uq_reports_region_date', table_name='reports')
     op.drop_index('ix_report_sections_section_key', 'report_sections')
     op.drop_index('ix_report_sections_report_id', 'report_sections')
 
