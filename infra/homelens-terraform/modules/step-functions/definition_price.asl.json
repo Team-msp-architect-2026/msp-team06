@@ -1,0 +1,49 @@
+{
+  "Comment": "국토부 실거래가 수집 → 지역 정규화 파이프라인",
+  "StartAt": "IngestPrice",
+  "States": {
+    "IngestPrice": {
+      "Type": "Task",
+      "Resource": "${molit_price_ingest_arn}",
+      "Next": "NormalizeRegion",
+      "Retry": [
+        {
+          "ErrorEquals": ["Lambda.ServiceException", "Lambda.TooManyRequestsException"],
+          "IntervalSeconds": 60,
+          "MaxAttempts": 3,
+          "BackoffRate": 2
+        }
+      ],
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "Next": "PipelineFailed"
+        }
+      ]
+    },
+    "NormalizeRegion": {
+      "Type": "Task",
+      "Resource": "${region_normalizer_arn}",
+      "End": true,
+      "Retry": [
+        {
+          "ErrorEquals": ["Lambda.ServiceException"],
+          "IntervalSeconds": 30,
+          "MaxAttempts": 3,
+          "BackoffRate": 2
+        }
+      ],
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "Next": "PipelineFailed"
+        }
+      ]
+    },
+    "PipelineFailed": {
+      "Type": "Fail",
+      "Error": "PipelineFailed",
+      "Cause": "가격 파이프라인 실패 — CloudWatch Logs 확인"
+    }
+  }
+}

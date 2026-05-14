@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(//home/ezen/terraform_seou/modules/eventbridge/**)"
+    ]
+  }
+}

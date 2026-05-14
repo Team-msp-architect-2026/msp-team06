@@ -1,0 +1,7 @@
+aws_region   = "eu-west-3"
+project_name = "homelens"
+
+# GitHub Actions OIDC — GitHub 계정 정상화 후 실제 값 입력
+# Organization 초대 완료 후 아래 값을 채워서 terraform.tfvars로 복사
+github_org  = "YOUR_GITHUB_ORG"
+github_repo = "YOUR_GITHUB_REPO"

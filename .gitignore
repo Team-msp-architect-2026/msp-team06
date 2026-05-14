@@ -1,111 +1,73 @@
-# ─────────────────────────────────────
+# -----------------------------------------------------------------------
+# Terraform
+# -----------------------------------------------------------------------
+
+# 프로바이더 플러그인 / 초기화 디렉터리
+**/.terraform/
+**/.terraform.lock.hcl
+
+# 상태 파일 (원격 S3 백엔드 사용 — 로컬에 생성되면 안 됨)
+*.tfstate
+*.tfstate.*
+*.tfstate.backup
+
+# 플랜 파일
+*.tfplan
+
+# 크래시 로그
+crash.log
+crash.*.log
+
+# tfvars — 민감 정보 포함 가능
+# 주의: 이 프로젝트의 terraform.tfvars는 인프라 크기 설정만 포함하므로
+#        커밋해도 무방하나, 실수로 시크릿을 넣을 경우를 대비해 *.auto.tfvars만 제외
+*.auto.tfvars
+*.auto.tfvars.json
+secrets.tfvars
+
+# 예시 파일은 커밋 포함
+!*.tfvars.example
+
+# override 파일 (로컬 임시 오버라이드)
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+
+# CLI 설정
+.terraformrc
+terraform.rc
+
+# -----------------------------------------------------------------------
 # OS / IDE
-# ─────────────────────────────────────
+# -----------------------------------------------------------------------
 .DS_Store
 Thumbs.db
+
+# WSL2 — Windows에서 다운로드한 파일에 붙는 Zone.Identifier 메타데이터
+*:Zone.Identifier
+
 .vscode/
 .idea/
 *.swp
-*~
+*.swo
 
-# ─────────────────────────────────────
-# 🔒 Secrets (절대 커밋 금지)
-# ─────────────────────────────────────
+# -----------------------------------------------------------------------
+# Python (백엔드 예정)
+# -----------------------------------------------------------------------
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
 .env
 .env.*
 !.env.example
-*.pem
-*.key
-*.crt
-*.p12
-*.pfx
-kubeconfig
-kubeconfig.*
-.kube/
-**/secrets/
-**/credentials*
-*-sealed.yaml.bak
 
-# ─────────────────────────────────────
-# Python
-# ─────────────────────────────────────
-__pycache__/
-*.py[cod]
-*.egg-info/
-.venv/
-venv/
-.pytest_cache/
-.mypy_cache/
-.ruff_cache/
-htmlcov/
-.coverage
-
-# ─────────────────────────────────────
-# Node / JavaScript
-# ─────────────────────────────────────
+# -----------------------------------------------------------------------
+# Node.js (프론트엔드 예정)
+# -----------------------------------------------------------------------
 node_modules/
+.expo/
 dist/
 build/
-.next/
-.nuxt/
-coverage/
-*.log
-npm-debug.log*
-yarn-debug.log*
-pnpm-debug.log*
-
-# ─────────────────────────────────────
-# Java / JVM
-# ─────────────────────────────────────
-target/
-*.class
-*.jar
-*.war
-.gradle/
-out/
-.mvn/wrapper/maven-wrapper.jar
-
-# ─────────────────────────────────────
-# Go
-# ─────────────────────────────────────
-*.exe
-*.test
-*.out
-vendor/
-
-# ─────────────────────────────────────
-# Terraform / IaC
-# ─────────────────────────────────────
-.terraform/
-*.tfstate
-*.tfstate.backup
-*.tfvars
-!*.tfvars.example
-.terraformrc
-
-# ─────────────────────────────────────
-# Kubernetes / Helm
-# ─────────────────────────────────────
-charts/*.tgz
-values.local.yaml
-**/*.local.yaml
-
-# ─────────────────────────────────────
-# Data / Model (대용량 — Git LFS 사용)
-# ─────────────────────────────────────
-*.csv
-*.parquet
-*.h5
-*.pkl
-*.pt
-*.onnx
-!sample/*.csv
-data/raw/
-models/weights/
-
-# ─────────────────────────────────────
-# Misc
-# ─────────────────────────────────────
-tmp/
-*.bak
-*.tmp

@@ -1,102 +1,50 @@
-# MSP Team06 — 프로젝트명
+# Welcome to your Expo app 👋
 
-> MSP Architect Training 2026 · MSP Team06 ([팀원 이름들])
+This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
 
-한 줄 프로젝트 소개를 여기에. (예: "K8s 기반 OO 서비스를 GitOps로 운영하는 플랫폼")
+## Get started
 
-## 👥 팀원
+1. Install dependencies
 
-| 역할 | 이름 | 주요 담당 | GitHub |
-|------|------|-----------|--------|
-| 팀장 |  | 인프라 · ArgoCD | @ |
-| 팀원 |  | Backend · DB | @ |
-| 팀원 |  | Frontend · UX | @ |
+   ```bash
+   npm install
+   ```
 
-## 🎯 프로젝트 목표
+2. Start the app
 
--
--
--
+   ```bash
+   npx expo start
+   ```
 
-## 🏗️ 시스템 아키텍처
+In the output, you'll find options to open the app in a
 
-```mermaid
-flowchart LR
-    User[사용자] -->|HTTPS| Ingress[Nginx Ingress]
-    Ingress --> FE[Frontend]
-    Ingress --> BE[Backend API]
-    BE --> DB[(MySQL)]
-    BE --> AI[AI Service]
-    subgraph K8s[k3s Cluster]
-        FE
-        BE
-        AI
-        DB
-    end
-```
+- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
+- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
+- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
+- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
 
-> 📖 상세 아키텍처는 [Wiki — 시스템 아키텍처](../../wiki/10-시스템-아키텍처) 참조
+You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
 
-## 🛠️ 기술 스택
+## Get a fresh project
 
-| 계층 | 기술 |
-|------|------|
-| Frontend |  |
-| Backend |  |
-| Database |  |
-| Infra | k3s, Helm, ArgoCD |
-| CI/CD | GitHub Actions, ArgoCD |
-| Monitoring | Prometheus, Grafana, Loki |
+When you're ready, run:
 
-## 🚀 빠른 시작
-
-### 사전 요구사항
-- Docker / Docker Compose
-- kubectl, helm
-- (기타)
-
-### 로컬 실행
 ```bash
-git clone git@github.com:Team-msp-architect-2026/msp-team06.git
-cd msp-team06
-cp .env.example .env
-docker compose up -d
-# http://localhost:3000
+npm run reset-project
 ```
 
-### K8s 배포 (ArgoCD)
-```bash
-kubectl apply -f k8s/argocd/application.yaml
-```
+This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
 
-## 📂 디렉토리 구조
+## Learn more
 
-```
-.
-├── .github/             # Issue/PR 템플릿, CODEOWNERS
-├── docs/                # 설계 문서 (ADR 등)
-├── k8s/                 # Kubernetes 매니페스트
-├── helm/                # Helm Chart
-├── frontend/            # 프론트엔드
-├── backend/             # 백엔드 API
-└── README.md
-```
+To learn more about developing your project with Expo, look at the following resources:
 
-## 📚 문서
+- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
+- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
 
-| 문서 | 위치 |
-|------|------|
-| 요구사항 정의서 | [Wiki](../../wiki/01-요구사항-정의서) |
-| 시스템 아키텍처 | [Wiki](../../wiki/10-시스템-아키텍처) |
-| API 명세서 | [Wiki](../../wiki/30-API-명세서) |
-| ERD | [Wiki](../../wiki/40-ERD) |
-| Runbook | [Wiki](../../wiki/50-인프라-Runbook) |
-| ADR | [docs/adr/](docs/adr/) |
+## Join the community
 
-## 🤝 기여 방법
+Join our community of developers creating universal apps.
 
-[CONTRIBUTING.md](CONTRIBUTING.md) 참조
-
-## 📄 라이선스
-
-[MIT](LICENSE)
+- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
+- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
