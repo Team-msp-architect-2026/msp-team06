@@ -109,6 +109,16 @@ module "secrets" {
   source       = "../../modules/secrets"
   project_name = var.project_name
   env          = var.environment
+
+  kakao_rest_api_key  = var.kakao_rest_api_key
+  kakao_js_api_key    = var.kakao_js_api_key
+  naver_client_id     = var.naver_client_id
+  naver_client_secret = var.naver_client_secret
+  molit_service_key   = var.molit_service_key
+
+  rds_endpoint   = module.rds.rds_endpoint
+  rds_secret_arn = module.rds.rds_secret_arn
+  redis_endpoint = module.elasticache.redis_primary_endpoint
 }
 
 module "s3" {

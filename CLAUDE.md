@@ -142,30 +142,52 @@ EKS FastAPI (homelens 네임스페이스)
 | Bootstrap apply | 완료 (팀원 tfstate 확인됨) |
 | GitHub 조직 초대 | 미완료 — 완료 후 `shared/terraform.tfvars`에 입력 |
 
-### apply 순서 (의존성 순)
+### apply 순서 (의존성 순) — 3단계 방식 필수
+
+Helm provider가 EKS cluster endpoint를 참조하므로 EKS 생성 전 Helm 리소스를 apply하면 provider 초기화 실패.
 
 ```bash
 cd homelens-terraform/environments/dev
 terraform init
 
-terraform apply -target=module.networking
-terraform apply -target=module.eks
-terraform apply -target=module.rds
-terraform apply -target=module.elasticache
-terraform apply -target=module.sqs
-terraform apply -target=module.secrets
-terraform apply -target=module.s3
-terraform apply -target=module.alb          # ALB Ingress Controller Helm 포함
-terraform apply -target=module.lambda
-terraform apply -target=module.step_functions
-terraform apply -target=module.eventbridge
-terraform apply -target=module.waf_cdn
-terraform apply -target=module.dns
-terraform apply -target=module.monitoring
-terraform apply -target=module.bedrock
-terraform apply -target=module.celery       # KEDA Helm + ScaledObject 포함
-terraform plan                              # No changes 확인
+# 1단계: EKS까지 (Helm 없음)
+terraform apply \
+  -target=module.networking \
+  -target=module.rds \
+  -target=module.elasticache \
+  -target=module.sqs \
+  -target=module.secrets \
+  -target=module.s3 \
+  -target=module.eks
+# EKS 프로비저닝 15~20분 소요
+
+# 2단계: Helm 사용 모듈 (EKS endpoint 확보 후)
+terraform apply \
+  -target=module.alb \
+  -target=module.celery
+
+# 3단계: 나머지
+terraform apply \
+  -target=module.lambda \
+  -target=module.step_functions \
+  -target=module.eventbridge \
+  -target=module.waf_cdn \
+  -target=module.dns \
+  -target=module.monitoring \
+  -target=module.bedrock
+
+terraform plan  # No changes 확인
 ```
+
+### shared 폴더 apply (ECR + GitHub OIDC)
+
+```bash
+cd homelens-terraform/shared
+terraform init
+terraform apply
+```
+
+- `shared/backend.tf`에 `required_providers` 포함 → `versions.tf` 별도 불필요 (중복 시 삭제)
 
 ---
 
@@ -238,6 +260,107 @@ terraform plan                              # No changes 확인
 - ALB의 ACM 인증서 도메인이 CloudFront origin 도메인과 반드시 일치해야 함
 - prod: CloudFront origin = `origin.ourhomelens.com`, 인증서 = `*.ourhomelens.com` (일치 ✓)
 
+### Security Group 순환 참조 — 반드시 분리
+- 두 SG가 서로를 참조하는 인라인 ingress/egress 규칙은 Cycle 에러 발생
+- 해결: `aws_security_group_rule` 별도 리소스로 분리
+  ```hcl
+  # 인라인 블록 대신 별도 리소스
+  resource "aws_security_group_rule" "alb_to_eks" { ... }
+  resource "aws_security_group_rule" "eks_from_alb" { ... }
+  ```
+
+### EKS Cluster SG vs eks_node_sg — 핵심 구분
+- EKS 관리형 노드그룹은 EKS가 자동 생성한 **cluster security group**만 노드에 부착
+- `vpc_config.security_group_ids`에 지정한 `eks_node_sg`는 **control plane ENI**에 붙음 (노드 아님)
+- ALB→노드 8080 ingress 규칙은 `eks_node_sg`가 아닌 **cluster SG**에 추가해야 함
+  ```hcl
+  # eks/main.tf에서 관리
+  resource "aws_security_group_rule" "cluster_sg_from_alb" {
+    security_group_id        = aws_eks_cluster.main.vpc_config[0].cluster_security_group_id
+    source_security_group_id = var.alb_sg_id
+    ...
+  }
+  ```
+- `eks_node_sg`에 추가한 규칙은 EKS가 주기적으로 삭제 → Terraform apply 루프 발생
+
+### VPC Endpoint SG — CIDR 기반으로 설정
+- 노드는 cluster SG만 보유하므로 `eks_node_sg` 참조 시 VPC 엔드포인트 접근 불가
+- private subnet CIDR로 허용해야 노드가 ECR/STS 엔드포인트 사용 가능
+  ```hcl
+  cidr_blocks = [for s in local.private_subnets : s.cidr]
+  ```
+
+### Helm provider 버전 — 3.x 핀 필수
+- Helm 3.x에서 `kubernetes { }` 블록 문법 변경 → `context deadline exceeded` 또는 파싱 에러
+- `environments/dev/versions.tf`에 반드시 상한 핀:
+  ```hcl
+  helm = {
+    source  = "hashicorp/helm"
+    version = ">= 2.13.0, < 3.0.0"
+  }
+  ```
+- 버전 변경 후 `terraform init -upgrade` 실행 필요
+
+### RDS Parameter Group — shared_preload_libraries
+- `postgis-3`은 유효하지 않은 값 → `InvalidParameterValue` 에러
+- PostGIS는 `shared_preload_libraries` 불필요, SQL로 설치: `CREATE EXTENSION IF NOT EXISTS postgis;`
+- 올바른 설정:
+  ```hcl
+  parameter {
+    name         = "shared_preload_libraries"
+    value        = "pg_stat_statements"
+    apply_method = "pending-reboot"   # static parameter는 pending-reboot 필수
+  }
+  ```
+
+### Secrets Manager import — ARN 필수
+- `terraform import`는 시크릿 이름이 아닌 전체 ARN 필요
+- AWS가 이름 뒤에 랜덤 6자리를 붙이므로 ARN 먼저 조회:
+  ```bash
+  aws secretsmanager list-secrets --region eu-west-3 \
+    --query 'SecretList[?starts_with(Name, `homelens/dev`)].{Name:Name,ARN:ARN}'
+  terraform import module.secrets.aws_secretsmanager_secret.xxx arn:aws:secretsmanager:...:secret:name-XXXXXX
+  ```
+
+### KEDA ScaledObject — kubernetes_manifest 사용 금지
+- `kubernetes_manifest`는 plan 단계에서 CRD 검증 → KEDA 설치 전 에러 발생
+- `null_resource + local-exec + kubectl apply`로 대체:
+  ```hcl
+  resource "null_resource" "keda_scaled_object" {
+    provisioner "local-exec" {
+      command = "aws eks update-kubeconfig ... && kubectl apply -f - <<YAML ... YAML"
+    }
+    depends_on = [helm_release.keda]
+  }
+  ```
+- `hashicorp/null` provider 추가 후 `terraform init -upgrade` 필요
+
+### ALB Ingress Controller — vpcId 명시 필수
+- IMDSv2 활성화 환경에서 IMDS 자동 조회 실패 → `EC2MetadataError: status code: 401`
+- helm_release에 `vpcId` 명시 및 timeout 연장 필수:
+  ```hcl
+  set { name = "vpcId"; value = var.vpc_id }
+  timeout = 600
+  ```
+
+### Celery 초기 replicas = 0
+- `placeholder:latest` 이미지 부재로 Deployment progress deadline 초과
+- `modules/celery/variables.tf`의 `replicas` default = 0
+- 실제 이미지는 CI/CD에서 배포
+
+### CloudWatch Dashboard — region 필드 필수
+- 모든 metric 위젯에 `region` 필드 없으면 `InvalidParameterInput` 에러
+  ```hcl
+  properties = {
+    region = var.aws_region
+    metrics = [...]
+  }
+  ```
+
+### DNS outputs — data source 참조
+- `dns/outputs.tf`는 `data.aws_route53_zone.main` 참조 (managed resource 아님)
+- `aws_route53_zone.main`으로 참조 시 `Reference to undeclared resource` 에러
+
 ---
 
 # HomeLens AI
@@ -249,7 +372,7 @@ terraform plan                              # No changes 확인
 - MVP 목표일: 2026-06-01
 - 대상 플랫폼: iOS / Android (React Native)
 - MVP 대상 지역: 서울 전역
-- 현재 단계: Terraform 인프라 코드 완성, apply 대기 중
+- 현재 단계: Terraform dev 환경 apply 완료 (2026-05-14), shared(ECR) apply 진행 중
 
 ## 기술 스택 요약
 
