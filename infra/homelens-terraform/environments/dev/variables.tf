@@ -90,3 +90,34 @@ variable "redis_node_type" {
   type        = string
 }
 
+# Secrets — 외부 API 키 (secrets.auto.tfvars에서 주입, 절대 커밋 금지)
+variable "kakao_rest_api_key" {
+  type      = string
+  sensitive = true
+  default   = ""
+}
+
+variable "kakao_js_api_key" {
+  type      = string
+  sensitive = true
+  default   = ""
+}
+
+variable "naver_client_id" {
+  type      = string
+  sensitive = true
+  default   = ""
+}
+
+variable "naver_client_secret" {
+  type      = string
+  sensitive = true
+  default   = ""
+}
+
+variable "molit_service_key" {
+  type      = string
+  sensitive = true
+  default   = ""
+}
+

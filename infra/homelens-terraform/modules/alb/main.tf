@@ -96,6 +96,12 @@ resource "helm_release" "alb_controller" {
     name  = "replicaCount"
     value = var.environment == "prod" ? "2" : "1"
   }
+  set {
+    name  = "vpcId"
+    value = var.vpc_id
+  }
+
+  timeout = 600
 
   depends_on = [aws_lb.main]
 }

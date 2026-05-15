@@ -200,14 +200,6 @@ resource "aws_security_group" "alb" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 
-  egress {
-    description     = "ALB to EKS API port"
-    from_port       = 8080
-    to_port         = 8080
-    protocol        = "tcp"
-    security_groups = [aws_security_group.eks_node.id]
-  }
-
   tags = { Name = "${local.name_prefix}-alb-sg" }
 }
 
@@ -216,14 +208,6 @@ resource "aws_security_group" "eks_node" {
   name        = "${local.name_prefix}-eks-node-sg"
   description = "EKS node group"
   vpc_id      = aws_vpc.main.id
-
-  ingress {
-    description     = "From ALB"
-    from_port       = 8080
-    to_port         = 8080
-    protocol        = "tcp"
-    security_groups = [aws_security_group.alb.id]
-  }
 
   ingress {
     description = "Node-to-node"
@@ -241,11 +225,18 @@ resource "aws_security_group" "eks_node" {
   }
 
   tags = { Name = "${local.name_prefix}-eks-node-sg" }
+}
 
-  lifecycle {
-    # ALB SG와 순환 참조 방지
-    create_before_destroy = true
-  }
+# ALB egress → EKS — 순환 참조 방지를 위해 별도 리소스로 분리
+# ingress 쪽(eks_from_alb)은 EKS cluster SG에서 관리 (eks 모듈 참고)
+resource "aws_security_group_rule" "alb_to_eks" {
+  type                     = "egress"
+  description              = "ALB to EKS API port"
+  from_port                = 8080
+  to_port                  = 8080
+  protocol                 = "tcp"
+  security_group_id        = aws_security_group.alb.id
+  source_security_group_id = aws_security_group.eks_node.id
 }
 
 # RDS SG
@@ -289,11 +280,11 @@ resource "aws_security_group" "vpc_endpoint" {
   vpc_id      = aws_vpc.main.id
 
   ingress {
-    description     = "HTTPS from EKS nodes"
-    from_port       = 443
-    to_port         = 443
-    protocol        = "tcp"
-    security_groups = [aws_security_group.eks_node.id]
+    description = "HTTPS from private subnets (EKS cluster SG + eks_node_sg)"
+    from_port   = 443
+    to_port     = 443
+    protocol    = "tcp"
+    cidr_blocks = [for s in local.private_subnets : s.cidr]
   }
 
   egress {
