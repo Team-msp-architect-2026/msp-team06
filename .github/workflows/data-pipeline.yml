@@ -1,0 +1,86 @@
+name: Data Pipeline Deploy
+
+on:
+  push:
+    branches:
+      - dev
+    paths:
+      - 'data-pipeline/**'
+
+env:
+  AWS_REGION: eu-west-3
+  ECR_REGISTRY: ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.eu-west-3.amazonaws.com
+
+jobs:
+  # ── 1. DB 마이그레이션 (Alembic) ──
+  db-migrate:
+    name: DB Migration (Alembic)
+    runs-on: ubuntu-latest
+    steps:
+      - name: 코드 체크아웃
+        uses: actions/checkout@v4
+
+      - name: Python 설치
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: 의존성 설치
+        run: |
+          pip install alembic psycopg2-binary sqlalchemy
+
+      - name: AWS 인증
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: DB 접속 정보 가져오기 (Secrets Manager)
+        run: |
+          DB_SECRET=$(aws secretsmanager get-secret-value \
+            --secret-id homelens/dev/rds/postgres \
+            --query SecretString --output text)
+          echo "DB_HOST=$(echo $DB_SECRET | jq -r .host)" >> $GITHUB_ENV
+          echo "DB_PORT=$(echo $DB_SECRET | jq -r .port)" >> $GITHUB_ENV
+          echo "DB_NAME=$(echo $DB_SECRET | jq -r .dbname)" >> $GITHUB_ENV
+          echo "DB_USER=$(echo $DB_SECRET | jq -r .username)" >> $GITHUB_ENV
+          echo "DB_PASSWORD=$(echo $DB_SECRET | jq -r .password)" >> $GITHUB_ENV
+
+      - name: Alembic 마이그레이션 실행
+        working-directory: data-pipeline
+        run: |
+          export DATABASE_URL="postgresql://$DB_USER:$DB_PASSWORD@$DB_HOST:$DB_PORT/$DB_NAME"
+          alembic upgrade head
+
+  # ── 2. Lambda 함수 배포 ──
+  deploy-lambdas:
+    name: Deploy Lambda Functions
+    runs-on: ubuntu-latest
+    needs: db-migrate
+    steps:
+      - name: 코드 체크아웃
+        uses: actions/checkout@v4
+
+      - name: AWS 인증
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Lambda 함수 배포 (전체)
+        working-directory: data-pipeline/lambdas
+        run: |
+          for lambda_dir in */; do
+            lambda_name="${lambda_dir%/}"
+            echo "📦 $lambda_name 배포 중..."
+            cd $lambda_name
+            zip -r ../../../${lambda_name}.zip .
+            cd ..
+            aws lambda update-function-code \
+              --function-name homelens-${lambda_name} \
+              --zip-file fileb://../../${lambda_name}.zip \
+              --region ${{ env.AWS_REGION }}
+            echo "✅ $lambda_name 배포 완료"
+          done
