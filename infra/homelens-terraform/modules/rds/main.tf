@@ -7,13 +7,13 @@ resource "aws_db_subnet_group" "main" {
 }
 
 resource "aws_db_parameter_group" "main" {
-    name = "${var.project_name}-${var.env}-pg17"
+    name   = "${var.project_name}-${var.env}-pg17"
     family = "postgres17"
 
     parameter {
-        name = "shared_preload_libraries"
-        value = "postgis-3"
-    
+        name         = "shared_preload_libraries"
+        value        = "pg_stat_statements"
+        apply_method = "pending-reboot"
     }
 }
 

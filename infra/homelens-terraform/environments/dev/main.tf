@@ -63,6 +63,7 @@ module "eks" {
   cluster_version           = var.cluster_version
   private_subnet_ids        = module.networking.private_subnet_ids
   eks_node_sg_id            = module.networking.eks_node_sg_id
+  alb_sg_id                 = module.networking.alb_sg_id
 
   api_node_instance_type    = var.api_node_instance_type
   api_node_min_size         = var.api_node_min_size
@@ -108,6 +109,16 @@ module "secrets" {
   source       = "../../modules/secrets"
   project_name = var.project_name
   env          = var.environment
+
+  kakao_rest_api_key  = var.kakao_rest_api_key
+  kakao_js_api_key    = var.kakao_js_api_key
+  naver_client_id     = var.naver_client_id
+  naver_client_secret = var.naver_client_secret
+  molit_service_key   = var.molit_service_key
+
+  rds_endpoint   = module.rds.rds_endpoint
+  rds_secret_arn = module.rds.rds_secret_arn
+  redis_endpoint = module.elasticache.redis_primary_endpoint
 }
 
 module "s3" {
@@ -191,6 +202,7 @@ module "monitoring" {
   source       = "../../modules/monitoring"
   project_name = var.project_name
   env          = var.environment
+  aws_region   = var.aws_region
 
   alb_arn_suffix = module.alb.alb_arn_suffix
 }

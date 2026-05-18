@@ -30,9 +30,9 @@ variable "aws_region" {
 }
 
 variable "replicas" {
-  description = "Initial Celery worker replica count"
+  description = "Initial Celery worker replica count (0 = CI/CD가 실제 이미지 배포 전까지 파드 미생성)"
   type        = number
-  default     = 1
+  default     = 0
 }
 
 variable "celery_image" {
