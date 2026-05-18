@@ -4,6 +4,9 @@ set -e
 echo "=== EKS kubeconfig 업데이트 ==="
 aws eks update-kubeconfig --name homelens-dev-eks --region eu-west-3 2>/dev/null || true
 
+echo "=== Ingress 먼저 삭제 (ALB Controller가 finalizer 처리하는 동안) ==="
+kubectl delete ingress homelens-ingress -n homelens 2>/dev/null || true
+
 echo "=== Helm release 정리 (없으면 무시) ==="
 helm uninstall aws-load-balancer-controller -n kube-system 2>/dev/null || true
 helm uninstall keda -n keda 2>/dev/null || true
