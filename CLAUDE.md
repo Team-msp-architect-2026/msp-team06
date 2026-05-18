@@ -159,6 +159,25 @@ bash destroy.sh          # Helm 정리 후 terraform destroy 자동 실행
 # ── 매일 아침 ──────────────────────────────
 cd homelens-terraform/environments/dev
 terraform init           # .terraform 폴더 없을 때만 (destroy해도 폴더 유지됨)
+
+# Terraform apply 3단계 완료 후 → kubectl apply
+# 1. ALB ARN 확인 (매일 바뀜 — ALB 재생성 시 랜덤 ID 변경됨)
+terraform output alb_arn
+# → 출력된 ARN으로 k8s/ingress.yaml의 load-balancer-arn 값 교체
+
+# 2. EKS kubeconfig 업데이트 (경로 무관)
+aws eks update-kubeconfig --name homelens-dev-eks --region eu-west-3
+
+# 3. kubectl apply (homelens/ 루트에서 실행)
+cd ~/homelens
+kubectl apply -f k8s/configmap.yaml
+kubectl apply -f k8s/fastapi-serviceaccount.yaml
+kubectl apply -f k8s/fastapi-deployment.yaml
+kubectl apply -f k8s/fastapi-service.yaml
+kubectl apply -f k8s/ingress.yaml
+# celery-deployment.yaml은 ECR 이미지 준비 후 CI/CD에서 배포 — 수동 apply 불필요
+
+# fastapi_role_arn은 매번 동일 (IAM Role 이름 고정) → serviceaccount.yaml 수정 불필요
 ```
 
 ### apply 순서 (의존성 순) — 3단계 방식 필수
@@ -428,7 +447,8 @@ terraform apply
 - MVP 목표일: 2026-06-01
 - 대상 플랫폼: iOS / Android (React Native)
 - MVP 대상 지역: 서울 전역
-- 현재 단계: Terraform 코드 완성 (2026-05-18), dev 환경 apply 준비 중
+- 현재 단계: dev 환경 Terraform apply 완료 + kubectl apply 완료 (2026-05-18)
+- 다음 단계: 백엔드 팀 FastAPI·Celery 이미지 ECR 빌드·푸시 → CI/CD 연결 (GitHub org 초대 후)
 
 ## 기술 스택 요약
 
