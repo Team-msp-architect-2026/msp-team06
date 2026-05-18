@@ -44,12 +44,15 @@ homelens-terraform/
 ├── environments/
 │   ├── versions.tf             # 루트 참조용 (실제 사용은 각 환경 폴더에 복사본)
 │   ├── dev/
-│   │   ├── versions.tf         # aws, kubernetes, helm, tls provider 선언
-│   │   ├── backend.tf          # S3 원격 상태 (homelens-tfstate-dev)
-│   │   ├── main.tf             # 전체 모듈 호출
+│   │   ├── versions.tf                   # aws, kubernetes, helm, tls provider 선언
+│   │   ├── backend.tf                    # S3 원격 상태 (homelens-tfstate-dev)
+│   │   ├── main.tf                       # 전체 모듈 호출
 │   │   ├── variables.tf
 │   │   ├── terraform.tfvars
-│   │   └── outputs.tf
+│   │   ├── outputs.tf
+│   │   ├── destroy.sh                    # 매일 저녁 인프라 제거 스크립트
+│   │   ├── secrets.auto.tfvars.example   # API 키 템플릿 (커밋됨)
+│   │   └── secrets.auto.tfvars           # 실제 API 키 (gitignore, 로컬 전용)
 │   ├── staging/                # dev와 동일 구조
 │   └── prod/                   # dev와 동일 구조
 └── modules/
@@ -67,7 +70,7 @@ homelens-terraform/
     ├── lambda/                 # 팀원 담당 — 파이프라인 함수 5개, VPC 밖 배치
     ├── step-functions/         # 팀원 담당 — news-pipeline + price-pipeline (각각 별도)
     ├── eventbridge/            # 팀원 담당 — 뉴스(매일 KST 02:00) + 가격(월 1회) 스케줄
-    ├── secrets/                # 팀원 담당 — Secrets Manager 경로 6개 생성
+    ├── secrets/                # 우리 담당 — Secrets Manager 7개 생성 + 자동 값 주입
     └── monitoring/             # 팀원 담당 — Prometheus, X-Ray, CloudWatch 알람
 ```
 
@@ -81,19 +84,22 @@ homelens-terraform/
 ### 핵심 모듈 간 의존 관계 (output → input)
 
 ```
-sqs.report_queue_url        → celery.sqs_queue_url
-sqs.report_queue_arn        → lambda.report_queue_arn
-sqs.news_summary_queue_arn  → lambda.news_summary_queue_arn
-sqs.price_ingest_queue_arn  → lambda.price_ingest_queue_arn
-s3.raw_data_bucket_name     → lambda.raw_data_bucket_name
-s3.raw_data_bucket_arn      → lambda.raw_data_bucket_arn
-lambda.*_arn (4개)          → step_functions 입력
+sqs.report_queue_url              → celery.sqs_queue_url
+sqs.report_queue_arn              → lambda.report_queue_arn
+sqs.news_summary_queue_arn        → lambda.news_summary_queue_arn
+sqs.price_ingest_queue_arn        → lambda.price_ingest_queue_arn
+s3.raw_data_bucket_name           → lambda.raw_data_bucket_name
+s3.raw_data_bucket_arn            → lambda.raw_data_bucket_arn
+lambda.*_arn (4개)                → step_functions 입력
 step_functions.news_pipeline_arn  → eventbridge.news_pipeline_arn
 step_functions.price_pipeline_arn → eventbridge.price_pipeline_arn
-eks.alb_controller_role_arn → alb.alb_controller_role_arn
-eks.keda_operator_role_arn  → celery.keda_operator_role_arn
-alb.alb_arn_suffix          → monitoring.alb_arn_suffix
-secrets (depends_on)        → bedrock
+eks.alb_controller_role_arn       → alb.alb_controller_role_arn
+eks.keda_operator_role_arn        → celery.keda_operator_role_arn
+alb.alb_arn_suffix                → monitoring.alb_arn_suffix
+rds.rds_endpoint                  → secrets.rds_endpoint
+rds.rds_secret_arn                → secrets.rds_secret_arn
+elasticache.redis_primary_endpoint → secrets.redis_endpoint
+secrets (depends_on)              → bedrock
 ```
 
 ---
@@ -142,30 +148,94 @@ EKS FastAPI (homelens 네임스페이스)
 | Bootstrap apply | 완료 (팀원 tfstate 확인됨) |
 | GitHub 조직 초대 | 미완료 — 완료 후 `shared/terraform.tfvars`에 입력 |
 
-### apply 순서 (의존성 순)
+### 매일 destroy / apply 워크플로우
 
 ```bash
+# ── 매일 저녁 ──────────────────────────────
 cd homelens-terraform/environments/dev
-terraform init
+bash destroy.sh          # Helm 정리 후 terraform destroy 자동 실행
+                         # recovery_window_in_days=0 → 시크릿 즉시 삭제됨
 
-terraform apply -target=module.networking
-terraform apply -target=module.eks
-terraform apply -target=module.rds
-terraform apply -target=module.elasticache
-terraform apply -target=module.sqs
-terraform apply -target=module.secrets
-terraform apply -target=module.s3
-terraform apply -target=module.alb          # ALB Ingress Controller Helm 포함
-terraform apply -target=module.lambda
-terraform apply -target=module.step_functions
-terraform apply -target=module.eventbridge
-terraform apply -target=module.waf_cdn
-terraform apply -target=module.dns
-terraform apply -target=module.monitoring
-terraform apply -target=module.bedrock
-terraform apply -target=module.celery       # KEDA Helm + ScaledObject 포함
-terraform plan                              # No changes 확인
+# ── 매일 아침 ──────────────────────────────
+cd homelens-terraform/environments/dev
+terraform init           # .terraform 폴더 없을 때만 (destroy해도 폴더 유지됨)
+
+# Terraform apply 3단계 완료 후 → kubectl apply
+# 1. ALB ARN 확인 (매일 바뀜 — ALB 재생성 시 랜덤 ID 변경됨)
+terraform output alb_arn
+# → 출력된 ARN으로 k8s/ingress.yaml의 load-balancer-arn 값 교체
+
+# 2. EKS kubeconfig 업데이트 (경로 무관)
+aws eks update-kubeconfig --name homelens-dev-eks --region eu-west-3
+
+# 3. kubectl apply (homelens/ 루트에서 실행)
+cd ~/homelens
+kubectl apply -f k8s/configmap.yaml
+kubectl apply -f k8s/fastapi-serviceaccount.yaml
+kubectl apply -f k8s/fastapi-deployment.yaml
+kubectl apply -f k8s/fastapi-service.yaml
+kubectl apply -f k8s/ingress.yaml
+# celery-deployment.yaml은 ECR 이미지 준비 후 CI/CD에서 배포 — 수동 apply 불필요
+
+# fastapi_role_arn은 매번 동일 (IAM Role 이름 고정) → serviceaccount.yaml 수정 불필요
 ```
+
+### apply 순서 (의존성 순) — 3단계 방식 필수
+
+Helm provider가 EKS cluster endpoint를 참조하므로 EKS 생성 전 Helm 리소스를 apply하면 provider 초기화 실패.
+secrets 모듈은 rds, elasticache output을 참조하므로 반드시 같은 단계에서 함께 apply할 것.
+
+```bash
+# 1단계: EKS까지 (Helm 없음) — 15~20분 소요
+terraform apply \
+  -target=module.networking \
+  -target=module.rds \
+  -target=module.elasticache \
+  -target=module.sqs \
+  -target=module.s3 \
+  -target=module.eks \
+  -target=module.secrets
+
+# 2단계: Helm 사용 모듈 (EKS endpoint 확보 후)
+terraform apply \
+  -target=module.alb \
+  -target=module.celery
+
+# 3단계: 나머지
+terraform apply \
+  -target=module.lambda \
+  -target=module.step_functions \
+  -target=module.eventbridge \
+  -target=module.waf_cdn \
+  -target=module.dns \
+  -target=module.monitoring \
+  -target=module.bedrock
+
+terraform plan  # No changes 확인
+```
+
+### API 키 주입 방법 (secrets.auto.tfvars)
+
+민감한 API 키는 `secrets.auto.tfvars`(gitignore)에 보관. apply 시 자동으로 Secrets Manager에 주입됨.
+
+```bash
+cp secrets.auto.tfvars.example secrets.auto.tfvars
+# 파일 열어서 실제 키 입력 후 저장
+```
+
+- API 키 없이 apply해도 인프라는 정상 생성됨 (시크릿 값만 빈 문자열로 저장)
+- 키 입력 후 `terraform apply -target=module.secrets` 재실행하면 값 업데이트됨
+- 새 외부 API 추가 시 수정 파일: `modules/secrets/{main,variables,outputs}.tf`, `environments/dev/{main,variables}.tf`, `secrets.auto.tfvars.example`, `k8s/configmap.yaml`
+
+### shared 폴더 apply (ECR + GitHub OIDC)
+
+```bash
+cd homelens-terraform/shared
+terraform init
+terraform apply
+```
+
+- `shared/backend.tf`에 `required_providers` 포함 → `versions.tf` 별도 불필요 (중복 시 삭제)
 
 ---
 
@@ -191,6 +261,33 @@ terraform plan                              # No changes 확인
 ### RDS PostGIS 설치 방식
 - private subnet RDS에는 `local-exec` 방식 접근 불가
 - `CREATE EXTENSION IF NOT EXISTS postgis;` — FastAPI 첫 배포 전 DB 마이그레이션으로 실행 (`V001__enable_postgis.sql`)
+
+### Secrets Manager — 삭제 예약 충돌 방지
+- 모든 시크릿에 `recovery_window_in_days = 0` 적용 → destroy 시 즉시 삭제
+- 이 설정이 없으면 다음 날 apply 시 "already scheduled for deletion" 오류 발생
+- 현재 삭제 예약 상태인 시크릿이 있다면 apply 전 강제 삭제 필요:
+  ```bash
+  aws secretsmanager delete-secret --region eu-west-3 \
+    --secret-id homelens/dev/<이름> --force-delete-without-recovery
+  ```
+
+### Secrets Manager — 시크릿 구조 (7개)
+| 경로 | 저장값 | 출처 |
+|------|--------|------|
+| `homelens/dev/kakao/map-api` | rest_api_key, js_api_key | secrets.auto.tfvars |
+| `homelens/dev/naver/news-api` | client_id, client_secret | secrets.auto.tfvars |
+| `homelens/dev/molit/real-estate-api` | service_key (국토부) | secrets.auto.tfvars |
+| `homelens/dev/mois/address-api` | service_key (행안부) | secrets.auto.tfvars |
+| `homelens/dev/rds/postgres` | host, port, dbname, username, password_secret_arn | RDS 모듈 output 자동 주입 |
+| `homelens/dev/redis/auth` | host, port | ElastiCache 모듈 output 자동 주입 |
+| `homelens/dev/bedrock/config` | model_id, region | 모듈 기본값 |
+
+- RDS 비밀번호는 `manage_master_user_password=true`로 AWS가 관리 → `password_secret_arn`으로 참조
+- `secrets` 모듈 단독 apply 금지 — rds/elasticache output 없으면 rds_endpoint, redis_endpoint가 빈 값 저장됨
+
+### terraform init — "empty directory" 오류
+- 원인: `environments/dev/` 가 아닌 다른 경로에서 실행
+- 해결: `cd homelens-terraform/environments/dev && ls backend.tf` 확인 후 `terraform init`
 
 ### Bootstrap 중복 apply 금지
 - 팀원이 이미 apply 완료 확인됨 (`~/terraform_seou/bootstrap/terraform.tfstate` 존재)
@@ -238,6 +335,107 @@ terraform plan                              # No changes 확인
 - ALB의 ACM 인증서 도메인이 CloudFront origin 도메인과 반드시 일치해야 함
 - prod: CloudFront origin = `origin.ourhomelens.com`, 인증서 = `*.ourhomelens.com` (일치 ✓)
 
+### Security Group 순환 참조 — 반드시 분리
+- 두 SG가 서로를 참조하는 인라인 ingress/egress 규칙은 Cycle 에러 발생
+- 해결: `aws_security_group_rule` 별도 리소스로 분리
+  ```hcl
+  # 인라인 블록 대신 별도 리소스
+  resource "aws_security_group_rule" "alb_to_eks" { ... }
+  resource "aws_security_group_rule" "eks_from_alb" { ... }
+  ```
+
+### EKS Cluster SG vs eks_node_sg — 핵심 구분
+- EKS 관리형 노드그룹은 EKS가 자동 생성한 **cluster security group**만 노드에 부착
+- `vpc_config.security_group_ids`에 지정한 `eks_node_sg`는 **control plane ENI**에 붙음 (노드 아님)
+- ALB→노드 8080 ingress 규칙은 `eks_node_sg`가 아닌 **cluster SG**에 추가해야 함
+  ```hcl
+  # eks/main.tf에서 관리
+  resource "aws_security_group_rule" "cluster_sg_from_alb" {
+    security_group_id        = aws_eks_cluster.main.vpc_config[0].cluster_security_group_id
+    source_security_group_id = var.alb_sg_id
+    ...
+  }
+  ```
+- `eks_node_sg`에 추가한 규칙은 EKS가 주기적으로 삭제 → Terraform apply 루프 발생
+
+### VPC Endpoint SG — CIDR 기반으로 설정
+- 노드는 cluster SG만 보유하므로 `eks_node_sg` 참조 시 VPC 엔드포인트 접근 불가
+- private subnet CIDR로 허용해야 노드가 ECR/STS 엔드포인트 사용 가능
+  ```hcl
+  cidr_blocks = [for s in local.private_subnets : s.cidr]
+  ```
+
+### Helm provider 버전 — 3.x 핀 필수
+- Helm 3.x에서 `kubernetes { }` 블록 문법 변경 → `context deadline exceeded` 또는 파싱 에러
+- `environments/dev/versions.tf`에 반드시 상한 핀:
+  ```hcl
+  helm = {
+    source  = "hashicorp/helm"
+    version = ">= 2.13.0, < 3.0.0"
+  }
+  ```
+- 버전 변경 후 `terraform init -upgrade` 실행 필요
+
+### RDS Parameter Group — shared_preload_libraries
+- `postgis-3`은 유효하지 않은 값 → `InvalidParameterValue` 에러
+- PostGIS는 `shared_preload_libraries` 불필요, SQL로 설치: `CREATE EXTENSION IF NOT EXISTS postgis;`
+- 올바른 설정:
+  ```hcl
+  parameter {
+    name         = "shared_preload_libraries"
+    value        = "pg_stat_statements"
+    apply_method = "pending-reboot"   # static parameter는 pending-reboot 필수
+  }
+  ```
+
+### Secrets Manager import — ARN 필수
+- `terraform import`는 시크릿 이름이 아닌 전체 ARN 필요
+- AWS가 이름 뒤에 랜덤 6자리를 붙이므로 ARN 먼저 조회:
+  ```bash
+  aws secretsmanager list-secrets --region eu-west-3 \
+    --query 'SecretList[?starts_with(Name, `homelens/dev`)].{Name:Name,ARN:ARN}'
+  terraform import module.secrets.aws_secretsmanager_secret.xxx arn:aws:secretsmanager:...:secret:name-XXXXXX
+  ```
+
+### KEDA ScaledObject — kubernetes_manifest 사용 금지
+- `kubernetes_manifest`는 plan 단계에서 CRD 검증 → KEDA 설치 전 에러 발생
+- `null_resource + local-exec + kubectl apply`로 대체:
+  ```hcl
+  resource "null_resource" "keda_scaled_object" {
+    provisioner "local-exec" {
+      command = "aws eks update-kubeconfig ... && kubectl apply -f - <<YAML ... YAML"
+    }
+    depends_on = [helm_release.keda]
+  }
+  ```
+- `hashicorp/null` provider 추가 후 `terraform init -upgrade` 필요
+
+### ALB Ingress Controller — vpcId 명시 필수
+- IMDSv2 활성화 환경에서 IMDS 자동 조회 실패 → `EC2MetadataError: status code: 401`
+- helm_release에 `vpcId` 명시 및 timeout 연장 필수:
+  ```hcl
+  set { name = "vpcId"; value = var.vpc_id }
+  timeout = 600
+  ```
+
+### Celery 초기 replicas = 0
+- `placeholder:latest` 이미지 부재로 Deployment progress deadline 초과
+- `modules/celery/variables.tf`의 `replicas` default = 0
+- 실제 이미지는 CI/CD에서 배포
+
+### CloudWatch Dashboard — region 필드 필수
+- 모든 metric 위젯에 `region` 필드 없으면 `InvalidParameterInput` 에러
+  ```hcl
+  properties = {
+    region = var.aws_region
+    metrics = [...]
+  }
+  ```
+
+### DNS outputs — data source 참조
+- `dns/outputs.tf`는 `data.aws_route53_zone.main` 참조 (managed resource 아님)
+- `aws_route53_zone.main`으로 참조 시 `Reference to undeclared resource` 에러
+
 ---
 
 # HomeLens AI
@@ -249,7 +447,8 @@ terraform plan                              # No changes 확인
 - MVP 목표일: 2026-06-01
 - 대상 플랫폼: iOS / Android (React Native)
 - MVP 대상 지역: 서울 전역
-- 현재 단계: Terraform 인프라 코드 완성, apply 대기 중
+- 현재 단계: dev 환경 Terraform apply 완료 + kubectl apply 완료 (2026-05-18)
+- 다음 단계: 백엔드 팀 FastAPI·Celery 이미지 ECR 빌드·푸시 → CI/CD 연결 (GitHub org 초대 후)
 
 ## 기술 스택 요약
 
@@ -335,6 +534,13 @@ homelens/
 │   ├── requirements.md     # 요구사항 정의서 전문
 │   └── tech_stack.md       # 기술 스택 상세 정의
 ├── homelens-terraform/     # Terraform IaC
+├── k8s/                    # Kubernetes YAML (kubectl apply용)
+│   ├── configmap.yaml          # 비민감 환경변수 + Secrets Manager 경로명
+│   ├── fastapi-serviceaccount.yaml
+│   ├── fastapi-deployment.yaml
+│   ├── fastapi-service.yaml
+│   ├── celery-deployment.yaml  # CI/CD 이미지 업데이트용
+│   └── ingress.yaml            # ALB 라우팅 (api-dev.ourhomelens.com)
 ├── backend/                # FastAPI 서버 (예정)
 └── frontend/               # React Native 앱 (예정)
 ```

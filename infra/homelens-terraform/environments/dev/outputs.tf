@@ -32,3 +32,11 @@ output "report_queue_url" {
   value       = module.sqs.report_queue_url
   description = "Celery AI 리포트 요청 큐 URL"
 }
+
+output "fastapi_role_arn" {
+  value = module.eks.fastapi_role_arn
+}
+
+output "alb_arn" {
+  value = module.alb.alb_arn
+}
