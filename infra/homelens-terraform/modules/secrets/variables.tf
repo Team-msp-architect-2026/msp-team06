@@ -39,6 +39,12 @@ variable "molit_service_key" {
   default   = ""
 }
 
+variable "mois_service_key" {
+  type      = string
+  sensitive = true
+  default   = ""
+}
+
 # 인프라 파생값 — RDS / ElastiCache 모듈 output에서 전달
 variable "rds_endpoint" {
   type    = string

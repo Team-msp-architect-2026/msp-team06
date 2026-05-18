@@ -115,6 +115,7 @@ module "secrets" {
   naver_client_id     = var.naver_client_id
   naver_client_secret = var.naver_client_secret
   molit_service_key   = var.molit_service_key
+  mois_service_key    = var.mois_service_key
 
   rds_endpoint   = module.rds.rds_endpoint
   rds_secret_arn = module.rds.rds_secret_arn

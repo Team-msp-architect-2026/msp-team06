@@ -13,6 +13,9 @@ data:
   KAKAO_SECRET_NAME: "homelens/dev/kakao/map-api"
   NAVER_SECRET_NAME: "homelens/dev/naver/news-api"
   MOLIT_SECRET_NAME: "homelens/dev/molit/real-estate-api"
+  MOLIT_APT_LIST_ENDPOINT: "https://apis.data.go.kr/1613000/AptListService3"
+  MOLIT_APT_TRADE_ENDPOINT: "https://apis.data.go.kr/1613000/RTMSDataSvcAptTradeDev"
+  MOLIT_APT_RENT_ENDPOINT: "https://apis.data.go.kr/1613000/RTMSDataSvcAptRent"
   MOIS_SECRET_NAME: "homelens/dev/mois/address-api"
   BEDROCK_SECRET_NAME: "homelens/dev/bedrock/config"
 

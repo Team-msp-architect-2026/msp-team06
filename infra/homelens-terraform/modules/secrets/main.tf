@@ -48,6 +48,22 @@ resource "aws_secretsmanager_secret_version" "molit" {
   })
 }
 
+# 행안부 도로명주소 API
+resource "aws_secretsmanager_secret" "mois" {
+  name                    = "homelens/${var.env}/mois/address-api"
+  description             = "행안부 도로명주소 API 서비스키"
+  recovery_window_in_days = 0
+
+  tags = { Env = var.env }
+}
+
+resource "aws_secretsmanager_secret_version" "mois" {
+  secret_id = aws_secretsmanager_secret.mois.id
+  secret_string = jsonencode({
+    service_key = var.mois_service_key
+  })
+}
+
 # RDS 접속 정보
 # password는 RDS manage_master_user_password가 관리 — password_secret_arn으로 참조
 resource "aws_secretsmanager_secret" "rds" {

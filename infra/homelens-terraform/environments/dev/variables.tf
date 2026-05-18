@@ -121,3 +121,9 @@ variable "molit_service_key" {
   default   = ""
 }
 
+variable "mois_service_key" {
+  type      = string
+  sensitive = true
+  default   = ""
+}
+
