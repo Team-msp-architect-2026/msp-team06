@@ -13,6 +13,11 @@ output "molit_secret_arn" {
   description = "국토부 API 시크릿 ARN"
 }
 
+output "mois_secret_arn" {
+  value       = aws_secretsmanager_secret.mois.arn
+  description = "행안부 도로명주소 API 시크릿 ARN"
+}
+
 output "rds_secret_arn" {
   value       = aws_secretsmanager_secret.rds.arn
   description = "RDS 접속 정보 시크릿 ARN"
