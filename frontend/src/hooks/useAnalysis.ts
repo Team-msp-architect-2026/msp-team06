@@ -24,28 +24,35 @@ export function usePrice(
 }
 
 // 가격 추이 조회 훅
-export function usePriceTrend(regionId: string, period: string = "1y") {
+export function usePriceTrend(
+  regionId: string,
+  lat: number,
+  lng: number,
+  period: string = "1y",
+  regionName?: string,
+) {
   return useQuery({
-    queryKey: ["price", "trend", regionId, period],
-    queryFn: () => getPriceTrend(regionId, period),
-    enabled: !!regionId,
+    queryKey: ["price", "trend", regionId, lat, lng, period, regionName],
+    queryFn: () => getPriceTrend(regionId, lat, lng, period, "all", regionName),
+    enabled: !!regionId && !!lat && !!lng,
   });
 }
 
 // 가격 통계 조회 훅 (최저/평균/최고)
 export function usePriceStats(
   regionId: string,
-  lawdCd: string,
+  lat: number,
+  lng: number,
   dealYmd: string,
   period: string = "1m",
+  regionName?: string,
 ) {
   return useQuery({
-    queryKey: ["price", "stats", regionId, lawdCd, dealYmd, period],
-    queryFn: () => getPriceStats(regionId, lawdCd, dealYmd, "all", period),
-    enabled: !!regionId && !!lawdCd && !!dealYmd,
+    queryKey: ["price", "stats", regionId, lat, lng, dealYmd, period],
+    queryFn: () => getPriceStats(regionId, lat, lng, dealYmd, "all", period, regionName),
+    enabled: !!regionId && !!lat && !!lng && !!dealYmd,
   });
 }
-
 // 이슈/뉴스 목록 조회 훅
 export function useIssues(regionId: string, regionName: string) {
   return useQuery({

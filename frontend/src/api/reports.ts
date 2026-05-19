@@ -38,8 +38,13 @@ export interface ReportResponse {
 }
 
 // AI 리포트 생성 요청
-export async function createReport(regionId: string): Promise<ReportCreateResponse> {
-  return apiPost<ReportCreateResponse>('/reports', { regionId });
+export async function createReport(
+  regionId: string,
+  regionName?: string,
+  lat?: number,
+  lng?: number,
+): Promise<ReportCreateResponse> {
+  return apiPost<ReportCreateResponse>('/reports', { regionId, regionName, lat, lng });
 }
 
 // AI 리포트 생성 상태 조회 (Polling)

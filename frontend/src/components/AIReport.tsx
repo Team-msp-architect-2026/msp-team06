@@ -1,11 +1,11 @@
 // AI 리포트 컴포넌트 - idle/loading/done 상태별 UI 표시
-
 import React from "react";
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { ReportResponse } from "../api/reports";
 import { Report, ReportStatus } from "../types";
 
 interface AIReportProps {
-  report: Report;
+  report?: Report | ReportResponse;
   onGenerate: () => void;
   status: ReportStatus;
 }
@@ -38,19 +38,31 @@ const AIReport: React.FC<AIReportProps> = ({ report, onGenerate, status }) => {
     );
   }
 
+  if (status === "done" && !report) {
+    return (
+      <View style={styles.rstart}>
+        <Text style={styles.rst}>리포트를 불러오지 못했습니다</Text>
+      </View>
+    );
+  }
+
   return (
     <View>
       <View style={styles.rsum}>
         <Text style={styles.rsuml}>한줄 요약</Text>
-        <Text style={styles.rsumq}>{report.summary}</Text>
+        <Text style={styles.rsumq}>{report?.summary}</Text>
       </View>
-      {report.sections.map((sec, i) => (
+      {report?.sections.map((sec, i) => (
         <View key={i} style={styles.rsec}>
-          <Text style={styles.rset}>{sec.title}</Text>
-          <Text style={styles.rbody}>{sec.body}</Text>
+          <Text style={styles.rset}>
+            {(sec as any).sectionTitle || (sec as any).title}
+          </Text>
+          <Text style={styles.rbody}>
+            {(sec as any).content || (sec as any).body}
+          </Text>
         </View>
       ))}
-      <Text style={styles.disc}>{report.disclaimer}</Text>
+      <Text style={styles.disc}>{report?.disclaimer}</Text>
       <Text style={styles.rdate}>
         데이터 출처: 국토교통부 실거래가 공개시스템 (2026년 4월 기준)
       </Text>

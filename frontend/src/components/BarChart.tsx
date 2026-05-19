@@ -1,29 +1,48 @@
-// 가격 추이 막대 차트 - idx로 데이터 선택 (0:매매/1:전세/2:월세/3:보증금)
-
+// 가격 추이 막대 차트 - 실제 API 데이터 사용
 import React from "react";
 import { StyleSheet, Text, View } from "react-native";
-import { CHART_DATA, MONTHS } from "../constants/mockData";
 
-interface BarChartProps {
-  idx: number;
+interface BarChartItem {
+  month: string;
+  avgPrice: number;
 }
 
-const BarChart: React.FC<BarChartProps> = ({ idx }) => {
-  const d = CHART_DATA[idx];
-  const mx = Math.max(...d.v);
+interface BarChartProps {
+  data: BarChartItem[];
+  color: string;
+  unit: string;      // "억" | "만"
+  divisor: number;   // 가격 나누기 단위 (매매/전세: 10000, 월세: 1)
+}
+
+const BarChart: React.FC<BarChartProps> = ({ data, color, unit, divisor }) => {
+  if (!data || data.length === 0) {
+    return (
+      <View style={styles.empty}>
+        <Text style={styles.emptyText}>데이터 없음</Text>
+      </View>
+    );
+  }
+
+  // 최근 6개월만 표시 (최신순 정렬 후 슬라이스)
+  const recent = [...data].slice(0, 6).reverse();
+  const prices = recent.map((d) => d.avgPrice / divisor);
+  const mx = Math.max(...prices);
+
   return (
     <View style={styles.chtOuter}>
       <View style={styles.chtBars}>
-        {d.v.map((v, i) => {
-          const h = Math.round((v / mx) * 68);
-          const lbl = idx === 3 ? (v / 1000).toFixed(1) + "천" : v + d.u;
+        {recent.map((item, i) => {
+          const price = item.avgPrice / divisor;
+          const h = Math.round((price / mx) * 68);
+          const lbl =
+            divisor === 10000
+              ? (price).toFixed(1) + "억"
+              : Math.round(price) + unit;
           return (
             <View key={i} style={styles.cc}>
               <Text style={styles.cv}>{lbl}</Text>
               <View style={styles.cbw}>
-                <View
-                  style={[styles.cb, { height: h, backgroundColor: d.c }]}
-                />
+                <View style={[styles.cb, { height: h, backgroundColor: color }]} />
               </View>
             </View>
           );
@@ -31,9 +50,9 @@ const BarChart: React.FC<BarChartProps> = ({ idx }) => {
       </View>
       <View style={styles.chtSep} />
       <View style={styles.chtLbls}>
-        {MONTHS.map((m, i) => (
+        {recent.map((item, i) => (
           <Text key={i} style={styles.cl}>
-            {m}
+            {item.month.slice(5)}월
           </Text>
         ))}
       </View>
@@ -56,6 +75,8 @@ const styles = StyleSheet.create({
   chtSep: { height: 0.5, backgroundColor: "#E8E5DA", marginTop: 2 },
   chtLbls: { flexDirection: "row", marginTop: 4 },
   cl: { flex: 1, fontSize: 8, color: "#9B9B95", textAlign: "center" },
+  empty: { height: 80, justifyContent: "center", alignItems: "center" },
+  emptyText: { fontSize: 12, color: "#9B9B95" },
 });
 
 export default BarChart;

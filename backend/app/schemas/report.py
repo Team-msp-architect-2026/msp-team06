@@ -8,6 +8,9 @@ from datetime import date, datetime
 # POST /api/v1/reports 요청에 사용
 class ReportCreateRequest(BaseModel):
     regionId: str
+    regionName: Optional[str] = None
+    lat: Optional[float] = None
+    lng: Optional[float] = None
 
 # 리포트 생성 응답 형식
 # pending/cached 상태 반환

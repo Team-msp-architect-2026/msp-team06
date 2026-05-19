@@ -11,16 +11,17 @@ import {
 import AIReport from "../components/AIReport";
 import IssueCard from "../components/IssueCard";
 import KakaoMap from "../components/KakaoMap";
-import { RA_REPORT } from "../constants/mockData";
-import { useIssues } from "../hooks/useAnalysis";
+import { useIssues, usePrice, usePriceTrend } from "../hooks/useAnalysis";
 import { useMapMarkers } from "../hooks/useMap";
 import { useAppStore } from "../store/useAppStore";
 import { ReportStatus, ReportTarget, Screen } from "../types";
+import { useReport } from "../hooks/useReport";
 
 interface AreaScreenProps {
   areaTab: number;
   setAreaTab: (n: number) => void;
   raStatus: ReportStatus;
+  raReportId: string | null;  
   generate: (which: ReportTarget) => void;
   go: (s: Screen) => void;
 }
@@ -36,9 +37,11 @@ const AreaScreen: React.FC<AreaScreenProps> = ({
   areaTab,
   setAreaTab,
   raStatus,
+  raReportId,  
   generate,
   go,
 }) => {
+  const { data: reportData } = useReport(raReportId);  
   const { selectedRegion } = useAppStore();
 
   const scrollRef = useRef<ScrollView>(null);
@@ -47,6 +50,31 @@ const AreaScreen: React.FC<AreaScreenProps> = ({
     selectedRegion?.regionId || "",
     selectedRegion?.name || "",
   );
+
+  const now = new Date();
+  const dealYmd = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}`;
+
+  const { data: priceData, isLoading: priceLoading } = usePrice(
+    selectedRegion?.regionId || "",
+    selectedRegion?.lat || 0,
+    selectedRegion?.lng || 0,
+    dealYmd,
+    selectedRegion?.name || "",
+  );
+
+  const { data: trendData } = usePriceTrend(
+    selectedRegion?.regionId || "",
+    selectedRegion?.lat || 0,
+    selectedRegion?.lng || 0,
+    "1y",
+    selectedRegion?.name || "",
+  );
+
+  // 전월 대비 변동률 계산
+  const saleTrend = trendData?.trend.filter((t) => t.dealType === "sale") || [];
+  const changeRate = saleTrend.length >= 2
+    ? ((saleTrend[0].avgPrice - saleTrend[1].avgPrice) / saleTrend[1].avgPrice * 100).toFixed(1)
+    : null;
 
   const { data: markerData, isLoading: markerLoading } = useMapMarkers(
     selectedRegion?.regionId || "",
@@ -99,26 +127,43 @@ const AreaScreen: React.FC<AreaScreenProps> = ({
           <View style={styles.sr}>
             <View style={styles.si}>
               <Text style={styles.sl}>매매 평균가</Text>
-              <Text style={styles.sv}>8억 2천</Text>
-              <Text style={styles.sd}>▲ 전월 +1.2%</Text>
+              <Text style={styles.sv}>
+                {priceLoading ? "조회 중..." : priceData?.avgSalePrice
+                  ? `${Math.round(priceData.avgSalePrice / 10000)}억 ${Math.round((priceData.avgSalePrice % 10000) / 1000)}천`
+                  : "데이터 없음"}
+              </Text>
+              {changeRate && (
+                <Text style={[styles.sd, { color: Number(changeRate) >= 0 ? "#27AE60" : "#E74C3C" }]}>
+                  {Number(changeRate) >= 0 ? `▲ 전월 +${changeRate}%` : `▼ 전월 ${changeRate}%`}
+                </Text>
+              )}
             </View>
             <View style={styles.sp} />
             <View style={styles.si}>
               <Text style={styles.sl}>전세 평균가</Text>
-              <Text style={styles.sv}>5억 1천</Text>
+              <Text style={styles.sv}>
+                {priceLoading ? "조회 중..." : priceData?.avgJeonsePrice
+                  ? `${Math.round(priceData.avgJeonsePrice / 10000)}억 ${Math.round((priceData.avgJeonsePrice % 10000) / 1000)}천`
+                  : "데이터 없음"}
+              </Text>
             </View>
           </View>
           <View style={styles.sdv} />
           <View style={styles.sr}>
             <View style={styles.si}>
               <Text style={styles.sl}>월세 평균</Text>
-              <Text style={styles.svsm}>보증금 1천/월 85만</Text>
+              <Text style={styles.svsm}>
+                {priceLoading ? "조회 중..." : priceData?.avgMonthlyRent
+                  ? `보증금 ${Math.round((priceData.avgMonthlyDeposit || 0) / 1000)}천/월 ${priceData.avgMonthlyRent}만`
+                  : "데이터 없음"}
+              </Text>
             </View>
             <View style={styles.sp} />
             <View style={styles.si}>
               <Text style={styles.sl}>이번달 거래량</Text>
-              <Text style={styles.sv}>23건</Text>
-              <Text style={styles.sd}>▲ 전월 +5건</Text>
+              <Text style={styles.sv}>
+                {priceLoading ? "조회 중..." : `${priceData?.recentTradeCount ?? 0}건`}
+              </Text>
             </View>
           </View>
           <View style={styles.sdv} />
@@ -222,7 +267,7 @@ const AreaScreen: React.FC<AreaScreenProps> = ({
           )}
           {areaTab === 1 && (
             <AIReport
-              report={RA_REPORT}
+              report={reportData}
               status={raStatus}
               onGenerate={() => generate("ra")}
             />
