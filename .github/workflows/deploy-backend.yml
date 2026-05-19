@@ -39,7 +39,7 @@ jobs:
 
       - name: Update kubeconfig
         run: |
-          aws eks update-kubeconfig --region eu-west-3 --name homelens-dev
+          aws eks update-kubeconfig --region eu-west-3 --name homelens-dev-eks
 
       - name: Deploy to EKS
         env:
