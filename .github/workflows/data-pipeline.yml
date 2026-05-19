@@ -37,12 +37,12 @@ jobs:
           aws-region: ${{ env.AWS_REGION }}
 
       - name: DB 접속 정보 설정
-  run: |
-    echo "DB_HOST=${{ secrets.DB_HOST }}" >> $GITHUB_ENV
-    echo "DB_PORT=${{ secrets.DB_PORT }}" >> $GITHUB_ENV
-    echo "DB_NAME=${{ secrets.DB_NAME }}" >> $GITHUB_ENV
-    echo "DB_USER=${{ secrets.DB_USER }}" >> $GITHUB_ENV
-    echo "DB_PASSWORD=${{ secrets.DB_PASSWORD }}" >> $GITHUB_ENV
+        run: |
+          echo "DB_HOST=${{ secrets.DB_HOST }}" >> $GITHUB_ENV
+          echo "DB_PORT=${{ secrets.DB_PORT }}" >> $GITHUB_ENV
+          echo "DB_NAME=${{ secrets.DB_NAME }}" >> $GITHUB_ENV
+          echo "DB_USER=${{ secrets.DB_USER }}" >> $GITHUB_ENV
+          echo "DB_PASSWORD=${{ secrets.DB_PASSWORD }}" >> $GITHUB_ENV
       - name: Alembic 마이그레이션 실행
         working-directory: data-pipeline
         run: |
