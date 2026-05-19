@@ -21,6 +21,7 @@ class PriceResponse(BaseModel):
 class PriceTrendItem(BaseModel):
     month: str
     avgPrice: int
+    avgDeposit: Optional[int] = None
     dealType: str
     tradeCount: int
 

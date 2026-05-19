@@ -1,79 +1,18 @@
-# # HomeLens AI - AI 리포트 생성 서비스 로직
-# # Anthropic API 연동 (Claude 모델 사용)
-
-# import anthropic
-# from app.core.config import settings
-
-# # Anthropic 클라이언트 초기화
-# client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
-
-# # AI 리포트 면책 고지 문구
-# DISCLAIMER = (
-#     "본 리포트는 국토교통부 실거래가·카카오맵·네이버 뉴스 데이터를 기반으로 "
-#     "AI가 생성한 참고 자료이며, 부동산 중개나 투자자문이 아닙니다. "
-#     "AI 생성 내용은 부정확할 수 있으므로 실제 거래 시에는 공인중개사 등 "
-#     "전문가 상담을 권장하며, 거래 결정과 결과에 대한 책임은 이용자에게 있습니다."
-# )
-
-
-# def build_prompt(region_name: str, price_data: dict, news_data: dict, infra_data: dict) -> str:
-#     # AI 리포트 생성을 위한 프롬프트 구성
-#     return f"""
-# 당신은 부동산 정보 분석 AI입니다. 아래 데이터를 기반으로 {region_name} 지역의 부동산 분석 리포트를 작성해주세요.
-
-# [가격 데이터]
-# {price_data}
-
-# [뉴스/이슈 데이터]
-# {news_data}
-
-# [인프라 데이터]
-# {infra_data}
-
-# 다음 4개 섹션으로 작성해주세요.
-# 1. 가격 동향: 최근 가격 변화 흐름 및 변동 요인 후보
-# 2. 생활 환경: 교통, 학교, 편의시설 등 인프라 종합
-# 3. 지역 이슈: 관련 뉴스 및 개발 이슈 요약
-# 4. 종합 의견: 실거주·매매 관점 종합 정리
-
-# 주의사항:
-# - 원인 단정 금지. '영향 가능 요인 후보' 형태로 표현
-# - 투자 권유·법률·세무 조언 미제공
-# - 각 섹션은 3~5문장으로 작성
-# """
-
-
-# async def generate_report(
-#     region_name: str,
-#     price_data: dict,
-#     news_data: dict,
-#     infra_data: dict,
-# ) -> dict:
-#     # Claude API로 AI 리포트 생성
-#     prompt = build_prompt(region_name, price_data, news_data, infra_data)
-
-#     message = client.messages.create(
-#         model="claude-opus-4-6",
-#         max_tokens=2000,
-#         messages=[
-#             {"role": "user", "content": prompt}
-#         ],
-#     )
-
-#     # 응답 텍스트 파싱
-#     content = message.content[0].text
-
-#     return {
-#         "content": content,
-#         "disclaimer": DISCLAIMER,
-#     }
-
-#-------------------------------------------------------------------------
-
 # HomeLens AI - AI 리포트 생성 서비스 로직
-# 현재 mock 응답 반환 (Bedrock 연동 후 교체 예정)
+# Amazon Bedrock Claude 연동
 
-# AI 리포트 면책 고지 문구
+import json
+import boto3
+from app.core.config import settings
+
+# Bedrock 클라이언트
+bedrock = boto3.client(
+    "bedrock-runtime",
+    region_name="eu-west-3",
+)
+
+MODEL_ID = "eu.anthropic.claude-sonnet-4-6"
+
 DISCLAIMER = (
     "본 리포트는 국토교통부 실거래가·카카오맵·네이버 뉴스 데이터를 기반으로 "
     "AI가 생성한 참고 자료이며, 부동산 중개나 투자자문이 아닙니다. "
@@ -81,33 +20,59 @@ DISCLAIMER = (
     "전문가 상담을 권장하며, 거래 결정과 결과에 대한 책임은 이용자에게 있습니다."
 )
 
-# mock 리포트 섹션 데이터
-MOCK_SECTIONS = [
-    {
-        "sectionKey": "price_trend",
-        "sectionTitle": "가격 동향",
-        "content": "최근 6개월간 매매 평균가가 완만한 상승세를 보이고 있습니다. 거래량도 전월 대비 증가하는 추세로 실수요자 유입이 지속되는 것으로 보입니다.",
-        "sortOrder": 1,
-    },
-    {
-        "sectionKey": "life_env",
-        "sectionTitle": "생활 환경",
-        "content": "대중교통 접근성이 우수하며 주변 생활 편의시설이 잘 갖춰져 있습니다. 학군 및 의료 환경도 양호한 수준입니다.",
-        "sortOrder": 2,
-    },
-    {
-        "sectionKey": "local_issues",
-        "sectionTitle": "지역 이슈",
-        "content": "해당 지역 관련 개발 계획 논의가 진행 중입니다. 다만 실현 시기가 불확실하므로 단기 의사결정에 과도하게 반영하는 것은 바람직하지 않습니다.",
-        "sortOrder": 3,
-    },
-    {
-        "sectionKey": "overall",
-        "sectionTitle": "종합 의견",
-        "content": "실거주 목적의 수요자에게 긍정적인 지역으로 판단됩니다. 가격 상승세가 지속되고 있어 진입 시점에 대한 신중한 검토가 필요합니다.",
-        "sortOrder": 4,
-    },
-]
+
+def build_prompt(region_name: str, price_data: dict, news_data: dict, infra_data: dict) -> str:
+    return f"""당신은 부동산 정보 분석 AI입니다. 아래 데이터를 기반으로 {region_name} 지역의 부동산 분석 리포트를 작성해주세요.
+
+[가격 데이터]
+{json.dumps(price_data, ensure_ascii=False)}
+
+[뉴스/이슈 데이터]
+{json.dumps(news_data, ensure_ascii=False)}
+
+[인프라 데이터]
+{json.dumps(infra_data, ensure_ascii=False)}
+
+다음 JSON 형식으로만 응답해주세요. 다른 텍스트 없이 JSON만 출력:
+{{
+  "summary": "2문장 이내. 이 지역이 어떤 곳인지, 지금 시장 분위기가 어떤지 핵심만.",
+  "sections": [
+    {{
+      "sectionKey": "price_trend",
+      "sectionTitle": "가격 동향",
+      "content": "부동산을 잘 모르는 사람도 이해할 수 있도록 가격 흐름과 그 배경을 설명. 수치가 있으면 활용하고 없으면 지역 특성과 시장 상황을 바탕으로 서술. 핵심 내용 위주로 충실하게.",
+      "sortOrder": 1
+    }},
+    {{
+      "sectionKey": "life_env",
+      "sectionTitle": "생활 환경",
+      "content": "지하철, 버스 등 교통, 주변 학교, 마트, 병원 등 실생활에 필요한 시설을 구체적으로 설명. 실제로 살 때 어떤 점이 편리하고 불편한지 중심으로 서술.",
+      "sortOrder": 2
+    }},
+    {{
+      "sectionKey": "local_issues",
+      "sectionTitle": "지역 이슈",
+      "content": "재개발, 재건축, 교통 호재, 규제 등 이 지역 가격과 생활에 영향을 줄 수 있는 이슈를 일반인이 이해하기 쉽게 설명. 뉴스 데이터가 있으면 활용하고 없으면 해당 지역의 알려진 이슈를 서술.",
+      "sortOrder": 3
+    }},
+    {{
+      "sectionKey": "overall",
+      "sectionTitle": "종합 의견",
+      "content": "실제로 이 지역에 살거나 매매를 고려하는 사람 입장에서 알아야 할 핵심 사항 정리. 장단점을 균형 있게 서술.",
+      "sortOrder": 4
+    }}
+  ]
+}}
+
+작성 원칙:
+- 부동산 초보자도 이해할 수 있는 쉬운 표현 사용
+- 원인 단정 금지. '~가능성이 있습니다', '~요인 중 하나로 볼 수 있습니다' 형태로 표현
+- 투자 권유·법률·세무 조언 절대 미제공
+- 'API 연동 필요', '데이터 연동' 등 개발 관련 문구 절대 사용 금지
+- 데이터 부족 시 지역 특성과 공개된 정보를 바탕으로 자연스럽게 서술
+- summary는 반드시 2문장 이내
+- 쓸데없는 반복이나 불필요한 문장 없이 핵심 위주로 작성
+- JSON 형식 외 다른 텍스트 출력 금지"""
 
 
 async def generate_report(
@@ -116,9 +81,49 @@ async def generate_report(
     news_data: dict,
     infra_data: dict,
 ) -> dict:
-    # mock 리포트 반환 (Bedrock 연동 후 실제 AI 생성으로 교체)
-    return {
-        "content": f"{region_name} 부동산 분석 리포트",
-        "sections": MOCK_SECTIONS,
-        "disclaimer": DISCLAIMER,
-    }    
+    try:
+        prompt = build_prompt(region_name, price_data, news_data, infra_data)
+
+        body = json.dumps({
+            "anthropic_version": "bedrock-2023-05-31",
+            "max_tokens": 4096,
+            "messages": [{"role": "user", "content": prompt}]
+        })
+
+        response = bedrock.invoke_model(
+            modelId=MODEL_ID,
+            body=body,
+            contentType="application/json",
+            accept="application/json",
+        )
+
+        response_body = json.loads(response["body"].read())
+        text = response_body["content"][0]["text"]
+
+        # JSON 파싱
+        text = text.strip()
+        if text.startswith("```"):
+            text = text.split("```")[1]
+            if text.startswith("json"):
+                text = text[4:]
+        result = json.loads(text.strip())
+
+        return {
+            "summary": result.get("summary", ""),
+            "sections": result.get("sections", []),
+            "disclaimer": DISCLAIMER,
+        }
+
+    except Exception as e:
+        print(f"Bedrock 오류: {e}")
+        # 오류 시 mock 반환
+        return {
+            "summary": f"{region_name} 부동산 분석 리포트 (데이터 준비 중)",
+            "sections": [
+                {"sectionKey": "price_trend", "sectionTitle": "가격 동향", "content": "데이터를 불러오지 못했습니다.", "sortOrder": 1},
+                {"sectionKey": "life_env", "sectionTitle": "생활 환경", "content": "데이터를 불러오지 못했습니다.", "sortOrder": 2},
+                {"sectionKey": "local_issues", "sectionTitle": "지역 이슈", "content": "데이터를 불러오지 못했습니다.", "sortOrder": 3},
+                {"sectionKey": "overall", "sectionTitle": "종합 의견", "content": "데이터를 불러오지 못했습니다.", "sortOrder": 4},
+            ],
+            "disclaimer": DISCLAIMER,
+        }

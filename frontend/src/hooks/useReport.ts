@@ -8,9 +8,9 @@ import { createReport, getReport, getReportStatus } from '../api/reports';
 export function useCreateReport() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (regionId: string) => createReport(regionId),
+    mutationFn: (params: { regionId: string; regionName?: string; lat?: number; lng?: number }) =>
+      createReport(params.regionId, params.regionName, params.lat, params.lng),
     onSuccess: (data) => {
-      // 생성 성공 시 상태 조회 캐시 초기화
       queryClient.invalidateQueries({ queryKey: ['report', 'status', data.reportId] });
     },
   });

@@ -77,30 +77,40 @@ export async function getPrice(
 // 가격 추이 조회
 export async function getPriceTrend(
   regionId: string,
+  lat: number,
+  lng: number,
   period: string = "1y",
   dealType: string = "all",
+  regionName?: string,
 ): Promise<PriceTrendResponse> {
   return apiGet<PriceTrendResponse>("/analysis/price/trend", {
     regionId,
+    lat,
+    lng,
     period,
     dealType,
+    regionName,
   });
 }
 
 // 가격 통계 조회 (최저/평균/최고)
 export async function getPriceStats(
   regionId: string,
-  lawdCd: string,
+  lat: number,
+  lng: number,
   dealYmd: string,
   dealType: string = "all",
   period: string = "1m",
+  regionName?: string,
 ): Promise<PriceStatResponse> {
   return apiGet<PriceStatResponse>("/analysis/price/stats", {
     regionId,
-    lawdCd,
+    lat,
+    lng,
     dealYmd,
     dealType,
     period,
+    regionName,
   });
 }
 

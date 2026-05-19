@@ -13,11 +13,11 @@ import BarChart from "../components/BarChart";
 import IssueCard from "../components/IssueCard";
 import KakaoMap from "../components/KakaoMap";
 import Stats3 from "../components/Stats3";
-import { RC_REPORT } from "../constants/mockData";
-import { useIssues, usePrice } from "../hooks/useAnalysis";
+import { useIssues, usePrice, usePriceTrend, usePriceStats } from "../hooks/useAnalysis";
 import { useMapMarkers } from "../hooks/useMap";
 import { useAppStore } from "../store/useAppStore";
 import { ReportStatus, ReportTarget, Screen } from "../types";
+import { useReport } from "../hooks/useReport";
 
 interface ComplexScreenProps {
   cxTab: number;
@@ -29,6 +29,7 @@ interface ComplexScreenProps {
   rcStatus: ReportStatus;
   generate: (which: ReportTarget) => void;
   go: (s: Screen) => void;
+  rcReportId: string | null;
 }
 
 const INFRA_COLORS: Record<string, string> = {
@@ -65,10 +66,12 @@ const ComplexScreen: React.FC<ComplexScreenProps> = ({
   rentTab,
   setRentTab,
   rcStatus,
+  rcReportId,
   generate,
   go,
 }) => {
   const { selectedRegion, prevScreen } = useAppStore();
+  const { data: reportData } = useReport(rcReportId);
 
   const scrollRef = useRef<ScrollView>(null);
 
@@ -77,7 +80,7 @@ const ComplexScreen: React.FC<ComplexScreenProps> = ({
     selectedRegion?.lat || 0,
     selectedRegion?.lng || 0,
     "infra",
-  );
+);
 
   const now = new Date();
   const dealYmd = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}`;
@@ -89,10 +92,30 @@ const ComplexScreen: React.FC<ComplexScreenProps> = ({
     dealYmd,
   );
 
+  const { data: trendData } = usePriceTrend(
+  selectedRegion?.regionId || "",
+  selectedRegion?.lat || 0,
+  selectedRegion?.lng || 0,
+  "1y",
+  selectedRegion?.name || "",
+);
+
+  const { data: statsData } = usePriceStats(
+  selectedRegion?.regionId || "",
+  selectedRegion?.lat || 0,
+  selectedRegion?.lng || 0,
+  dealYmd,
+  "1m",
+  selectedRegion?.name || "",
+);
+
+  const monthlyTrend = trendData?.trend.filter((t) => t.dealType === "monthly") || [];
+  const deposits = monthlyTrend.map((t) => (t as any).avgDeposit || 0).filter((d) => d > 0);
+
   const { data: issuesData, isLoading: issuesLoading } = useIssues(
     selectedRegion?.regionId || "",
     selectedRegion?.name || "",
-  );
+);
 
   return (
     <View style={styles.scr}>
@@ -264,47 +287,53 @@ const ComplexScreen: React.FC<ComplexScreenProps> = ({
                     style={[styles.ptb, priceTab === i && styles.ptbOn]}
                     onPress={() => setPriceTab(i)}
                   >
-                    <Text
-                      style={[
-                        styles.ptbText,
-                        priceTab === i && styles.ptbTextOn,
-                      ]}
-                    >
+                    <Text style={[styles.ptbText, priceTab === i && styles.ptbTextOn]}>
                       {p}
                     </Text>
                   </TouchableOpacity>
                 ))}
               </View>
+
+              {/* 매매 추이 차트 */}
               {priceTab === 0 && (
                 <View>
-                  <Text style={styles.chartTitle}>
-                    매매가 추이 (최근 6개월)
-                  </Text>
-                  <BarChart idx={0} />
+                  <Text style={styles.chartTitle}>매매가 추이 (최근 6개월)</Text>
+                  <BarChart
+                    data={trendData?.trend.filter((t) => t.dealType === "sale") || []}
+                    color="#1A1A18"
+                    unit="억"
+                    divisor={10000}
+                  />
                   <Stats3
                     items={[
-                      ["최저가", "14.2억"],
-                      ["평균가", "14.8억"],
-                      ["최고가", "15.2억"],
+                      ["최저가", statsData?.minPrice ? `${Math.round(statsData.minPrice / 10000)}억` : "데이터 없음"],
+                      ["평균가", statsData?.avgPrice ? `${Math.round(statsData.avgPrice / 10000)}억` : "데이터 없음"],
+                      ["최고가", statsData?.maxPrice ? `${Math.round(statsData.maxPrice / 10000)}억` : "데이터 없음"],
                     ]}
                   />
                 </View>
               )}
+              {/* 전세 추이 차트 */}
               {priceTab === 1 && (
                 <View>
-                  <Text style={styles.chartTitle}>
-                    전세가 추이 (최근 6개월)
-                  </Text>
-                  <BarChart idx={1} />
+                  <Text style={styles.chartTitle}>전세가 추이 (최근 6개월)</Text>
+                  <BarChart
+                    data={trendData?.trend.filter((t) => t.dealType === "jeonse") || []}
+                    color="#185FA5"
+                    unit="억"
+                    divisor={10000}
+                  />
                   <Stats3
                     items={[
-                      ["최저가", "7.8억"],
-                      ["평균가", "8.2억"],
-                      ["최고가", "8.5억"],
+                      ["최저가", statsData?.minPrice ? `${Math.round(statsData.minPrice / 10000)}억` : "데이터 없음"],
+                      ["평균가", statsData?.avgPrice ? `${Math.round(statsData.avgPrice / 10000)}억` : "데이터 없음"],
+                      ["최고가", statsData?.maxPrice ? `${Math.round(statsData.maxPrice / 10000)}억` : "데이터 없음"],
                     ]}
                   />
                 </View>
               )}
+
+              {/* 월세/보증금 추이 차트 */}
               {priceTab === 2 && (
                 <View>
                   <View style={styles.rtog}>
@@ -314,42 +343,51 @@ const ComplexScreen: React.FC<ComplexScreenProps> = ({
                         style={[styles.rtb, rentTab === i && styles.rtbOn]}
                         onPress={() => setRentTab(i)}
                       >
-                        <Text
-                          style={[
-                            styles.rtbText,
-                            rentTab === i && styles.rtbTextOn,
-                          ]}
-                        >
+                        <Text style={[styles.rtbText, rentTab === i && styles.rtbTextOn]}>
                           {r}
                         </Text>
                       </TouchableOpacity>
                     ))}
                   </View>
-                  {rentTab === 0 ? (
+
+                  {/* 월세 추이 차트 */}
+                  {rentTab === 0 && (
                     <View>
-                      <Text style={styles.chartTitle}>
-                        월세 추이 (최근 6개월)
-                      </Text>
-                      <BarChart idx={2} />
+                      <Text style={styles.chartTitle}>월세 추이 (최근 6개월)</Text>
+                      <BarChart
+                        data={trendData?.trend.filter((t) => t.dealType === "monthly") || []}
+                        color="#854F0B"
+                        unit="만"
+                        divisor={1}
+                      />
                       <Stats3
                         items={[
-                          ["최저", "78만"],
-                          ["평균", "130만"],
-                          ["최고", "165만"],
+                          ["최저", statsData?.minPrice ? `${statsData.minPrice}만` : "데이터 없음"],
+                          ["평균", statsData?.avgPrice ? `${statsData.avgPrice}만` : "데이터 없음"],
+                          ["최고", statsData?.maxPrice ? `${statsData.maxPrice}만` : "데이터 없음"],
                         ]}
                       />
                     </View>
-                  ) : (
+                  )}
+
+                  {/* 보증금 추이 차트 */}
+                  {rentTab === 1 && (
                     <View>
-                      <Text style={styles.chartTitle}>
-                        보증금 추이 (최근 6개월)
-                      </Text>
-                      <BarChart idx={3} />
+                      <Text style={styles.chartTitle}>보증금 추이 (최근 6개월)</Text>
+                      <BarChart
+                        data={trendData?.trend.filter((t) => t.dealType === "monthly").map((t) => ({
+                          ...t,
+                          avgPrice: (t as any).avgDeposit || 0,
+                        })) || []}
+                        color="#3B6D11"
+                        unit="만"
+                        divisor={10000}
+                      />
                       <Stats3
                         items={[
-                          ["최저", "500만"],
-                          ["평균", "2,000만"],
-                          ["최고", "5,000만"],
+                          ["최저", deposits.length ? `${Math.round(Math.min(...deposits) / 10000)}억` : "데이터 없음"],
+                          ["평균", deposits.length ? `${Math.round(deposits.reduce((a, b) => a + b, 0) / deposits.length / 10000)}억` : "데이터 없음"],
+                          ["최고", deposits.length ? `${Math.round(Math.max(...deposits) / 10000)}억` : "데이터 없음"],
                         ]}
                       />
                     </View>
@@ -391,7 +429,7 @@ const ComplexScreen: React.FC<ComplexScreenProps> = ({
           {/* AI 리포트 탭 */}
           {cxTab === 2 && (
             <AIReport
-              report={RC_REPORT}
+              report={reportData}
               status={rcStatus}
               onGenerate={() => generate("rc")}
             />

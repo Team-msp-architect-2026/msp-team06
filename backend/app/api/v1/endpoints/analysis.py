@@ -1,4 +1,5 @@
 # HomeLens AI - 가격/이슈 분석 API 엔드포인트
+# 조회 순서: DB → Redis → 외부 API
 
 from fastapi import APIRouter, Depends, Query, HTTPException
 from typing import Optional
@@ -11,9 +12,19 @@ from app.schemas.analysis import (
     PriceStatResponse,
     IssueResponse,
 )
-from app.services.news import search_real_estate_news
 from app.utils.classify import classify_category
-from app.services.price import fetch_sale_price, fetch_rent_price, get_lawd_cd
+from app.services.price import (
+    fetch_sale_price,
+    fetch_rent_price,
+    get_lawd_cd,
+    get_price_snapshot,
+    get_price_trend,
+    get_price_stats,
+    get_kapt_name,
+    filter_by_name,
+    fetch_price_trend_from_api,
+)
+from app.services.news import get_region_issues
 
 router = APIRouter()
 
@@ -28,26 +39,44 @@ async def get_price(
     dealType: Optional[str] = Query("all", description="sale | jeonse | monthly | all"),
     db: AsyncSession = Depends(get_db),
 ):
-    # 국토부 실거래가 API로 가격 현황 조회
-    try:
-        lawdCd = await get_lawd_cd(lat, lng)
+    # 1순위: DB → Redis 조회
+    snapshot = await get_price_snapshot(regionId, db)
+    if snapshot:
+        return {
+            "avgSalePrice": snapshot.get("avg_sale_price"),
+            "avgJeonsePrice": snapshot.get("avg_jeonse_price"),
+            "avgMonthlyRent": snapshot.get("avg_monthly_rent"),
+            "avgMonthlyDeposit": snapshot.get("avg_monthly_deposit"),
+            "jeonseRatio": snapshot.get("jeonse_ratio"),
+            "recentTradeCount": snapshot.get("recent_trade_count") or 0,
+            "priceStabilityGrade": snapshot.get("price_stability_grade", "normal"),
+            "priceLevel": snapshot.get("price_level", "avg"),
+            "dataBaseDate": snapshot.get("data_base_date", str(date.today())),
+        }
 
-        sale_data = await fetch_sale_price(lawdCd, dealYmd)
-        rent_data = await fetch_rent_price(lawdCd, dealYmd)
+    # 2순위: 외부 API 직접 호출 (fallback)
+    try:
+        lawd_cd_5, lawd_cd_10 = await get_lawd_cd(lat, lng)
+
+        # 단지목록 API로 공식 단지명 조회
+        matched_name = None
+        if regionName:
+            matched_name = await get_kapt_name(lawd_cd_10, regionName)
+            if matched_name:
+                print(f"최종 사용 단지명: {matched_name}")
+
+        sale_data = await fetch_sale_price(lawd_cd_5, dealYmd)
+        rent_data = await fetch_rent_price(lawd_cd_5, dealYmd)
 
         # 매매 데이터 파싱
         sale_items = sale_data.get("response", {}).get("body", {}).get("items", {}).get("item", [])
         if isinstance(sale_items, dict):
             sale_items = [sale_items]
 
-        # 단지명 필터링
-        if regionName and sale_items:
-            print("aptNm 샘플:", [i.get("aptNm") for i in sale_items[:5]])  # 추가
-            filtered = [i for i in sale_items if regionName in str(i.get("aptNm", ""))]    
-
-        # 단지명 필터링
-        if regionName and sale_items:
-            filtered = [i for i in sale_items if regionName in str(i.get("aptNm", ""))]
+        # 단지명 필터링 (공식 단지명 우선, 없으면 카카오맵 단지명)
+        filter_name = matched_name or regionName
+        if filter_name and sale_items:
+            filtered = filter_by_name(sale_items, filter_name)
             if filtered:
                 sale_items = filtered
 
@@ -61,13 +90,11 @@ async def get_price(
         if isinstance(rent_items, dict):
             rent_items = [rent_items]
 
-        # 단지명 필터링
-        if regionName and rent_items:
-            filtered_rent = [i for i in rent_items if regionName in str(i.get("aptNm", ""))]
+        if filter_name and rent_items:
+            filtered_rent = filter_by_name(rent_items, filter_name)
             if filtered_rent:
                 rent_items = filtered_rent
 
-        # 전세/월세 분리
         jeonse_items = [i for i in rent_items if str(i.get("monthlyRent", "0")) == "0"]
         monthly_items = [i for i in rent_items if str(i.get("monthlyRent", "0")) != "0"]
 
@@ -105,39 +132,101 @@ async def get_price(
 
 
 @router.get("/price/trend", response_model=PriceTrendResponse)
-async def get_price_trend(
-    regionId: str = Query(..., description="서비스 내부 지역 ID"),
-    period: Optional[str] = Query("1y", description="1m | 3m | 1y"),
-    dealType: Optional[str] = Query("all", description="sale | jeonse | monthly | all"),
+async def get_price_trend_endpoint(
+    regionId: str = Query(...),
+    lat: float = Query(...),
+    lng: float = Query(...),
+    period: Optional[str] = Query("1y"),
+    dealType: Optional[str] = Query("all"),
+    regionName: Optional[str] = Query(None),
     db: AsyncSession = Depends(get_db),
 ):
-    # TODO: 기간별 가격 추이 데이터 구현 필요
-    return {
-        "trend": [],
-        "changeRate1m": 0.0,
-        "changeRate3m": 0.0,
-        "changeRate1y": 0.0,
-        "dataBaseDate": date.today(),
-    }
+    # DB → Redis 조회
+    trend = await get_price_trend(regionId, dealType, period, db)
+    if trend:
+        return {
+            "trend": trend,
+            "changeRate1m": 0.0,
+            "changeRate3m": 0.0,
+            "changeRate1y": 0.0,
+            "dataBaseDate": date.today(),
+        }
 
+    # 외부 API fallback
+    try:
+        print(f"[trend] fetch_price_trend_from_api 호출 시작")
+        all_trend = await fetch_price_trend_from_api(lat, lng, regionName)
+        print(f"[trend] 결과: {len(all_trend)}건")
+        
+        # dealType별로 각각 최근 6개월
+        if dealType == "all":
+            sale = [t for t in all_trend if t["dealType"] == "sale"][:6]
+            jeonse = [t for t in all_trend if t["dealType"] == "jeonse"][:6]
+            monthly = [t for t in all_trend if t["dealType"] == "monthly"][:6]
+            recent = sale + jeonse + monthly
+        else:
+            recent = [t for t in all_trend if t["dealType"] == dealType][:6]
+
+        return {
+            "trend": recent,
+            "changeRate1m": 0.0,
+            "changeRate3m": 0.0,
+            "changeRate1y": 0.0,
+            "dataBaseDate": date.today(),
+        }
+    except Exception as e:
+        print(f"가격 추이 API 오류: {e}")
+        print(traceback.format_exc())
+        return {
+            "trend": [],
+            "changeRate1m": 0.0,
+            "changeRate3m": 0.0,
+            "changeRate1y": 0.0,
+            "dataBaseDate": date.today(),
+        }
 
 @router.get("/price/stats", response_model=PriceStatResponse)
-async def get_price_stats(
+async def get_price_stats_endpoint(
     regionId: str = Query(..., description="서비스 내부 지역 ID"),
-    lawdCd: str = Query(..., description="법정동 코드 앞 5자리"),
+    lat: float = Query(..., description="위도"),
+    lng: float = Query(..., description="경도"),
     dealYmd: str = Query(..., description="조회 계약년월 (YYYYMM 형식)"),
     dealType: Optional[str] = Query("all", description="sale | jeonse | monthly | all"),
     period: Optional[str] = Query("1m", description="1m | 3m | 1y"),
+    regionName: Optional[str] = Query(None, description="단지명 필터링용"),
     db: AsyncSession = Depends(get_db),
 ):
-    # 국토부 실거래가 API로 가격 통계 (최저/평균/최고) 조회
+    # 1순위: DB → Redis 조회
+    stats = await get_price_stats(regionId, dealType, period, db)
+    if stats:
+        return {
+            "minPrice": stats.get("min_price"),
+            "avgPrice": stats.get("avg_price"),
+            "maxPrice": stats.get("max_price"),
+            "totalTradeCount": stats.get("total_trade_count"),
+            "recentTradeCount": stats.get("recent_trade_count"),
+            "tradeSignal": stats.get("trade_signal", "normal"),
+            "dataBaseDate": stats.get("data_base_date", str(date.today())),
+        }
+
+    # 2순위: 외부 API fallback
     try:
-        sale_data = await fetch_sale_price(lawdCd, dealYmd)
+        lawd_cd_5, lawd_cd_10 = await get_lawd_cd(lat, lng)
+        matched_name = None
+        if regionName:
+            matched_name = await get_kapt_name(lawd_cd_10, regionName)
+        filter_name = matched_name or regionName
+
+        sale_data = await fetch_sale_price(lawd_cd_5, dealYmd)
         sale_items = sale_data.get("response", {}).get("body", {}).get("items", {}).get("item", [])
         if isinstance(sale_items, dict):
             sale_items = [sale_items]
 
-        # 거래가 목록 추출
+        if filter_name and sale_items:
+            filtered = filter_by_name(sale_items, filter_name)
+            if filtered:
+                sale_items = filtered
+
         prices = [
             int(str(i.get("dealAmount", "0")).replace(",", ""))
             for i in sale_items
@@ -168,34 +257,34 @@ async def get_issues(
     limit: int = Query(20, description="반환 건수"),
     db: AsyncSession = Depends(get_db),
 ):
-    # 네이버 뉴스 API로 지역 관련 이슈/뉴스 조회
+    # DB → Redis → 네이버 API 순서
     try:
-        result = await search_real_estate_news(regionName, display=50)
+        result = await get_region_issues(regionId, regionName, limit, db)
         items = result.get("items", [])
-        issue_list = []
-        seen_categories = set()
 
-        for item in items:
-            title = item.get("title", "").replace("<b>", "").replace("</b>", "")
-            category = classify_category(title)
+        # 네이버 API 직접 호출 응답인 경우 가공
+        if result.get("source") == "api":
+            issue_list = []
+            seen_categories = set()
+            for item in items:
+                title = item.get("title", "").replace("<b>", "").replace("</b>", "")
+                category = classify_category(title)
+                if category in seen_categories:
+                    continue
+                seen_categories.add(category)
+                issue_list.append({
+                    "issueId": item.get("link", ""),
+                    "type": category,
+                    "title": title,
+                    "summary": item.get("description", "").replace("<b>", "").replace("</b>", ""),
+                    "impactType": "neutral",
+                    "publishedAt": item.get("pubDate", ""),
+                    "url": item.get("link", ""),
+                })
+                if len(issue_list) >= 5:
+                    break
+            return {"items": issue_list}
 
-            if category in seen_categories:
-                continue
-            seen_categories.add(category)
-
-            issue_list.append({
-                "issueId": item.get("link", ""),
-                "type": category,
-                "title": title,
-                "summary": item.get("description", "").replace("<b>", "").replace("</b>", ""),
-                "impactType": "neutral",
-                "publishedAt": item.get("pubDate", ""),
-                "url": item.get("link", ""),
-            })
-
-            if len(issue_list) >= 5:
-                break
-
-        return {"items": issue_list}
+        return {"items": items}
     except Exception as e:
         raise HTTPException(status_code=503, detail="외부 API 연결 실패")
