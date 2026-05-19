@@ -161,6 +161,7 @@ def parse_xml_response(xml_data: str, deal_type: str) -> list:
                 result.append({
                     "deal_type": "sale",
                     "apt_name": get_text("아파트"),
+                    "apt_seq": get_text("aptSeq"),        # 추가
                     "deal_amount": get_text("거래금액").replace(",", ""),
                     "area": get_text("전용면적"),
                     "floor": get_text("층"),
@@ -175,6 +176,7 @@ def parse_xml_response(xml_data: str, deal_type: str) -> list:
                 result.append({
                     "deal_type": deal_type,
                     "apt_name": get_text("아파트"),
+                    "apt_seq": get_text("aptSeq"),        # 추가
                     "deposit": get_text("보증금액").replace(",", ""),
                     "monthly_rent": get_text("월세금액").replace(",", ""),
                     "area": get_text("전용면적"),

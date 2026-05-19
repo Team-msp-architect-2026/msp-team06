@@ -41,18 +41,42 @@ def get_region_id(conn, lawd_cd: str) -> str:
 
 
 def parse_prices(price_data: list, deal_type: str) -> dict:
-    """가격 데이터 파싱 - 통계 계산"""
+    """가격 데이터 파싱 - apt_seq별, dong별 분류"""
     prices = []
+    apt_seq_groups = {}
+    dong_groups = {}
 
     for item in price_data:
+        apt_seq = item.get("apt_seq", "")
+        dong = item.get("dong", "")
+
         try:
             if deal_type == "sale":
                 amount = int(item.get("deal_amount", "0").replace(",", ""))
             else:
                 amount = int(item.get("deposit", "0").replace(",", ""))
 
-            if amount > 0:
-                prices.append(amount)
+            if amount <= 0:
+                continue
+
+            prices.append(amount)
+
+            # apt_seq별 그룹
+            if apt_seq:
+                if apt_seq not in apt_seq_groups:
+                    apt_seq_groups[apt_seq] = {
+                        "prices": [],
+                        "apt_name": item.get("apt_name", ""),
+                        "dong": dong
+                    }
+                apt_seq_groups[apt_seq]["prices"].append(amount)
+
+            # dong별 그룹
+            if dong:
+                if dong not in dong_groups:
+                    dong_groups[dong] = []
+                dong_groups[dong].append(amount)
+
         except (ValueError, AttributeError):
             continue
 
@@ -91,7 +115,65 @@ def parse_prices(price_data: list, deal_type: str) -> dict:
             else "normal" if len(prices) >= 3
             else "low"
         ),
+        "apt_seq_groups": apt_seq_groups,
+        "dong_groups": dong_groups,
     }
+
+
+def save_by_apt_seq(conn, apt_seq_groups: dict, deal_type: str, month: str):
+    """단지별(apt_seq) 가격 데이터 저장"""
+    with conn.cursor() as cur:
+        for apt_seq, data in apt_seq_groups.items():
+            prices = data["prices"]
+            if not prices:
+                continue
+
+            avg_price = sum(prices) // len(prices)
+            trade_count = len(prices)
+
+            cur.execute("""
+                INSERT INTO price_trends (
+                    region_id, month, deal_type,
+                    avg_price, trade_count, apt_seq, created_at
+                ) VALUES (
+                    (SELECT id FROM regions WHERE legal_dong_code LIKE %s LIMIT 1),
+                    %s, %s, %s, %s, %s, NOW()
+                )
+                ON CONFLICT DO NOTHING
+            """, (
+                apt_seq[:5] + "%",
+                month,
+                deal_type,
+                avg_price,
+                trade_count,
+                apt_seq,
+            ))
+
+
+def save_by_dong(conn, lawd_cd: str, dong_groups: dict, deal_type: str, month: str):
+    """동별 가격 데이터 저장"""
+    with conn.cursor() as cur:
+        for dong, prices in dong_groups.items():
+            if not prices:
+                continue
+
+            avg_price = sum(prices) // len(prices)
+            trade_count = len(prices)
+
+            cur.execute("""
+                INSERT INTO price_trends (
+                    region_id, month, deal_type,
+                    avg_price, trade_count, created_at
+                )
+                SELECT id, %s, %s, %s, %s, NOW()
+                FROM regions
+                WHERE name = %s AND LEFT(legal_dong_code, 5) = %s
+                LIMIT 1
+                ON CONFLICT DO NOTHING
+            """, (
+                month, deal_type, avg_price, trade_count,
+                dong, lawd_cd,
+            ))
 
 
 def save_price_snapshot(conn, region_id: str, stats: dict, deal_type: str, data_base_date: str):
@@ -242,7 +324,8 @@ def lambda_handler(event, context):
         save_price_snapshot(conn, region_id, stats, deal_type, data_base_date)
         save_price_trend(conn, region_id, stats, deal_type, month)
         save_price_stats(conn, region_id, stats, deal_type, data_base_date)
-
+        save_by_apt_seq(conn, stats.get("apt_seq_groups", {}), deal_type, month)  
+        save_by_dong(conn, lawd_cd, stats.get("dong_groups", {}), deal_type, month)  
         conn.commit()
         print(f"저장 완료: {region_id} {deal_type} {month}")
 
