@@ -178,6 +178,12 @@ kubectl apply -f k8s/ingress.yaml
 # celery-deployment.yaml은 ECR 이미지 준비 후 CI/CD에서 배포 — 수동 apply 불필요
 
 # fastapi_role_arn은 매번 동일 (IAM Role 이름 고정) → serviceaccount.yaml 수정 불필요
+
+# 4. aws-auth ConfigMap 팀원 권한 복원 (EKS destroy 시 초기화되므로 매번 필수)
+kubectl get configmap aws-auth -n kube-system -o yaml > ~/aws-auth.yaml
+# ~/aws-auth.yaml 열어서 mapUsers 섹션 추가 후 저장
+kubectl apply -f ~/aws-auth.yaml
+# 팀원 확인: aws eks update-kubeconfig --name homelens-dev-eks --region eu-west-3 && kubectl get pods -n homelens
 ```
 
 ### apply 순서 (의존성 순) — 3단계 방식 필수
@@ -435,6 +441,41 @@ terraform apply
 ### DNS outputs — data source 참조
 - `dns/outputs.tf`는 `data.aws_route53_zone.main` 참조 (managed resource 아님)
 - `aws_route53_zone.main`으로 참조 시 `Reference to undeclared resource` 에러
+
+### EKS aws-auth — 팀원 kubectl 권한 관리
+- `terraform destroy` 시 EKS 클러스터 삭제 → aws-auth ConfigMap도 함께 초기화됨
+- 매일 아침 apply 후 반드시 팀원 권한 재등록 필요
+- 현재 등록된 팀원: **student08**, **student12**
+
+```bash
+# aws-auth 최신 버전 받기
+kubectl get configmap aws-auth -n kube-system -o yaml > ~/aws-auth.yaml
+
+# nano로 열어서 mapUsers 섹션 추가
+nano ~/aws-auth.yaml
+```
+
+추가할 내용 (`data:` 아래, `mapRoles:` 와 같은 레벨):
+```yaml
+  mapUsers: |
+    - userarn: arn:aws:iam::611058323802:user/student08
+      username: student08
+      groups:
+        - system:masters
+    - userarn: arn:aws:iam::611058323802:user/student12
+      username: student12
+      groups:
+        - system:masters
+```
+
+```bash
+# 적용
+kubectl apply -f ~/aws-auth.yaml
+```
+
+- 팀원 신규 추가 시: `aws sts get-caller-identity`로 정확한 ARN 확인 후 등록
+- "the server has asked for the client to provide credentials" 오류 → aws-auth 미등록 또는 ARN 불일치
+- "Conflict: the object has been modified" 오류 → `kubectl get configmap aws-auth -n kube-system -o yaml > ~/aws-auth.yaml` 재실행 후 편집
 
 ---
 
