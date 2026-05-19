@@ -39,25 +39,8 @@ MOLIT_API_URLS = {
 
 
 def get_api_key() -> str:
-    """
-    Secrets Manager에서 국토부 API 키 자동 조회
-    
-    API 키 저장 방법 (1회 수동):
-    aws secretsmanager put-secret-value \
-      --secret-id homelens/dev/molit/real-estate-api \
-      --secret-string '{"api_key":"발급받은키입력"}'
-    """
-    env = os.environ.get("ENVIRONMENT", "dev")
-    secret_name = f"homelens/{env}/molit/real-estate-api"
-
-    try:
-        response = secretsmanager.get_secret_value(SecretId=secret_name)
-        secret = json.loads(response["SecretString"])
-        return secret["api_key"]
-    except Exception as e:
-        print(f"API 키 조회 실패: {e}")
-        return os.environ.get("MOLIT_API_KEY", "")
-
+    """환경 변수에서 API 키 조회"""
+    return os.environ.get("MOLIT_API_KEY", "")
 
 def get_db_connection():
     """
