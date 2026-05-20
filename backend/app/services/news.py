@@ -3,6 +3,8 @@
 
 import httpx
 from app.core.config import settings
+from sqlalchemy.ext.asyncio import AsyncSession
+from app.core.redis import cache_get, cache_set, TTL_NEWS
 
 # 네이버 뉴스 API 엔드포인트
 NAVER_NEWS_URL = "https://openapi.naver.com/v1/search/news.json"
@@ -31,3 +33,62 @@ async def search_real_estate_news(region_name: str = None, display: int = 50) ->
     else:
         keyword = "아파트 매매 전세 실거래 부동산시장"
     return await search_news(keyword, display)
+
+async def get_news_highlights(region: str = "", limit: int = 10, category: str = "all", db: AsyncSession = None) -> dict:
+    cache_key = f"news:highlights:{region}:{category}"
+    cached = await cache_get(cache_key)
+    if cached:
+        return cached
+
+    try:
+        keyword = f"{region} 아파트 부동산" if region else "아파트 매매 전세 부동산시장"
+        data = await search_news(keyword, limit)
+        items = data.get("items", [])
+        result = {
+            "items": [
+                {
+                    "newsId": f"naver_{i}",
+                    "title": item.get("title", "").replace("<b>", "").replace("</b>", ""),
+                    "summary": item.get("description", "").replace("<b>", "").replace("</b>", ""),
+                    "source": item.get("originallink", ""),
+                    "url": item.get("link", ""),
+                    "publishedAt": item.get("pubDate", ""),
+                    "category": "market",
+                    "keywords": [],
+                }
+                for i, item in enumerate(items)
+            ]
+        }
+        await cache_set(cache_key, result, TTL_NEWS)
+        return result
+    except Exception as e:
+        print(f"뉴스 하이라이트 조회 실패: {e}")
+        return {"items": []}
+
+
+async def get_region_issues(region_id: str, region_name: str, display: int = 20, db: AsyncSession = None) -> list:
+    cache_key = f"news:issues:{region_id}"
+    cached = await cache_get(cache_key)
+    if cached:
+        return cached
+
+    try:
+        data = await search_real_estate_news(region_name, display)
+        items = data.get("items", [])
+        result = [
+            {
+                "issueId": f"naver_{i}",
+                "type": "news",
+                "title": item.get("title", "").replace("<b>", "").replace("</b>", ""),
+                "summary": item.get("description", "").replace("<b>", "").replace("</b>", ""),
+                "impactType": "neutral",
+                "publishedAt": item.get("pubDate", ""),
+                "url": item.get("link", ""),
+            }
+            for i, item in enumerate(items)
+        ]
+        await cache_set(cache_key, result, TTL_NEWS)
+        return result
+    except Exception as e:
+        print(f"지역 이슈 조회 실패: {e}")
+        return []
