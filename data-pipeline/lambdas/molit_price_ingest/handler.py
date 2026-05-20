@@ -30,7 +30,7 @@ s3_client = boto3.client("s3", region_name=AWS_REGION)
 sqs_client = boto3.client("sqs", region_name=AWS_REGION)
 secretsmanager = boto3.client("secretsmanager", region_name=AWS_REGION)
 
-# 1.국토부 실거래가 API 엔드포인트 (공공데이터포털 RTMSDataSvc 계열)
+# 국토부 실거래가 API 엔드포인트 (공공데이터포털 RTMSDataSvc 계열)
 MOLIT_API_URLS = {
     "sale":    "https://apis.data.go.kr/1613000/RTMSDataSvcAptTradeDev",  # 매매
     "jeonse":  "https://apis.data.go.kr/1613000/RTMSDataSvcAptRent",      # 전세
