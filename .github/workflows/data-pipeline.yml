@@ -46,6 +46,7 @@ jobs:
       - name: Alembic 마이그레이션 실행
         working-directory: data-pipeline
         run: |
+          pip install pydantic-settings
           export DATABASE_URL="postgresql://$DB_USER:$DB_PASSWORD@$DB_HOST:$DB_PORT/$DB_NAME"
           export PYTHONPATH=$PYTHONPATH:$(pwd)/../backend
           alembic upgrade head
