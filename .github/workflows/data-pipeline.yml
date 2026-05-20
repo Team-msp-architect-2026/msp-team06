@@ -10,6 +10,10 @@ on:
 env:
   AWS_REGION: eu-west-3
 
+permissions:
+  id-token: write
+  contents: read
+
 jobs:
   deploy-lambdas:
     name: Deploy Lambda Functions
@@ -18,11 +22,10 @@ jobs:
       - name: 코드 체크아웃
         uses: actions/checkout@v4
 
-      - name: AWS 인증
+      - name: AWS 인증 (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          role-to-assume: arn:aws:iam::611058323802:role/homelens-github-actions-deploy-role
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Lambda 함수 배포 (전체)
@@ -40,4 +43,3 @@ jobs:
               --region ${{ env.AWS_REGION }}
             echo "✅ $lambda_name 배포 완료"
           done
-          
