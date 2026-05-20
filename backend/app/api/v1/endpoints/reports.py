@@ -16,7 +16,7 @@ from app.schemas.report import (
 from app.services.report import generate_report
 from app.services.price import get_price_snapshot, fetch_sale_price, get_lawd_cd
 from app.services.news import get_region_issues
-from app.services.map import search_all_nearby_infra_with_cache
+from app.services.map import search_all_nearby_infra
 
 router = APIRouter()
 
@@ -55,7 +55,7 @@ async def _generate_report_async(report_id: str, region_id: str, region_name: st
         # 3. 인프라 데이터 수집
         infra_data = {}
         try:
-            markers = await search_all_nearby_infra_with_cache(region_id, lat, lng, 1500)
+            markers = await search_all_nearby_infra(region_id, lat, lng, 1500)
             if markers:
                 infra_data = {"markers": [{"name": m.get("name"), "type": m.get("markerType"), "distance": m.get("distanceM")} for m in markers[:10]]}
         except Exception as e:
