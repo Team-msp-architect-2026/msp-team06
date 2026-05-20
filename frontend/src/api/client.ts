@@ -6,9 +6,16 @@ const BASE_URL = "http://10.0.2.2:8000/api/v1";
 // 공통 API 호출 함수
 export async function apiGet<T>(
   path: string,
-  params?: Record<string, string | number>,
+  params?: Record<string, string | number | undefined>,
 ): Promise<T> {
   const url = new URL(`${BASE_URL}${path}`);
+  if (params) {
+    Object.entries(params).forEach(([key, value]) => {
+      if (value !== undefined) {
+        url.searchParams.append(key, String(value));
+      }
+    });
+  }
 
   // 쿼리 파라미터 추가
   if (params) {

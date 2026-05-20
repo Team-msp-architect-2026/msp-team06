@@ -64,6 +64,7 @@ export async function getPrice(
   lng: number,
   dealYmd: string,
   dealType: string = "all",
+  regionName?: string,
 ): Promise<PriceResponse> {
   return apiGet<PriceResponse>("/analysis/price", {
     regionId,
@@ -71,6 +72,7 @@ export async function getPrice(
     lng,
     dealYmd,
     dealType,
+    regionName,
   });
 }
 
