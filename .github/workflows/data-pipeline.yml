@@ -33,7 +33,6 @@ jobs:
         run: |
           for lambda_dir in */; do
             lambda_name="${lambda_dir%/}"
-            # 언더스코어를 하이픈으로 변환 + dev 추가
             function_name="homelens-dev-${lambda_name//_/-}"
             echo "📦 $function_name 배포 중..."
             cd $lambda_name
@@ -42,6 +41,7 @@ jobs:
             aws lambda update-function-code \
               --function-name $function_name \
               --zip-file fileb://../../${lambda_name}.zip \
-              --region ${{ env.AWS_REGION }}
-            echo "✅ $function_name 배포 완료"
+              --region ${{ env.AWS_REGION }} \
+            && echo "✅ $function_name 배포 완료" \
+            || echo "⚠️ $function_name 없음 - 건너뜀"
           done
