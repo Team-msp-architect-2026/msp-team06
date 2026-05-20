@@ -58,4 +58,4 @@ jobs:
             $(kubectl get pod -n homelens \
               -l app=fastapi \
               -o jsonpath='{.items[0].metadata.name}') \
-            -- alembic upgrade head
+            -- bash -c "DATABASE_URL=postgresql://homelens_admin:$(aws secretsmanager get-secret-value --secret-id arn:aws:secretsmanager:eu-west-3:611058323802:secret:rds!db-6452b471-05a7-4fcb-a213-e529b6a3f1e8-IRHb2Z --query SecretString --output text | python3 -c \"import sys,json;print(json.load(sys.stdin)['password'])\")@homelens-dev-postgres.clk6su6ui84v.eu-west-3.rds.amazonaws.com:5432/homelens alembic upgrade head"
