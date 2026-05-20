@@ -12,7 +12,7 @@ env:
   ECR_REGISTRY: ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.eu-west-3.amazonaws.com
 
 jobs:
-  # ── 1. DB 마이그레이션 (Alembic) ──
+  # ── 1.. DB 마이그레이션 (Alembic) ──
   db-migrate:
     name: DB Migration (Alembic)
     runs-on: ubuntu-latest
