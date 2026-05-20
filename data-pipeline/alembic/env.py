@@ -14,7 +14,8 @@ if config.config_file_name is not None:
 target_metadata = Base.metadata
 
 # DB URL 주입
-config.set_main_option("sqlalchemy.url", settings.DATABASE_URL)
+db_url = f"postgresql://{settings.db_user}:{settings.db_password}@{settings.db_host}:{settings.db_port}/{settings.db_name}"
+config.set_main_option("sqlalchemy.url", db_url)
 
 
 def run_migrations_offline() -> None:
