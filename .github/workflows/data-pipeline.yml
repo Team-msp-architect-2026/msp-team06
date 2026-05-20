@@ -26,9 +26,9 @@ jobs:
           python-version: '3.12'
 
       - name: 의존성 설치
+        working-directory: data-pipeline
         run: |
           pip install -r ../backend/requirements.txt
-          working-directory: data-pipeline
 
       - name: AWS 인증
         uses: aws-actions/configure-aws-credentials@v4
