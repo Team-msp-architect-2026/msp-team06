@@ -107,7 +107,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ mapTab, setMapTab, go }) => {
             placeholder="성수동, 성수 롯데캐슬 파크..."
             placeholderTextColor={COLORS.textTertiary}
             value={searchVal}
-            onChangeText={setSearchVal}
+            onChangeText={(text) => setSearchVal(text.trim())}
             onSubmitEditing={handleSearch}
             returnKeyType="search"
             submitBehavior="blurAndSubmit"
