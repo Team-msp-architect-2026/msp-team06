@@ -24,27 +24,21 @@ router = APIRouter()
 _report_store = {}
 
 
-async def _generate_report_async(report_id: str, region_id: str, region_name: str, lat: float, lng: float, db):
-    """백그라운드에서 AI 리포트 생성"""
+async def _generate_report_async(report_id: str, region_id: str, region_name: str, lat: float, lng: float):
+    print(f"[리포트] 생성 시작: {report_id} / {region_name}")
     try:
         _report_store[report_id]["status"] = "processing"
         _report_store[report_id]["progressPct"] = 10
 
-        # 1. 가격 데이터 수집
+        # 1. 가격 데이터 수집 (db 없이)
         price_data = {}
-        try:
-            snapshot = await get_price_snapshot(region_id, db)
-            if snapshot:
-                price_data = snapshot
-        except Exception as e:
-            print(f"가격 데이터 수집 실패: {e}")
 
         _report_store[report_id]["progressPct"] = 40
 
-        # 2. 뉴스/이슈 데이터 수집
+        # 2. 뉴스/이슈 데이터 수집 (db 없이)
         news_data = {}
         try:
-            issues = await get_region_issues(region_id, region_name, db=db)
+            issues = await get_region_issues(region_id, region_name)
             if issues:
                 news_data = {"items": issues[:5]}
         except Exception as e:
@@ -104,7 +98,7 @@ async def create_report(
         "progressPct": 0,
     }
     background_tasks.add_task(
-        _generate_report_async, report_id, request.regionId, region_name, lat, lng, db
+        _generate_report_async, report_id, request.regionId, region_name, lat, lng
     )
     return {
         "reportId": report_id,
