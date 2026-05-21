@@ -39,7 +39,7 @@ jobs:
             cd $lambda_name
             mkdir -p dist
             cp handler.py dist/
-            pip install psycopg2-binary -t ./dist/ -q 2>/dev/null || true
+            pip install psycopg2-binary redis -t ./dist/ -q 2>/dev/null || true
             cd dist
             zip -r ../../${lambda_name}.zip .
             cd ../..
