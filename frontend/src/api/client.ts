@@ -17,24 +17,15 @@ export async function apiGet<T>(
     });
   }
 
-  // 쿼리 파라미터 추가
-  if (params) {
-    Object.entries(params).forEach(([key, value]) => {
-      url.searchParams.append(key, String(value));
-    });
-  }
-
   const response = await fetch(url.toString(), {
     method: "GET",
     headers: {
       "Content-Type": "application/json",
     },
   });
-
   if (!response.ok) {
     throw new Error(`API 오류: ${response.status}`);
   }
-
   return response.json();
 }
 
