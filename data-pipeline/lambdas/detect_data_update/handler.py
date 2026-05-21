@@ -19,7 +19,7 @@ secretsmanager = boto3.client("secretsmanager", region_name=AWS_REGION)
 
 def get_db_connection():
     """Secrets Manager에서 DB 연결 정보 조회"""
-    env = os.environ.get("ENVIRONMENT", "dev")
+    env = os.environ.get("ENV", "dev")
     secret_name = f"homelens/{env}/rds/postgres"
 
     response = secretsmanager.get_secret_value(SecretId=secret_name)
@@ -36,7 +36,7 @@ def get_db_connection():
 
 def get_redis_client():
     """Secrets Manager에서 Redis 연결 정보 조회"""
-    env = os.environ.get("ENVIRONMENT", "dev")
+    env = os.environ.get("ENV", "dev")
     redis_host = os.environ.get("REDIS_HOST", "localhost")
     redis_port = int(os.environ.get("REDIS_PORT", "6379"))
 

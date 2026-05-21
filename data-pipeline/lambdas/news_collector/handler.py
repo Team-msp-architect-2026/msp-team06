@@ -16,7 +16,7 @@ from datetime import datetime, timezone
 # 환경변수
 NAVER_CLIENT_ID = os.environ.get("NAVER_CLIENT_ID", "")
 NAVER_CLIENT_SECRET = os.environ.get("NAVER_CLIENT_SECRET", "")
-S3_BUCKET = os.environ.get("S3_BUCKET", "")
+S3_BUCKET = os.environ.get("RAW_DATA_BUCKET", "")
 SQS_NEWS_SUMMARY_URL = os.environ.get("SQS_NEWS_SUMMARY_URL", "")
 AWS_REGION = os.environ.get("AWS_REGION", "eu-west-3")
 

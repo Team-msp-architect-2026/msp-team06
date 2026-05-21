@@ -13,7 +13,7 @@ from datetime import datetime, timezone
 
 # ── AWS 클라이언트 ─────────────────────────────────────────────
 AWS_REGION = os.environ.get("AWS_REGION", "eu-west-3")
-S3_BUCKET = os.environ.get("S3_BUCKET", "")
+S3_BUCKET = os.environ.get("RAW_DATA_BUCKET", "")
 
 s3_client = boto3.client("s3", region_name=AWS_REGION)
 secretsmanager = boto3.client("secretsmanager", region_name=AWS_REGION)
@@ -21,7 +21,7 @@ secretsmanager = boto3.client("secretsmanager", region_name=AWS_REGION)
 
 def get_db_connection():
     """Secrets Manager에서 DB 연결 정보 조회 후 연결"""
-    env = os.environ.get("ENVIRONMENT", "dev")
+    env = os.environ.get("ENV", "dev")
     secret_name = f"homelens/{env}/rds/postgres"
 
     response = secretsmanager.get_secret_value(SecretId=secret_name)

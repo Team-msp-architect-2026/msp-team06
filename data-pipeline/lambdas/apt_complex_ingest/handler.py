@@ -53,7 +53,7 @@ SEOUL_SIGUNGU_CODES = {
 
 def get_api_key() -> str:
     """Secrets Manager에서 국토부 API 키 조회"""
-    env = os.environ.get("ENVIRONMENT", "dev")
+    env = os.environ.get("ENV", "dev")
     secret_name = f"homelens/{env}/molit/real-estate-api"
 
     try:
@@ -67,7 +67,7 @@ def get_api_key() -> str:
 
 def get_db_connection():
     """Secrets Manager에서 DB 연결 정보 조회"""
-    env = os.environ.get("ENVIRONMENT", "dev")
+    env = os.environ.get("ENV", "dev")
     secret_name = f"homelens/{env}/rds/postgres"
 
     response = secretsmanager.get_secret_value(SecretId=secret_name)

@@ -23,7 +23,7 @@ from datetime import datetime, timezone
 
 # ── AWS 클라이언트 ─────────────────────────────────────────────
 AWS_REGION = os.environ.get("AWS_REGION", "eu-west-3")
-S3_BUCKET = os.environ.get("S3_BUCKET", "")
+S3_BUCKET = os.environ.get("RAW_DATA_BUCKET", "")
 SQS_PRICE_INGEST_URL = os.environ.get("SQS_PRICE_INGEST_URL", "")
 
 s3_client = boto3.client("s3", region_name=AWS_REGION)
@@ -39,8 +39,15 @@ MOLIT_API_URLS = {
 
 
 def get_api_key() -> str:
-    """환경 변수에서 API 키 조회"""
-    return os.environ.get("MOLIT_API_KEY", "")
+    env = os.environ.get("ENV", "dev")
+    secret_name = f"homelens/{env}/molit/real-estate-api"
+    try:
+        response = secretsmanager.get_secret_value(SecretId=secret_name)
+        secret = json.loads(response["SecretString"])
+        return secret["api_key"]
+    except Exception as e:
+        print(f"API 키 조회 실패: {e}")
+        return os.environ.get("MOLIT_API_KEY", "")
 
 def get_db_connection():
     """
@@ -51,7 +58,7 @@ def get_db_connection():
       --secret-id homelens/dev/rds/postgres \
       --secret-string '{"username":"homelens_app","password":"","host":"","port":5432,"dbname":"homelens_dev"}'
     """
-    env = os.environ.get("ENVIRONMENT", "dev")
+    env = os.environ.get("ENV", "dev")
     secret_name = f"homelens/{env}/rds/postgres"
 
     response = secretsmanager.get_secret_value(SecretId=secret_name)

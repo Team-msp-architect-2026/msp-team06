@@ -20,7 +20,7 @@ bedrock = boto3.client("bedrock-runtime", region_name=AWS_REGION)
 
 def get_db_connection():
     """Secrets Manager에서 DB 연결 정보 조회"""
-    env = os.environ.get("ENVIRONMENT", "dev")
+    env = os.environ.get("ENV", "dev")
     secret_name = f"homelens/{env}/rds/postgres"
 
     response = secretsmanager.get_secret_value(SecretId=secret_name)
@@ -37,7 +37,7 @@ def get_db_connection():
 
 def get_bedrock_model_id() -> str:
     """Secrets Manager에서 Bedrock 모델 ID 조회"""
-    env = os.environ.get("ENVIRONMENT", "dev")
+    env = os.environ.get("ENV", "dev")
     secret_name = f"homelens/{env}/bedrock/config"
 
     try:

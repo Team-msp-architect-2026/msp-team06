@@ -13,7 +13,7 @@ from datetime import datetime, timezone
 
 # ── AWS 클라이언트 ─────────────────────────────────────────────
 AWS_REGION = os.environ.get("AWS_REGION", "eu-west-3")
-S3_BUCKET = os.environ.get("S3_BUCKET", "")
+S3_BUCKET = os.environ.get("RAW_DATA_BUCKET", "")
 SQS_NEWS_SUMMARY_URL = os.environ.get("SQS_NEWS_SUMMARY_URL", "")
 
 s3_client = boto3.client("s3", region_name=AWS_REGION)
