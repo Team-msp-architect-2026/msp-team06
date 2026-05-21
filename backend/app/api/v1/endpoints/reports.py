@@ -3,7 +3,7 @@
 
 import uuid
 import asyncio
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, BackgroundTasks
 from sqlalchemy.ext.asyncio import AsyncSession
 from datetime import datetime, date
 from app.core.database import get_db
@@ -87,13 +87,13 @@ async def _generate_report_async(report_id: str, region_id: str, region_name: st
 @router.post("", response_model=ReportCreateResponse)
 async def create_report(
     request: ReportCreateRequest,
+    background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
 ):
     report_id = str(uuid.uuid4())
     region_name = getattr(request, "regionName", "") or ""
     lat = getattr(request, "lat", 0.0) or 0.0
     lng = getattr(request, "lng", 0.0) or 0.0
-
     _report_store[report_id] = {
         "status": "pending",
         "regionId": request.regionId,
@@ -103,12 +103,9 @@ async def create_report(
         "createdAt": datetime.now().isoformat(),
         "progressPct": 0,
     }
-
-    # 백그라운드에서 리포트 생성
-    asyncio.create_task(
-        _generate_report_async(report_id, request.regionId, region_name, lat, lng, db)
+    background_tasks.add_task(
+        _generate_report_async, report_id, request.regionId, region_name, lat, lng, db
     )
-
     return {
         "reportId": report_id,
         "status": "pending",
