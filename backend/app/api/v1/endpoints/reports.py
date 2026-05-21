@@ -3,7 +3,7 @@
 
 import uuid
 import asyncio
-from fastapi import APIRouter, Depends, BackgroundTasks, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from datetime import datetime, date
 from app.core.database import get_db
@@ -81,7 +81,6 @@ async def _generate_report_async(report_id: str, region_id: str, region_name: st
 @router.post("", response_model=ReportCreateResponse)
 async def create_report(
     request: ReportCreateRequest,
-    background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
 ):
     report_id = str(uuid.uuid4())
@@ -97,8 +96,8 @@ async def create_report(
         "createdAt": datetime.now().isoformat(),
         "progressPct": 0,
     }
-    background_tasks.add_task(
-        _generate_report_async, report_id, request.regionId, region_name, lat, lng
+    asyncio.ensure_future(
+        _generate_report_async(report_id, request.regionId, region_name, lat, lng)
     )
     return {
         "reportId": report_id,
