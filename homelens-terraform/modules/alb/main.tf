@@ -11,7 +11,10 @@ resource "aws_lb" "main" {
 
   enable_deletion_protection = var.environment == "prod"
 
-  tags = { Name = "${local.name_prefix}-alb" }
+  tags = {
+    Name                                             = "${local.name_prefix}-alb"
+    "elbv2.k8s.aws/cluster"                          = "${local.name_prefix}-eks"
+  }
 }
 
 resource "aws_lb_target_group" "api" {

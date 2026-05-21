@@ -34,6 +34,16 @@ variable "alb_sg_id" {
   type        = string
 }
 
+variable "rds_sg_id" {
+  description = "RDS security group ID — cluster SG → 5432 rule 추가에 사용"
+  type        = string
+}
+
+variable "redis_sg_id" {
+  description = "Redis security group ID — cluster SG → 6379 rule 추가에 사용"
+  type        = string
+}
+
 variable "ami_type" {
   description = "AMI type for EKS managed node groups"
   type        = string

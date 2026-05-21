@@ -136,7 +136,7 @@ resource "aws_eks_node_group" "worker" {
 }
 
 # ---------------------------------------------------------------------------
-# ALB → EKS cluster SG ingress 규칙
+# cluster SG 기반 ingress/egress 규칙
 # 노드에는 eks_node_sg가 아닌 EKS auto-created cluster SG가 붙으므로 여기서 관리
 # ---------------------------------------------------------------------------
 resource "aws_security_group_rule" "cluster_sg_from_alb" {
@@ -147,6 +147,26 @@ resource "aws_security_group_rule" "cluster_sg_from_alb" {
   protocol                 = "tcp"
   security_group_id        = aws_eks_cluster.main.vpc_config[0].cluster_security_group_id
   source_security_group_id = var.alb_sg_id
+}
+
+resource "aws_security_group_rule" "rds_from_cluster_sg" {
+  type                     = "ingress"
+  description              = "PostgreSQL from EKS cluster SG"
+  from_port                = 5432
+  to_port                  = 5432
+  protocol                 = "tcp"
+  security_group_id        = var.rds_sg_id
+  source_security_group_id = aws_eks_cluster.main.vpc_config[0].cluster_security_group_id
+}
+
+resource "aws_security_group_rule" "redis_from_cluster_sg" {
+  type                     = "ingress"
+  description              = "Redis from EKS cluster SG"
+  from_port                = 6379
+  to_port                  = 6379
+  protocol                 = "tcp"
+  security_group_id        = var.redis_sg_id
+  source_security_group_id = aws_eks_cluster.main.vpc_config[0].cluster_security_group_id
 }
 
 # ---------------------------------------------------------------------------

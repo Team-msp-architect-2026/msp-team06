@@ -63,6 +63,9 @@ module "eks" {
   cluster_version           = var.cluster_version
   private_subnet_ids        = module.networking.private_subnet_ids
   eks_node_sg_id            = module.networking.eks_node_sg_id
+  alb_sg_id                 = module.networking.alb_sg_id
+  rds_sg_id                 = module.networking.rds_sg_id
+  redis_sg_id               = module.networking.redis_sg_id
 
   api_node_instance_type    = var.api_node_instance_type
   api_node_min_size         = var.api_node_min_size
@@ -127,7 +130,7 @@ module "alb" {
   alb_controller_role_arn = module.eks.alb_controller_role_arn
   eks_cluster_name        = module.eks.cluster_name
   aws_region              = var.aws_region
-  acm_certificate_arn     = "arn:aws:acm:eu-west-3:611058323802:certificate/e6827a7e-81ec-44d0-ae16-8877325b91e8"
+  acm_certificate_arn     = "arn:aws:acm:eu-west-3:611058323802:certificate/cbf76714-d305-4f44-a7ee-c0d347ccd808"
 }
 
 module "lambda" {

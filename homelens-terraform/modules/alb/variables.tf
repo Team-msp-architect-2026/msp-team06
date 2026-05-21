@@ -42,5 +42,5 @@ variable "aws_region" {
 variable "acm_certificate_arn" {
   description = "ACM 인증서 ARN — eu-west-3 발급 (ALB HTTPS 리스너용)"
   type        = string
-  default     = "arn:aws:acm:eu-west-3:611058323802:certificate/e6827a7e-81ec-44d0-ae16-8877325b91e8"
+  default     = "arn:aws:acm:eu-west-3:611058323802:certificate/cbf76714-d305-4f44-a7ee-c0d347ccd808"
 }
