@@ -57,7 +57,8 @@ async def _generate_report_async(report_id: str, region_id: str, region_name: st
         try:
             markers = await search_all_nearby_infra(lat, lng, 1500)
             if markers:
-                infra_data = {"markers": [{"name": m.get("name"), "type": m.get("markerType"), "distance": m.get("distanceM")} for m in markers[:10]]}
+                marker_list = markers.get("markers", []) if isinstance(markers, dict) else markers
+                infra_data = {"markers": [{"name": m.get("name"), "type": m.get("markerType"), "distance": m.get("distanceM")} for m in marker_list[:10]]}
         except Exception as e:
             print(f"인프라 데이터 수집 실패: {e}")
 
