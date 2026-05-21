@@ -287,4 +287,5 @@ async def get_issues(
 
         return {"items": items}
     except Exception as e:
+        print(f"이슈 API 오류: {e}")
         raise HTTPException(status_code=503, detail="외부 API 연결 실패")
