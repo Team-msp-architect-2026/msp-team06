@@ -34,11 +34,13 @@ async def _generate_report_async(report_id: str, region_id: str, region_name: st
         price_data = {}
 
         _report_store[report_id]["progressPct"] = 40
+        print(f"[리포트] 뉴스 수집 시작")
 
         # 2. 뉴스/이슈 데이터 수집 (db 없이)
         news_data = {}
         try:
             issues = await get_region_issues(region_id, region_name)
+            print(f"[리포트] 뉴스 수집 완료: {len(issues) if issues else 0}건")
             if issues:
                 news_data = {"items": issues[:5]}
         except Exception as e:
