@@ -3,7 +3,7 @@
 
 import uuid
 import asyncio
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, BackgroundTasks, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from datetime import datetime, date
 from app.core.database import get_db
@@ -24,27 +24,21 @@ router = APIRouter()
 _report_store = {}
 
 
-async def _generate_report_async(report_id: str, region_id: str, region_name: str, lat: float, lng: float, db):
-    """백그라운드에서 AI 리포트 생성"""
+async def _generate_report_async(report_id: str, region_id: str, region_name: str, lat: float, lng: float):
+    print(f"[리포트] 생성 시작: {report_id} / {region_name}")
     try:
         _report_store[report_id]["status"] = "processing"
         _report_store[report_id]["progressPct"] = 10
 
-        # 1. 가격 데이터 수집
+        # 1. 가격 데이터 수집 (db 없이)
         price_data = {}
-        try:
-            snapshot = await get_price_snapshot(region_id, db)
-            if snapshot:
-                price_data = snapshot
-        except Exception as e:
-            print(f"가격 데이터 수집 실패: {e}")
 
         _report_store[report_id]["progressPct"] = 40
 
-        # 2. 뉴스/이슈 데이터 수집
+        # 2. 뉴스/이슈 데이터 수집 (db 없이)
         news_data = {}
         try:
-            issues = await get_region_issues(region_id, region_name, db=db)
+            issues = await get_region_issues(region_id, region_name)
             if issues:
                 news_data = {"items": issues[:5]}
         except Exception as e:
@@ -55,9 +49,10 @@ async def _generate_report_async(report_id: str, region_id: str, region_name: st
         # 3. 인프라 데이터 수집
         infra_data = {}
         try:
-            markers = await search_all_nearby_infra(region_id, lat, lng, 1500)
+            markers = await search_all_nearby_infra(lat, lng, 1500)
             if markers:
-                infra_data = {"markers": [{"name": m.get("name"), "type": m.get("markerType"), "distance": m.get("distanceM")} for m in markers[:10]]}
+                marker_list = markers.get("markers", []) if isinstance(markers, dict) else markers
+                infra_data = {"markers": [{"name": m.get("name"), "type": m.get("markerType"), "distance": m.get("distanceM")} for m in marker_list[:10]]}
         except Exception as e:
             print(f"인프라 데이터 수집 실패: {e}")
 
@@ -86,13 +81,13 @@ async def _generate_report_async(report_id: str, region_id: str, region_name: st
 @router.post("", response_model=ReportCreateResponse)
 async def create_report(
     request: ReportCreateRequest,
+    background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
 ):
     report_id = str(uuid.uuid4())
     region_name = getattr(request, "regionName", "") or ""
     lat = getattr(request, "lat", 0.0) or 0.0
     lng = getattr(request, "lng", 0.0) or 0.0
-
     _report_store[report_id] = {
         "status": "pending",
         "regionId": request.regionId,
@@ -102,12 +97,9 @@ async def create_report(
         "createdAt": datetime.now().isoformat(),
         "progressPct": 0,
     }
-
-    # 백그라운드에서 리포트 생성
-    asyncio.create_task(
-        _generate_report_async(report_id, request.regionId, region_name, lat, lng, db)
+    background_tasks.add_task(
+        _generate_report_async, report_id, request.regionId, region_name, lat, lng
     )
-
     return {
         "reportId": report_id,
         "status": "pending",

@@ -260,31 +260,30 @@ async def get_issues(
     # DB → Redis → 네이버 API 순서
     try:
         result = await get_region_issues(regionId, regionName, limit, db)
-        items = result.get("items", [])
 
         # 네이버 API 직접 호출 응답인 경우 가공
-        if result.get("source") == "api":
+        if isinstance(result, list):
             issue_list = []
             seen_categories = set()
-            for item in items:
+            for item in result:
                 title = item.get("title", "").replace("<b>", "").replace("</b>", "")
                 category = classify_category(title)
                 if category in seen_categories:
                     continue
                 seen_categories.add(category)
                 issue_list.append({
-                    "issueId": item.get("link", ""),
+                    "issueId": item.get("url", ""),
                     "type": category,
                     "title": title,
-                    "summary": item.get("description", "").replace("<b>", "").replace("</b>", ""),
+                    "summary": item.get("summary", "").replace("<b>", "").replace("</b>", ""),
                     "impactType": "neutral",
-                    "publishedAt": item.get("pubDate", ""),
-                    "url": item.get("link", ""),
+                    "publishedAt": item.get("publishedAt", ""),
+                    "url": item.get("url", ""),
                 })
                 if len(issue_list) >= 5:
                     break
             return {"items": issue_list}
-
-        return {"items": items}
+        return {"items": result.get("items", [])}
     except Exception as e:
+        print(f"이슈 API 오류: {e}")
         raise HTTPException(status_code=503, detail="외부 API 연결 실패")
