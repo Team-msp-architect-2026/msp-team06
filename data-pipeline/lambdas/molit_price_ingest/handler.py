@@ -114,22 +114,12 @@ def get_gu_codes_from_db() -> dict:
             conn.close()
 
 
-def fetch_molit_data(
-    deal_type: str,
-    lawd_cd: str,
-    deal_ymd: str,
-    api_key: str
-) -> list:
+def fetch_molit_data(deal_type, lawd_cd, deal_ymd, api_key):
     """국토부 실거래가 API 호출"""
     base_url = MOLIT_API_URLS.get(deal_type, "")
-
-    if not base_url:
-        print(f"엔드포인트 미설정: {deal_type} - TODO 입력 필요")
-        return []
-
     encoded_key = urllib.parse.quote(api_key)
     url = (
-        f"{base_url}"
+        f"{base_url}/getRTMSDataSvcAptTradeDev"
         f"?serviceKey={encoded_key}"
         f"&LAWD_CD={lawd_cd}"
         f"&DEAL_YMD={deal_ymd}"
@@ -138,7 +128,11 @@ def fetch_molit_data(
     )
 
     try:
-        with urllib.request.urlopen(url, timeout=30) as response:
+        req = urllib.request.Request(
+            url,
+            headers={"User-Agent": "Mozilla/5.0"}
+        )
+        with urllib.request.urlopen(req, timeout=30) as response:
             xml_data = response.read().decode("utf-8")
             return parse_xml_response(xml_data, deal_type)
     except Exception as e:
