@@ -76,14 +76,20 @@ def get_db_connection():
 
 
 def get_gu_codes_from_db() -> dict:
-    """
-    DB regions 테이블에서 구 법정동 코드 조회
-    region_normalizer Lambda가 도로명주소 API로
-    수집해서 저장한 데이터를 여기서 읽어옴
+    """DB에서 구 법정동 코드 조회, 실패 시 기본값 사용"""
+    # 기본 서울 25개 구 코드
+    DEFAULT_GU_CODES = {
+        "종로구": "11010", "중구": "11020", "용산구": "11030",
+        "성동구": "11040", "광진구": "11050", "동대문구": "11060",
+        "중랑구": "11070", "성북구": "11080", "강북구": "11090",
+        "도봉구": "11100", "노원구": "11110", "은평구": "11120",
+        "서대문구": "11130", "마포구": "11140", "양천구": "11150",
+        "강서구": "11160", "구로구": "11170", "금천구": "11180",
+        "영등포구": "11190", "동작구": "11200", "관악구": "11210",
+        "서초구": "11220", "강남구": "11230", "송파구": "11240",
+        "강동구": "11250",
+    }
 
-    반환 예시:
-    {"강남구": "11230", "마포구": "11140", ...}
-    """
     conn = None
     try:
         conn = get_db_connection()
@@ -96,10 +102,14 @@ def get_gu_codes_from_db() -> dict:
                 AND LENGTH(legal_dong_code) >= 5
             """)
             rows = cur.fetchall()
-            return {row[0]: row[1][:5] for row in rows}
+            if rows:
+                return {row[0]: row[1][:5] for row in rows}
+            else:
+                print("DB에 지역 데이터 없음 → 기본 구 코드 사용")
+                return DEFAULT_GU_CODES
     except Exception as e:
-        print(f"DB 구 코드 조회 실패: {e}")
-        return {}
+        print(f"DB 구 코드 조회 실패: {e} → 기본 구 코드 사용")
+        return DEFAULT_GU_CODES
     finally:
         if conn:
             conn.close()
