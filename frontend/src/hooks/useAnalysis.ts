@@ -19,7 +19,7 @@ export function usePrice(
 ) {
   return useQuery({
     queryKey: ["price", regionId, lat, lng, dealYmd, regionName],
-    queryFn: () => getPrice(regionId, lat, lng, dealYmd, regionName),
+    queryFn: () => getPrice(regionId, lat, lng, dealYmd, "all", regionName),
     enabled: !!regionId && !!lat && !!lng && !!dealYmd,
   });
 }
