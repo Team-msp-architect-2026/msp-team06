@@ -121,7 +121,7 @@ const ComplexScreen: React.FC<ComplexScreenProps> = ({
     <View style={styles.scr}>
       {/* 상단 헤더 */}
       <View style={styles.bar}>
-        <TouchableOpacity onPress={() => go(prevScreen)}>
+        <TouchableOpacity onPress={() => go("home")}>
           <Text style={styles.bk}>‹</Text>
         </TouchableOpacity>
         <View>

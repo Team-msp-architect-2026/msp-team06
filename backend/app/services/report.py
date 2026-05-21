@@ -4,6 +4,7 @@
 import json
 import boto3
 from app.core.config import settings
+import asyncio
 
 # Bedrock 클라이언트
 bedrock = boto3.client(
@@ -80,21 +81,24 @@ async def generate_report(
     price_data: dict,
     news_data: dict,
     infra_data: dict,
-) -> dict:
+):
     try:
         prompt = build_prompt(region_name, price_data, news_data, infra_data)
-
         body = json.dumps({
             "anthropic_version": "bedrock-2023-05-31",
             "max_tokens": 4096,
             "messages": [{"role": "user", "content": prompt}]
         })
 
-        response = bedrock.invoke_model(
-            modelId=MODEL_ID,
-            body=body,
-            contentType="application/json",
-            accept="application/json",
+        loop = asyncio.get_event_loop()
+        response = await loop.run_in_executor(
+            None,
+            lambda: bedrock.invoke_model(
+                modelId=MODEL_ID,
+                body=body,
+                contentType="application/json",
+                accept="application/json",
+            )
         )
 
         response_body = json.loads(response["body"].read())

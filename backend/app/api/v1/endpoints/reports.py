@@ -28,23 +28,28 @@ async def _generate_report_async(report_id: str, region_id: str, region_name: st
     print(f"[리포트] 생성 시작: {report_id} / {region_name}")
     try:
         _report_store[report_id]["status"] = "processing"
-        _report_store[report_id]["progressPct"] = 10
+        print(f"[리포트] processing 설정 완료")
 
         # 1. 가격 데이터 수집 (db 없이)
         price_data = {}
 
         _report_store[report_id]["progressPct"] = 40
+        print(f"[리포트] 뉴스 수집 시작")
 
         # 2. 뉴스/이슈 데이터 수집 (db 없이)
         news_data = {}
         try:
             issues = await get_region_issues(region_id, region_name)
+            print(f"[리포트] 뉴스 수집 완료: {len(issues) if issues else 0}건")
+            
             if issues:
                 news_data = {"items": issues[:5]}
         except Exception as e:
             print(f"뉴스 데이터 수집 실패: {e}")
 
         _report_store[report_id]["progressPct"] = 70
+        print(f"[리포트] 인프라 수집 시작")
+        
 
         # 3. 인프라 데이터 수집
         infra_data = {}
@@ -56,7 +61,9 @@ async def _generate_report_async(report_id: str, region_id: str, region_name: st
         except Exception as e:
             print(f"인프라 데이터 수집 실패: {e}")
 
+        print(f"[리포트] 인프라 수집 완료")  # 추가
         _report_store[report_id]["progressPct"] = 80
+        print(f"[리포트] Bedrock 호출 시작")
 
         # 4. AI 리포트 생성
         result = await generate_report(region_name, price_data, news_data, infra_data)
