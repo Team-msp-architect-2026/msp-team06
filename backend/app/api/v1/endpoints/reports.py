@@ -3,7 +3,7 @@
 
 import uuid
 import asyncio
-from fastapi import APIRouter, Depends, BackgroundTasks
+from fastapi import APIRouter, Depends, BackgroundTasks, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from datetime import datetime, date
 from app.core.database import get_db
