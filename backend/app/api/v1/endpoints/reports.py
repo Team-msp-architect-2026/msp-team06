@@ -28,7 +28,7 @@ async def _generate_report_async(report_id: str, region_id: str, region_name: st
     print(f"[리포트] 생성 시작: {report_id} / {region_name}")
     try:
         _report_store[report_id]["status"] = "processing"
-        _report_store[report_id]["progressPct"] = 10
+        print(f"[리포트] processing 설정 완료")
 
         # 1. 가격 데이터 수집 (db 없이)
         price_data = {}
