@@ -32,9 +32,9 @@ secretsmanager = boto3.client("secretsmanager", region_name=AWS_REGION)
 
 # 1..........국토부 실거래가 API 엔드포인트 (공공데이터포털 RTMSDataSvc 계열)
 MOLIT_API_URLS = {
-    "sale":    "https://apis.data.go.kr/1613000/RTMSDataSvcAptTradeDev",  # 매매
-    "jeonse":  "https://apis.data.go.kr/1613000/RTMSDataSvcAptRent",      # 전세
-    "monthly": "https://apis.data.go.kr/1613000/RTMSDataSvcAptRent",      # 월세 (같은 엔드포인트)
+    "sale":    "https://apis.data.go.kr/1613000/RTMSDataSvcAptTradeDev/getRTMSDataSvcAptTradeDev",
+    "jeonse":  "https://apis.data.go.kr/1613000/RTMSDataSvcAptRent/getRTMSDataSvcAptRent",
+    "monthly": "https://apis.data.go.kr/1613000/RTMSDataSvcAptRent/getRTMSDataSvcAptRent",
 }
 
 
@@ -119,7 +119,7 @@ def fetch_molit_data(deal_type, lawd_cd, deal_ymd, api_key):
     base_url = MOLIT_API_URLS.get(deal_type, "")
     encoded_key = urllib.parse.quote(api_key)
     url = (
-        f"{base_url}/getRTMSDataSvcAptTradeDev"
+        f"{base_url}"
         f"?serviceKey={encoded_key}"
         f"&LAWD_CD={lawd_cd}"
         f"&DEAL_YMD={deal_ymd}"
