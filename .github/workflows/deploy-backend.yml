@@ -55,7 +55,7 @@ jobs:
       - name: Run Alembic Migration
         run: |
           DB_PASS=$(aws secretsmanager get-secret-value \
-            --secret-id arn:aws:secretsmanager:eu-west-3:611058323802:secret:rds!db-6452b471-05a7-4fcb-a213-e529b6a3f1e8-IRHb2Z \
+            --secret-id arn:aws:secretsmanager:eu-west-3:611058323802:secret:homelens/dev/rds/postgres-KR9PhI \
             --query SecretString \
             --output text | python3 -c "import sys,json;print(json.load(sys.stdin)['password'])")
           POD=$(kubectl get pod -n homelens -l app=fastapi -o jsonpath='{.items[0].metadata.name}')
