@@ -51,10 +51,11 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ mapTab, setMapTab, go }) => {
   const { data: newsData, isLoading: newsLoading } = useNewsHighlights();
 
   const handleSearch = async () => {
-    if (searchVal.trim().length === 0) return;
+    const trimmed = searchVal.trim();
+    if (trimmed.length === 0) return;
     try {
       const res = await fetch(
-        `http://10.0.2.2:8000/api/v1/regions/search?q=${encodeURIComponent(searchVal.trim())}&limit=1`,
+        `https://api-dev.ourhomelens.com/api/v1/regions/search?q=${encodeURIComponent(trimmed)}&limit=1`,
       );
       const data = await res.json();
       if (data && data.length > 0) {
@@ -109,6 +110,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ mapTab, setMapTab, go }) => {
             onChangeText={setSearchVal}
             onSubmitEditing={handleSearch}
             returnKeyType="search"
+            submitBehavior="blurAndSubmit"
           />
         </View>
 
