@@ -55,15 +55,19 @@ def get_db_connection():
 
 def search_address_api(keyword: str, confm_key: str) -> list:
     """행정안전부 도로명주소 API 검색"""
-    encoded = urllib.parse.quote(keyword)
+    encoded_keyword = urllib.parse.quote(keyword, encoding='utf-8')
     url = (
         f"https://business.juso.go.kr/addrlink/addrLinkApi.do"
-        f"?currentPage=1&countPerPage=10&keyword={encoded}"
+        f"?currentPage=1&countPerPage=10&keyword={encoded_keyword}"
         f"&confmKey={confm_key}&resultType=json"
     )
 
     try:
-        with urllib.request.urlopen(url, timeout=10) as response:
+        req = urllib.request.Request(
+            url,
+            headers={"User-Agent": "Mozilla/5.0"}
+        )
+        with urllib.request.urlopen(req, timeout=10) as response:
             result = json.loads(response.read().decode("utf-8"))
             return result.get("results", {}).get("juso", [])
     except Exception as e:
