@@ -54,8 +54,10 @@ jobs:
 
       - name: Run Alembic Migration
         run: |
-          kubectl exec -n homelens \
-            $(kubectl get pod -n homelens \
-              -l app=fastapi \
-              -o jsonpath='{.items[0].metadata.name}') \
-            -- bash -c "DATABASE_URL=postgresql://homelens_admin:$(aws secretsmanager get-secret-value --secret-id arn:aws:secretsmanager:eu-west-3:611058323802:secret:rds!db-6452b471-05a7-4fcb-a213-e529b6a3f1e8-IRHb2Z --query SecretString --output text | python3 -c \"import sys,json;print(json.load(sys.stdin)['password'])\")@homelens-dev-postgres.clk6su6ui84v.eu-west-3.rds.amazonaws.com:5432/homelens alembic upgrade head"
+          SECRET_JSON=$(aws secretsmanager get-secret-value \
+            --secret-id arn:aws:secretsmanager:eu-west-3:611058323802:secret:rds!db-ebdbb7d7-eaf7-4146-b599-234825f54959-nAHpdO \
+            --query SecretString \
+            --output text)
+          DB_PASS=$(echo $SECRET_JSON | python3 -c "import sys,json;print(json.load(sys.stdin)['password'])")
+          POD=$(kubectl get pod -n homelens -l app=fastapi -o jsonpath='{.items[0].metadata.name}')
+          kubectl exec -n homelens $POD -- bash -c "DATABASE_URL='postgresql://homelens_admin:${DB_PASS}@homelens-dev-postgres.clk6su6ui84v.eu-west-3.rds.amazonaws.com:5432/homelens' alembic upgrade head"
