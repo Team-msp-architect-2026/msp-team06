@@ -6,6 +6,7 @@ on:
       - dev
     paths:
       - 'data-pipeline/**'
+      - '.github/workflows/data-pipeline.yml'
 
 env:
   AWS_REGION: eu-west-3
