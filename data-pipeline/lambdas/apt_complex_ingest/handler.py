@@ -143,7 +143,6 @@ def save_location(conn, item: dict, region_id: str):
     loc_id = f"LOC_{item.get('kaptCode', '')}"
     
     with conn.cursor() as cur:
-        # 먼저 존재 여부 확인
         cur.execute("SELECT id FROM locations WHERE id = %s", (loc_id,))
         exists = cur.fetchone()
         
@@ -167,7 +166,10 @@ def save_location(conn, item: dict, region_id: str):
                 item.get("kaptName", ""),
                 address,
                 "apartment",
-                None, None, None, None,
+                0.0,  # lat 기본값
+                0.0,  # lng 기본값
+                None,
+                None,
             ))
 
 
