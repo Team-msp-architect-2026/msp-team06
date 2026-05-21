@@ -20,7 +20,7 @@ secretsmanager = boto3.client("secretsmanager", region_name=AWS_REGION)
 
 def get_db_credentials() -> dict:
     """Secrets Manager에서 DB 연결 정보 조회"""
-    env = os.environ.get("ENVIRONMENT", "dev")
+    env = os.environ.get("ENV", "dev")
     secret_name = f"homelens/{env}/rds/postgres"
 
     response = secretsmanager.get_secret_value(SecretId=secret_name)
@@ -28,13 +28,27 @@ def get_db_credentials() -> dict:
 
 
 def get_db_connection():
-    """PostgreSQL 연결"""
-    creds = get_db_credentials()
+    """Secrets Manager에서 DB 연결 정보 조회 후 연결"""
+    env = os.environ.get("ENV", "dev")
+    secret_name = f"homelens/{env}/rds/postgres"
+
+    response = secretsmanager.get_secret_value(SecretId=secret_name)
+    creds = json.loads(response["SecretString"])
+
+    # password_secret_arn에서 실제 비밀번호 조회
+    password = creds.get("password", "")
+    if not password and creds.get("password_secret_arn"):
+        pw_response = secretsmanager.get_secret_value(
+            SecretId=creds["password_secret_arn"]
+        )
+        pw_secret = json.loads(pw_response["SecretString"])
+        password = pw_secret.get("password", "")
+
     return psycopg2.connect(
         host=creds["host"],
-        port=creds["port"],
+        port=int(creds["port"]),
         user=creds["username"],
-        password=creds["password"],
+        password=password,
         dbname=creds["dbname"],
     )
 

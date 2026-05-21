@@ -27,11 +27,20 @@ def get_db_connection():
     response = secretsmanager.get_secret_value(SecretId=secret_name)
     creds = json.loads(response["SecretString"])
 
+    # password_secret_arn에서 실제 비밀번호 조회
+    password = creds.get("password", "")
+    if not password and creds.get("password_secret_arn"):
+        pw_response = secretsmanager.get_secret_value(
+            SecretId=creds["password_secret_arn"]
+        )
+        pw_secret = json.loads(pw_response["SecretString"])
+        password = pw_secret.get("password", "")
+
     return psycopg2.connect(
         host=creds["host"],
-        port=creds["port"],
+        port=int(creds["port"]),
         user=creds["username"],
-        password=creds["password"],
+        password=password,
         dbname=creds["dbname"],
     )
 

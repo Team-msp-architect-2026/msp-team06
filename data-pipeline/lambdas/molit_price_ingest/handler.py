@@ -50,25 +50,27 @@ def get_api_key() -> str:
         return os.environ.get("MOLIT_API_KEY", "")
 
 def get_db_connection():
-    """
-    Secrets Manager에서 DB 연결 정보 조회 후 연결
-    
-    DB 정보 저장 방법 (1회 수동):
-    aws secretsmanager put-secret-value \
-      --secret-id homelens/dev/rds/postgres \
-      --secret-string '{"username":"homelens_app","password":"","host":"","port":5432,"dbname":"homelens_dev"}'
-    """
+    """Secrets Manager에서 DB 연결 정보 조회 후 연결"""
     env = os.environ.get("ENV", "dev")
     secret_name = f"homelens/{env}/rds/postgres"
 
     response = secretsmanager.get_secret_value(SecretId=secret_name)
     creds = json.loads(response["SecretString"])
 
+    # password_secret_arn에서 실제 비밀번호 조회
+    password = creds.get("password", "")
+    if not password and creds.get("password_secret_arn"):
+        pw_response = secretsmanager.get_secret_value(
+            SecretId=creds["password_secret_arn"]
+        )
+        pw_secret = json.loads(pw_response["SecretString"])
+        password = pw_secret.get("password", "")
+
     return psycopg2.connect(
         host=creds["host"],
-        port=creds["port"],
+        port=int(creds["port"]),
         user=creds["username"],
-        password=creds["password"],
+        password=password,
         dbname=creds["dbname"],
     )
 
