@@ -36,11 +36,17 @@ jobs:
             function_name="homelens-dev-${lambda_name//_/-}"
             echo "📦 $function_name 배포 중..."
             cd $lambda_name
-            zip -r ../../../${lambda_name}.zip .
+            pip install psycopg2-binary -t ./package/ -q 2>/dev/null || true
+            if [ -d "./package" ]; then
+              cd package
+              zip -r ../../${lambda_name}.zip .
+              cd ..
+            fi
+            zip -g ../${lambda_name}.zip handler.py
             cd ..
             aws lambda update-function-code \
               --function-name $function_name \
-              --zip-file fileb://../../${lambda_name}.zip \
+              --zip-file fileb://${lambda_name}.zip \
               --region ${{ env.AWS_REGION }} \
             && echo "✅ $function_name 배포 완료" \
             || echo "⚠️ $function_name 없음 - 건너뜀"
