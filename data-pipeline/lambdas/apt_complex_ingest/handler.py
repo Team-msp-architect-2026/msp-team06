@@ -140,27 +140,35 @@ def save_location(conn, item: dict, region_id: str):
         item.get("as4", ""),
     ]))
 
+    loc_id = f"LOC_{item.get('kaptCode', '')}"
+    
     with conn.cursor() as cur:
-        cur.execute("""
-            INSERT INTO locations (
-                id, region_id, name, address,
-                property_type, lat, lng,
-                floors, build_year, created_at
-            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())
-            ON CONFLICT (id) DO UPDATE SET
-                name = EXCLUDED.name,
-                address = EXCLUDED.address
-        """, (
-            f"LOC_{item.get('kaptCode', '')}",
-            region_id,
-            item.get("kaptName", ""),
-            address,
-            "apartment",
-            None,
-            None,
-            None,
-            None,
-        ))
+        # 먼저 존재 여부 확인
+        cur.execute("SELECT id FROM locations WHERE id = %s", (loc_id,))
+        exists = cur.fetchone()
+        
+        if exists:
+            cur.execute("""
+                UPDATE locations SET
+                    name = %s,
+                    address = %s
+                WHERE id = %s
+            """, (item.get("kaptName", ""), address, loc_id))
+        else:
+            cur.execute("""
+                INSERT INTO locations (
+                    id, region_id, name, address,
+                    property_type, lat, lng,
+                    floors, build_year, created_at
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())
+            """, (
+                loc_id,
+                region_id,
+                item.get("kaptName", ""),
+                address,
+                "apartment",
+                None, None, None, None,
+            ))
 
 
 def lambda_handler(event, context):
