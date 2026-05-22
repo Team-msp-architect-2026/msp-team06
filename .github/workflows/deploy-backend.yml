@@ -54,10 +54,13 @@ jobs:
 
       - name: Run Alembic Migration
         run: |
+          RDS_SECRET=$(aws secretsmanager get-secret-value \
+            --secret-id homelens/dev/rds/postgres \
+            --query SecretString --output text)
+          PW_ARN=$(echo $RDS_SECRET | python3 -c "import sys,json;print(json.load(sys.stdin)['password_secret_arn'])")
           SECRET_JSON=$(aws secretsmanager get-secret-value \
-            --secret-id arn:aws:secretsmanager:eu-west-3:611058323802:secret:rds!db-c1f41647-42b7-485b-8660-5efa3362d6aa-jLCgPw \
-            --query SecretString \
-            --output text)
+            --secret-id "$PW_ARN" \
+            --query SecretString --output text)
           DB_PASS=$(echo $SECRET_JSON | python3 -c "import sys,json;print(json.load(sys.stdin)['password'])")
           POD=$(kubectl get pod -n homelens -l app=fastapi -o jsonpath='{.items[0].metadata.name}')
           kubectl exec -n homelens $POD -- bash -c "DATABASE_URL='postgresql://homelens_admin:${DB_PASS}@homelens-dev-postgres.clk6su6ui84v.eu-west-3.rds.amazonaws.com:5432/homelens' alembic upgrade heads"
