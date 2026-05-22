@@ -73,7 +73,11 @@ resource "aws_subnet" "public" {
   availability_zone       = local.public_subnets[count.index].az
   map_public_ip_on_launch = true
 
-  tags = { Name = "${local.name_prefix}-public-${local.public_subnets[count.index].az}" }
+  tags = {
+    Name                                                          = "${local.name_prefix}-public-${local.public_subnets[count.index].az}"
+    "kubernetes.io/role/elb"                                      = "1"
+    "kubernetes.io/cluster/${local.name_prefix}-eks"              = "shared"
+  }
 }
 
 # ---------------------------------------------------------------------------
@@ -86,7 +90,11 @@ resource "aws_subnet" "private" {
   cidr_block        = local.private_subnets[count.index].cidr
   availability_zone = local.private_subnets[count.index].az
 
-  tags = { Name = "${local.name_prefix}-private-${local.private_subnets[count.index].az}" }
+  tags = {
+    Name                                                          = "${local.name_prefix}-private-${local.private_subnets[count.index].az}"
+    "kubernetes.io/role/internal-elb"                             = "1"
+    "kubernetes.io/cluster/${local.name_prefix}-eks"              = "shared"
+  }
 }
 
 # ---------------------------------------------------------------------------
@@ -240,35 +248,22 @@ resource "aws_security_group_rule" "alb_to_eks" {
 }
 
 # RDS SG
+# ingress 규칙은 eks 모듈에서 aws_security_group_rule로 추가 (cluster SG 소스)
+# eks_node_sg는 노드에 붙지 않으므로 소스로 사용 불가
 resource "aws_security_group" "rds" {
   name        = "${local.name_prefix}-rds-sg"
   description = "RDS PostgreSQL"
   vpc_id      = aws_vpc.main.id
 
-  ingress {
-    description     = "PostgreSQL from EKS nodes"
-    from_port       = 5432
-    to_port         = 5432
-    protocol        = "tcp"
-    security_groups = [aws_security_group.eks_node.id]
-  }
-
   tags = { Name = "${local.name_prefix}-rds-sg" }
 }
 
 # Redis SG
+# ingress 규칙은 eks 모듈에서 aws_security_group_rule로 추가 (cluster SG 소스)
 resource "aws_security_group" "redis" {
   name        = "${local.name_prefix}-redis-sg"
   description = "ElastiCache Redis"
   vpc_id      = aws_vpc.main.id
-
-  ingress {
-    description     = "Redis from EKS nodes"
-    from_port       = 6379
-    to_port         = 6379
-    protocol        = "tcp"
-    security_groups = [aws_security_group.eks_node.id]
-  }
 
   tags = { Name = "${local.name_prefix}-redis-sg" }
 }

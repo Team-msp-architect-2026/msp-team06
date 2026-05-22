@@ -13,19 +13,21 @@ from app.core.redis import report_set, report_get
 
 AWS_REGION = os.getenv("AWS_REGION", "eu-west-3")
 
-app = Celery(
+celery_app = Celery(
     "homelens",
     broker="sqs://",
     broker_transport_options={
-        "region": AWS_REGION,
+        "region": "eu-west-3",
         "predefined_queues": {
             "homelens-dev-report-generation": {
                 "url": "https://sqs.eu-west-3.amazonaws.com/611058323802/homelens-dev-report-generation"
             }
-        }
+        },
+        "is_secure": True,
     },
     task_default_queue="homelens-dev-report-generation",
 )
+celery_app.conf.broker_connection_retry_on_startup = True
 
 @app.task(name="generate_report_task")
 def generate_report_task(report_id: str, region_id: str, region_name: str, lat: float, lng: float):
