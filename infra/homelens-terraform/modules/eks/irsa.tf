@@ -109,9 +109,12 @@ resource "aws_iam_role_policy" "fastapi_api" {
         Resource = "*"
       },
       {
-        Effect   = "Allow"
-        Action   = ["secretsmanager:GetSecretValue"]
-        Resource = "arn:aws:secretsmanager:${var.aws_region}:*:secret:homelens/${var.environment}/*"
+        Effect = "Allow"
+        Action = ["secretsmanager:GetSecretValue"]
+        Resource = [
+          "arn:aws:secretsmanager:${var.aws_region}:*:secret:homelens/${var.environment}/*",
+          "arn:aws:secretsmanager:${var.aws_region}:*:secret:rds!db-*"
+        ]
       }
     ]
   })
