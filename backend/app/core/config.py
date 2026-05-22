@@ -23,6 +23,14 @@ _naver = _load_secret("NAVER_SECRET_NAME")
 _molit = _load_secret("MOLIT_SECRET_NAME")
 _mois = _load_secret("MOIS_SECRET_NAME")
 _rds = _load_secret("RDS_SECRET_NAME")
+if "password_secret_arn" in _rds:
+    try:
+        _sm = boto3.client("secretsmanager", region_name=os.getenv("AWS_REGION", "eu-west-3"))
+        _rds["password"] = json.loads(
+            _sm.get_secret_value(SecretId=_rds.pop("password_secret_arn"))["SecretString"]
+        )["password"]
+    except Exception as e:
+        print(f"RDS 비밀번호 조회 실패: {e}")
 _redis = _load_secret("REDIS_SECRET_NAME")
 
 
