@@ -52,8 +52,8 @@ class Settings(BaseSettings):
     juso_api_key: str = _mois.get("service_key", os.getenv("JUSO_API_KEY", ""))
 
     @property
-    def database_url(self) -> str:
-        return f"postgresql+asyncpg://{self.db_user}:{self.db_password}@{self.db_host}:{self.db_port}/{self.db_name}"
+    def database_url_sync(self) -> str:
+        return f"postgresql+psycopg2://{self.db_user}:{self.db_password}@{self.db_host}:{self.db_port}/{self.db_name}"
 
     @property
     def redis_url(self) -> str:

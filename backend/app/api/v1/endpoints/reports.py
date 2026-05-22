@@ -1,12 +1,13 @@
 # HomeLens AI - AI 리포트 API 엔드포인트
-# 비동기 생성 방식: POST → Celery → Redis → GET
+# 비동기 생성 방식: POST → Celery → RDS → GET
 
 import uuid
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
 from datetime import datetime, date
 from app.core.database import get_db
-from app.core.redis import report_set, report_get
+from app.models.report import Report, ReportSection
 from app.schemas.report import (
     ReportCreateRequest,
     ReportCreateResponse,
@@ -27,16 +28,17 @@ async def create_report(
     lat = getattr(request, "lat", 0.0) or 0.0
     lng = getattr(request, "lng", 0.0) or 0.0
 
-    # Redis에 초기 상태 저장
-    report_set(report_id, {
-        "status": "pending",
-        "regionId": request.regionId,
-        "regionName": region_name,
-        "lat": lat,
-        "lng": lng,
-        "createdAt": datetime.now().isoformat(),
-        "progressPct": 0,
-    })
+    # RDS에 초기 상태 저장
+    report = Report(
+        id=report_id,
+        region_id=request.regionId,
+        status="pending",
+        progress_pct=0,
+        data_base_date=date.today(),
+        created_at=datetime.now(),
+    )
+    db.add(report)
+    await db.commit()
 
     # Celery 태스크 호출
     from app.worker import generate_report_task
@@ -54,15 +56,16 @@ async def get_report_status(
     report_id: str,
     db: AsyncSession = Depends(get_db),
 ):
-    report = report_get(report_id)
+    result = await db.execute(select(Report).where(Report.id == report_id))
+    report = result.scalar_one_or_none()
     if not report:
         raise HTTPException(status_code=404, detail="리포트를 찾을 수 없습니다")
     return {
         "reportId": report_id,
-        "status": report.get("status", "pending"),
-        "progressPct": report.get("progressPct"),
-        "completedAt": report.get("completedAt"),
-        "failReason": report.get("failReason"),
+        "status": report.status,
+        "progressPct": report.progress_pct,
+        "completedAt": report.completed_at.isoformat() if report.completed_at else None,
+        "failReason": report.fail_reason,
     }
 
 
@@ -71,17 +74,34 @@ async def get_report(
     report_id: str,
     db: AsyncSession = Depends(get_db),
 ):
-    report = report_get(report_id)
+    result = await db.execute(select(Report).where(Report.id == report_id))
+    report = result.scalar_one_or_none()
     if not report:
         raise HTTPException(status_code=404, detail="리포트를 찾을 수 없습니다")
-    if report.get("status") != "completed":
+    if report.status != "completed":
         raise HTTPException(status_code=404, detail="리포트가 아직 생성 중입니다")
+
+    sections_result = await db.execute(
+        select(ReportSection)
+        .where(ReportSection.report_id == report_id)
+        .order_by(ReportSection.sort_order)
+    )
+    sections = sections_result.scalars().all()
+
     return {
         "reportId": report_id,
-        "regionId": report.get("regionId", ""),
-        "summary": report.get("summary", ""),
-        "sections": report.get("sections", []),
-        "disclaimer": report.get("disclaimer", ""),
-        "generatedAt": report.get("generatedAt", datetime.now().isoformat()),
-        "dataBaseDate": report.get("dataBaseDate", str(date.today())),
+        "regionId": report.region_id,
+        "summary": report.summary or "",
+        "sections": [
+            {
+                "sectionKey": s.section_key,
+                "sectionTitle": s.section_title,
+                "content": s.content,
+                "sortOrder": s.sort_order,
+            }
+            for s in sections
+        ],
+        "disclaimer": report.disclaimer or "",
+        "generatedAt": report.generated_at.isoformat() if report.generated_at else datetime.now().isoformat(),
+        "dataBaseDate": str(report.data_base_date) if report.data_base_date else str(date.today()),
     }
