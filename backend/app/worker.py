@@ -118,3 +118,5 @@ def generate_report_task(report_id: str, region_id: str, region_name: str, lat: 
     finally:
         db.close()
         loop.close()
+
+app = celery_app  # Celery CLI -A app.worker 호환
