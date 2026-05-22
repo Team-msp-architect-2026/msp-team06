@@ -12,7 +12,17 @@ def _load_secret(secret_name_env: str) -> dict:
         return {}
     try:
         client = boto3.client('secretsmanager', region_name=os.getenv('AWS_REGION', 'eu-west-3'))
-        return json.loads(client.get_secret_value(SecretId=name)['SecretString'])
+        data = json.loads(client.get_secret_value(SecretId=name)['SecretString'])
+        
+        # password_secret_arn이 있으면 실제 패스워드를 별도 시크릿에서 읽기
+        if "password_secret_arn" in data and "password" not in data:
+            try:
+                pw_data = json.loads(client.get_secret_value(SecretId=data["password_secret_arn"])['SecretString'])
+                data["password"] = pw_data.get("password", "")
+            except Exception as e:
+                print(f"패스워드 시크릿 조회 실패: {e}")
+        
+        return data
     except Exception as e:
         print(f"Secrets Manager 조회 실패 ({secret_name_env}): {e}")
         return {}
