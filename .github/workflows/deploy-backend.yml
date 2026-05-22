@@ -55,7 +55,7 @@ jobs:
       - name: Run Alembic Migration
         run: |
           SECRET_JSON=$(aws secretsmanager get-secret-value \
-            --secret-id arn:aws:secretsmanager:eu-west-3:611058323802:secret:rds!db-ebdbb7d7-eaf7-4146-b599-234825f54959-nAHpdO \
+            --secret-id arn:aws:secretsmanager:eu-west-3:611058323802:secret:rds!db-c1f41647-42b7-485b-8660-5efa3362d6aa-jLCgPw \
             --query SecretString \
             --output text)
           DB_PASS=$(echo $SECRET_JSON | python3 -c "import sys,json;print(json.load(sys.stdin)['password'])")
