@@ -170,17 +170,17 @@ def parse_xml_response(xml_data: str, deal_type: str) -> list:
             else:
                 result.append({
                     "deal_type": deal_type,
-                    "apt_name": get_text("아파트"),
+                    "apt_name": get_text("aptNm"),
                     "apt_seq": get_text("aptSeq"),        # 추가
-                    "deposit": get_text("보증금액").replace(",", ""),
-                    "monthly_rent": get_text("월세금액").replace(",", ""),
-                    "area": get_text("전용면적"),
-                    "floor": get_text("층"),
-                    "build_year": get_text("건축년도"),
-                    "deal_year": get_text("년"),
-                    "deal_month": get_text("월"),
-                    "deal_day": get_text("일"),
-                    "dong": get_text("법정동"),
+                    "deposit": get_text("deposit").replace(",", ""),
+                    "monthly_rent": get_text("monthlyRent").replace(",", ""),
+                    "area": get_text("excluUseAr"),
+                    "floor": get_text("floor"),
+                    "build_year": get_text("buildYear"),
+                    "deal_year": get_text("dealYear"),
+                    "deal_month": get_text("dealMonth"),
+                    "deal_day": get_text("dealDay"),
+                    "dong": get_text("umdNm"),
                 })
 
         return result
