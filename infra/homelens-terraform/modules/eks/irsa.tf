@@ -104,8 +104,12 @@ resource "aws_iam_role_policy" "fastapi_api" {
     Version = "2012-10-17"
     Statement = [
       {
-        Effect   = "Allow"
-        Action   = ["sqs:SendMessage"]
+        Effect = "Allow"
+        Action = [
+          "sqs:SendMessage",
+          "sqs:GetQueueAttributes",
+          "sqs:GetQueueUrl",
+        ]
         Resource = "*"
       },
       {
