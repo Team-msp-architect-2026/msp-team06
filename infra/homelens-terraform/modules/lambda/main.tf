@@ -5,6 +5,10 @@ locals {
     "molit-price-ingest"      = { memory = 1024, timeout = 900 }
     "region-normalizer"       = { memory = 512,  timeout = 180 }
     "pipeline-step"           = { memory = 1024, timeout = 300 }
+    "normalize-price-data"    = { memory = 1024, timeout = 300 }
+    "detect-data-update"      = { memory = 512,  timeout = 180 }
+    "summarize-news"          = { memory = 1024, timeout = 180 }
+    "apt-complex-ingest"      = { memory = 1024, timeout = 300 }
   }
 }
 

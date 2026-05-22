@@ -109,7 +109,7 @@ secrets (depends_on)              → bedrock
 | 항목 | 값 | 상태 |
 |------|-----|------|
 | 도메인 | `ourhomelens.com` | Route53 등록 완료 |
-| ALB 인증서 (eu-west-3) | `arn:aws:acm:eu-west-3:611058323802:certificate/e6827a7e-81ec-44d0-ae16-8877325b91e8` | 발급 완료 |
+| ALB 인증서 (eu-west-3) | `arn:aws:acm:eu-west-3:611058323802:certificate/cbf76714-d305-4f44-a7ee-c0d347ccd808` | 발급 완료 (*.ourhomelens.com 와일드카드) |
 | CloudFront 인증서 (us-east-1) | `arn:aws:acm:us-east-1:611058323802:certificate/6be544e8-d753-4c2b-aec5-53a041884db9` | 발급 완료 |
 | AWS 계정 ID | `611058323802` | |
 
@@ -148,6 +148,26 @@ EKS FastAPI (homelens 네임스페이스)
 | Bootstrap apply | 완료 (팀원 tfstate 확인됨) |
 | GitHub 조직 초대 | 미완료 — 완료 후 `shared/terraform.tfvars`에 입력 |
 
+### [임시] apply 순서 안내 시 함께 알릴 것
+apply 순서를 안내할 때 아래 S3 권한 정책도 함께 적용하라고 반드시 언급할 것.
+해당 팀원의 IAM 사용자 또는 역할에 인라인 정책으로 추가:
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": ["s3:GetObject", "s3:HeadObject"],
+      "Resource": [
+        "arn:aws:s3:::homelens-dev-raw-data/*",
+        "arn:aws:s3:::homelens-dev-report-backup/*"
+      ]
+    }
+  ]
+}
+```
+AWS 콘솔 → IAM → 사용자/역할 → 권한 → 인라인 정책 추가
+
 ### 매일 destroy / apply 워크플로우
 
 ```bash
@@ -161,14 +181,10 @@ cd homelens-terraform/environments/dev
 terraform init           # .terraform 폴더 없을 때만 (destroy해도 폴더 유지됨)
 
 # Terraform apply 3단계 완료 후 → kubectl apply
-# 1. ALB ARN 확인 (매일 바뀜 — ALB 재생성 시 랜덤 ID 변경됨)
-terraform output alb_arn
-# → 출력된 ARN으로 k8s/ingress.yaml의 load-balancer-arn 값 교체
-
-# 2. EKS kubeconfig 업데이트 (경로 무관)
+# 1. EKS kubeconfig 업데이트 (경로 무관)
 aws eks update-kubeconfig --name homelens-dev-eks --region eu-west-3
 
-# 3. kubectl apply (homelens/ 루트에서 실행)
+# 2. kubectl apply (homelens/ 루트에서 실행)
 cd ~/homelens
 kubectl apply -f k8s/configmap.yaml
 kubectl apply -f k8s/fastapi-serviceaccount.yaml
@@ -178,6 +194,28 @@ kubectl apply -f k8s/ingress.yaml
 # celery-deployment.yaml은 ECR 이미지 준비 후 CI/CD에서 배포 — 수동 apply 불필요
 
 # fastapi_role_arn은 매번 동일 (IAM Role 이름 고정) → serviceaccount.yaml 수정 불필요
+
+# 3. Route53 api-dev 레코드 업데이트 (ingress 컨트롤러가 매번 새 ALB 생성)
+# ingress Address 확인 (ALB DNS 출력까지 1~2분 소요)
+kubectl get ingress homelens-ingress -n homelens
+# ADDRESS 컬럼 값(k8s-homelens-homelens-*.eu-west-3.elb.amazonaws.com)을 INGRESS_DNS에 입력
+INGRESS_DNS="<위에서 확인한 ADDRESS 값>"
+INGRESS_ZONE_ID=$(aws elbv2 describe-load-balancers --region eu-west-3 \
+  --query "LoadBalancers[?DNSName=='${INGRESS_DNS}'].CanonicalHostedZoneId" --output text)
+HOSTED_ZONE_ID=$(aws route53 list-hosted-zones \
+  --query "HostedZones[?Name=='ourhomelens.com.'].Id" --output text | cut -d/ -f3)
+aws route53 change-resource-record-sets --hosted-zone-id $HOSTED_ZONE_ID \
+  --change-batch "{\"Changes\":[{\"Action\":\"UPSERT\",\"ResourceRecordSet\":{\"Name\":\"api-dev.ourhomelens.com\",\"Type\":\"A\",\"AliasTarget\":{\"HostedZoneId\":\"${INGRESS_ZONE_ID}\",\"DNSName\":\"${INGRESS_DNS}\",\"EvaluateTargetHealth\":true}}}]}"
+
+# [TODO] external-dns 도입 검토 — apply 순서 안내 후 반드시 아래 질문할 것
+# "현재 kubectl apply 후 Route53을 매번 수동 업데이트하고 있습니다.
+#  external-dns를 도입하면 ingress apply 시 Route53이 자동 동기화됩니다. 도입할까요?"
+
+# 4. aws-auth ConfigMap 팀원 권한 복원 (EKS destroy 시 초기화되므로 매번 필수)
+kubectl get configmap aws-auth -n kube-system -o yaml > ~/aws-auth.yaml
+# ~/aws-auth.yaml 열어서 mapUsers 섹션 추가 후 저장
+kubectl apply -f ~/aws-auth.yaml
+# 팀원 확인: aws eks update-kubeconfig --name homelens-dev-eks --region eu-west-3 && kubectl get pods -n homelens
 ```
 
 ### apply 순서 (의존성 순) — 3단계 방식 필수
@@ -213,6 +251,12 @@ terraform apply \
 
 terraform plan  # No changes 확인
 ```
+
+# [TODO] Cluster Autoscaler 도입 검토 — apply 순서 안내 후 반드시 아래 질문할 것
+# "현재 KEDA로 Celery pod는 자동 증감되지만, EKS 노드는 자동 확장이 설정되어 있지 않습니다.
+#  pod가 Pending 상태가 될 경우 수동 개입이 필요합니다.
+#  Cluster Autoscaler를 도입하면 노드도 자동으로 증감됩니다. 도입할까요?
+#  (변경 범위: modules/eks/irsa.tf IRSA 추가, modules/eks/main.tf 노드그룹 태그 추가, Helm release 추가)"
 
 ### API 키 주입 방법 (secrets.auto.tfvars)
 
@@ -435,6 +479,41 @@ terraform apply
 ### DNS outputs — data source 참조
 - `dns/outputs.tf`는 `data.aws_route53_zone.main` 참조 (managed resource 아님)
 - `aws_route53_zone.main`으로 참조 시 `Reference to undeclared resource` 에러
+
+### EKS aws-auth — 팀원 kubectl 권한 관리
+- `terraform destroy` 시 EKS 클러스터 삭제 → aws-auth ConfigMap도 함께 초기화됨
+- 매일 아침 apply 후 반드시 팀원 권한 재등록 필요
+- 현재 등록된 팀원: **student08**, **student12**
+
+```bash
+# aws-auth 최신 버전 받기
+kubectl get configmap aws-auth -n kube-system -o yaml > ~/aws-auth.yaml
+
+# nano로 열어서 mapUsers 섹션 추가
+nano ~/aws-auth.yaml
+```
+
+추가할 내용 (`data:` 아래, `mapRoles:` 와 같은 레벨):
+```yaml
+  mapUsers: |
+    - userarn: arn:aws:iam::611058323802:user/student08
+      username: student08
+      groups:
+        - system:masters
+    - userarn: arn:aws:iam::611058323802:user/student12
+      username: student12
+      groups:
+        - system:masters
+```
+
+```bash
+# 적용
+kubectl apply -f ~/aws-auth.yaml
+```
+
+- 팀원 신규 추가 시: `aws sts get-caller-identity`로 정확한 ARN 확인 후 등록
+- "the server has asked for the client to provide credentials" 오류 → aws-auth 미등록 또는 ARN 불일치
+- "Conflict: the object has been modified" 오류 → `kubectl get configmap aws-auth -n kube-system -o yaml > ~/aws-auth.yaml` 재실행 후 편집
 
 ---
 
