@@ -27,6 +27,21 @@ async def create_report(
     lat = getattr(request, "lat", 0.0) or 0.0
     lng = getattr(request, "lng", 0.0) or 0.0
 
+    # 오늘 날짜로 동일 단지 리포트 이미 존재하면 기존 리포트 반환
+    existing_result = await db.execute(
+        select(Report).where(
+            Report.region_id == request.regionId,
+            Report.data_base_date == date.today()
+        )
+    )
+    existing_report = existing_result.scalar_one_or_none()
+    if existing_report:
+        return {
+            "reportId": existing_report.id,
+            "status": existing_report.status,
+            "estimatedSeconds": 30,
+        }
+
     # regions 테이블에 없으면 먼저 삽입 (외래키 제약 해결)
     region_stmt = pg_insert(Region).values(
         id=request.regionId,
