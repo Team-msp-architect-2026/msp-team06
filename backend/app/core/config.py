@@ -12,7 +12,17 @@ def _load_secret(secret_name_env: str) -> dict:
         return {}
     try:
         client = boto3.client('secretsmanager', region_name=os.getenv('AWS_REGION', 'eu-west-3'))
-        return json.loads(client.get_secret_value(SecretId=name)['SecretString'])
+        data = json.loads(client.get_secret_value(SecretId=name)['SecretString'])
+        
+        # password_secret_arn이 있으면 실제 패스워드를 별도 시크릿에서 읽기
+        if "password_secret_arn" in data and "password" not in data:
+            try:
+                pw_data = json.loads(client.get_secret_value(SecretId=data["password_secret_arn"])['SecretString'])
+                data["password"] = pw_data.get("password", "")
+            except Exception as e:
+                print(f"패스워드 시크릿 조회 실패: {e}")
+        
+        return data
     except Exception as e:
         print(f"Secrets Manager 조회 실패 ({secret_name_env}): {e}")
         return {}
@@ -41,12 +51,11 @@ class Settings(BaseSettings):
     secret_key: str = ""
 
     # DB 연결 설정
-    db_host: str = os.getenv("DB_HOST", "localhost")
-    db_port: int = 5432
-    db_name: str = os.getenv("DB_NAME", "homelens")
+    db_host: str = _rds.get("host", os.getenv("DB_HOST", "localhost"))
+    db_port: int = int(_rds.get("port", os.getenv("DB_PORT", 5432)))
+    db_name: str = _rds.get("dbname", os.getenv("DB_NAME", "homelens"))
     db_user: str = _rds.get("username", os.getenv("DB_USER", "homelens_admin"))
     db_password: str = _rds.get("password", os.getenv("DB_PASSWORD", ""))
-
     # Redis 연결 설정
     redis_host: str = os.getenv("REDIS_HOST", "localhost")
     redis_port: int = 6379
@@ -61,11 +70,11 @@ class Settings(BaseSettings):
 
     @property
     def database_url(self) -> str:
-        return f"postgresql+asyncpg://{self.db_user}:{self.db_password}@{self.db_host}:{self.db_port}/{self.db_name}"
+        return f"postgresql+asyncpg://{self.db_user}:{self.db_password}@{self.db_host}:{self.db_port}/{self.db_name}?ssl=require"
 
     @property
-    def redis_url(self) -> str:
-        return f"redis://{self.redis_host}:{self.redis_port}"
+    def database_url_sync(self) -> str:
+        return f"postgresql+psycopg2://{self.db_user}:{self.db_password}@{self.db_host}:{self.db_port}/{self.db_name}?sslmode=require"
 
     class Config:
         env_file = ".env"

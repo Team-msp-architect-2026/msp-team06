@@ -56,10 +56,11 @@ def get_db_connection():
 def search_address_api(keyword: str, confm_key: str) -> list:
     """행정안전부 도로명주소 API 검색"""
     encoded_keyword = urllib.parse.quote(keyword, encoding='utf-8')
+    encoded_key = urllib.parse.quote(confm_key, encoding='utf-8')
     url = (
         f"https://business.juso.go.kr/addrlink/addrLinkApi.do"
         f"?currentPage=1&countPerPage=10&keyword={encoded_keyword}"
-        f"&confmKey={confm_key}&resultType=json"
+        f"&confmKey={encoded_key}&resultType=json"
     )
 
     try:

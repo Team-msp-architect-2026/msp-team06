@@ -1,15 +1,13 @@
 # HomeLens AI - Celery Worker
-# SQS 브로커 기반 AI 리포트 비동기 생성
+# SQS 브로커 기반 AI 리포트 비동기 생성 → RDS 저장
 
 import os
 import asyncio
-import json
 from datetime import datetime, date
 from celery import Celery
 from app.services.report import generate_report
 from app.services.news import get_region_issues
 from app.services.map import search_all_nearby_infra
-from app.core.redis import report_set, report_get
 
 AWS_REGION = os.getenv("AWS_REGION", "eu-west-3")
 
@@ -29,16 +27,33 @@ celery_app = Celery(
 )
 celery_app.conf.broker_connection_retry_on_startup = True
 
-@app.task(name="generate_report_task")
+
+def get_db_session():
+    from sqlalchemy import create_engine
+    from sqlalchemy.orm import sessionmaker
+    from app.core.config import settings
+    engine = create_engine(settings.database_url_sync)
+    Session = sessionmaker(bind=engine)
+    return Session()
+
+
+@celery_app.task(name="generate_report_task")
 def generate_report_task(report_id: str, region_id: str, region_name: str, lat: float, lng: float):
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
-    
+    db = get_db_session()
+
     try:
-        data = report_get(report_id) or {}
-        data["status"] = "processing"
-        data["progressPct"] = 10
-        report_set(report_id, data)
+        from app.models.report import Report, ReportSection
+
+        # 상태 업데이트: processing
+        report = db.query(Report).filter(Report.id == report_id).first()
+        if not report:
+            print(f"[Celery] 리포트 없음: {report_id}")
+            return
+        report.status = "processing"
+        report.progress_pct = 10
+        db.commit()
 
         # 뉴스 수집
         news_data = {}
@@ -49,8 +64,8 @@ def generate_report_task(report_id: str, region_id: str, region_name: str, lat: 
         except Exception as e:
             print(f"뉴스 수집 실패: {e}")
 
-        data["progressPct"] = 70
-        report_set(report_id, data)
+        report.progress_pct = 70
+        db.commit()
 
         # 인프라 수집
         infra_data = {}
@@ -62,30 +77,44 @@ def generate_report_task(report_id: str, region_id: str, region_name: str, lat: 
         except Exception as e:
             print(f"인프라 수집 실패: {e}")
 
-        data["progressPct"] = 80
-        report_set(report_id, data)
+        report.progress_pct = 80
+        db.commit()
 
         # Bedrock 호출
         result = loop.run_until_complete(generate_report(region_name, {}, news_data, infra_data))
 
-        data.update({
-            "status": "completed",
-            "progressPct": 100,
-            "summary": result.get("summary", ""),
-            "sections": result.get("sections", []),
-            "disclaimer": result.get("disclaimer", ""),
-            "generatedAt": datetime.now().isoformat(),
-            "dataBaseDate": str(date.today()),
-            "completedAt": datetime.now().isoformat(),
-        })
-        report_set(report_id, data)
+        # 리포트 완료 저장
+        report.status = "completed"
+        report.progress_pct = 100
+        report.summary = result.get("summary", "")
+        report.disclaimer = result.get("disclaimer", "")
+        report.generated_at = datetime.now()
+        report.completed_at = datetime.now()
+        report.data_base_date = date.today()
+        db.commit()
+
+        # 섹션 저장
+        for section in result.get("sections", []):
+            db.add(ReportSection(
+                report_id=report_id,
+                section_key=section.get("sectionKey", ""),
+                section_title=section.get("sectionTitle", ""),
+                content=section.get("content", ""),
+                sort_order=section.get("sortOrder", 0),
+            ))
+        db.commit()
         print(f"[Celery] 리포트 완료: {report_id}")
 
     except Exception as e:
         print(f"[Celery] 리포트 실패: {e}")
-        data = report_get(report_id) or {}
-        data["status"] = "failed"
-        data["failReason"] = str(e)
-        report_set(report_id, data)
+        try:
+            report = db.query(Report).filter(Report.id == report_id).first()
+            if report:
+                report.status = "failed"
+                report.fail_reason = str(e)
+                db.commit()
+        except Exception:
+            pass
     finally:
+        db.close()
         loop.close()
