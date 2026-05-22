@@ -85,6 +85,38 @@ resource "aws_secretsmanager_secret_version" "rds" {
   })
 }
 
+# terraform apply 시 리소스 정책이 초기화되므로 코드로 관리
+resource "aws_secretsmanager_secret_policy" "rds" {
+  secret_arn = aws_secretsmanager_secret.rds.arn
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect    = "Allow"
+        Principal = { AWS = "arn:aws:iam::611058323802:user/student12" }
+        Action    = "secretsmanager:GetSecretValue"
+        Resource  = "*"
+      }
+    ]
+  })
+}
+
+# AWS 관리형 시크릿(rds!db-...)에도 student12 읽기 권한
+resource "aws_secretsmanager_secret_policy" "rds_managed" {
+  secret_arn = var.rds_secret_arn
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect    = "Allow"
+        Principal = { AWS = "arn:aws:iam::611058323802:user/student12" }
+        Action    = "secretsmanager:GetSecretValue"
+        Resource  = "*"
+      }
+    ]
+  })
+}
+
 # Redis 접속 정보 (dev는 auth_token 없음)
 resource "aws_secretsmanager_secret" "redis" {
   name                    = "homelens/${var.env}/redis/auth"
