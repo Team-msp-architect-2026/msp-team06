@@ -33,12 +33,11 @@ class Settings(BaseSettings):
     secret_key: str = ""
 
     # DB 연결 설정
-    db_host: str = os.getenv("DB_HOST", "localhost")
-    db_port: int = 5432
-    db_name: str = os.getenv("DB_NAME", "homelens")
+    db_host: str = _rds.get("host", os.getenv("DB_HOST", "localhost"))
+    db_port: int = int(_rds.get("port", os.getenv("DB_PORT", 5432)))
+    db_name: str = _rds.get("dbname", os.getenv("DB_NAME", "homelens"))
     db_user: str = _rds.get("username", os.getenv("DB_USER", "homelens_admin"))
     db_password: str = _rds.get("password", os.getenv("DB_PASSWORD", ""))
-
     # Redis 연결 설정
     redis_host: str = os.getenv("REDIS_HOST", "localhost")
     redis_port: int = 6379
