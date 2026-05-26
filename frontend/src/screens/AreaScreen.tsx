@@ -41,7 +41,7 @@ const AreaScreen: React.FC<AreaScreenProps> = ({
   generate,
   go,
 }) => {
-  const { data: reportData } = useReport(raReportId);  
+  const { data: reportData } = useReport(raReportId, raStatus === 'done' ? 'completed' : raStatus);  
   const { selectedRegion } = useAppStore();
 
   const scrollRef = useRef<ScrollView>(null);

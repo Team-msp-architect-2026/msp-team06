@@ -22,17 +22,29 @@ celery_app = Celery(
             }
         },
         "is_secure": True,
+        "connect_timeout": 5,  
+        "read_timeout": 30, 
     },
     task_default_queue="homelens-dev-report-generation",
 )
 celery_app.conf.broker_connection_retry_on_startup = True
+celery_app.conf.broker_transport = "sqs"
+celery_app.conf.task_always_eager = False  
 
 
 def get_db_session():
+    import boto3, json, os
     from sqlalchemy import create_engine
     from sqlalchemy.orm import sessionmaker
-    from app.core.config import settings
-    engine = create_engine(settings.database_url_sync)
+
+    # 매번 시크릿에서 직접 읽기
+    client = boto3.client('secretsmanager', region_name=os.getenv('AWS_REGION', 'eu-west-3'))
+    rds_info = json.loads(client.get_secret_value(SecretId=os.getenv('RDS_SECRET_NAME', 'homelens/dev/rds/postgres'))['SecretString'])
+    pw_info = json.loads(client.get_secret_value(SecretId=rds_info['password_secret_arn'])['SecretString'])
+
+    db_url = f"postgresql+psycopg2://{rds_info['username']}:{pw_info['password']}@{rds_info['host']}:{rds_info['port']}/{rds_info['dbname']}?sslmode=require"
+
+    engine = create_engine(db_url)
     Session = sessionmaker(bind=engine)
     return Session()
 
@@ -118,3 +130,5 @@ def generate_report_task(report_id: str, region_id: str, region_name: str, lat: 
     finally:
         db.close()
         loop.close()
+
+app = celery_app  # Celery CLI -A app.worker 호환

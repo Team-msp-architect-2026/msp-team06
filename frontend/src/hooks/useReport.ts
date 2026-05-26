@@ -33,11 +33,11 @@ export function useReportStatus(reportId: string | null) {
 }
 
 // AI 리포트 결과 조회 훅
-export function useReport(reportId: string | null) {
+export function useReport(reportId: string | null, status?: string) {
   return useQuery({
     queryKey: ['report', reportId],
     queryFn: () => getReport(reportId!),
-    // reportId 있을 때만 실행
-    enabled: !!reportId,
+    // reportId 있고 completed 상태일 때만 실행
+    enabled: !!reportId && status === 'completed',
   });
 }

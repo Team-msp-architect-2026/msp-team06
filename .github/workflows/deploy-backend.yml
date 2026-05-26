@@ -26,7 +26,7 @@ jobs:
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v1
 
-      - name: Build, tag, and push image to ECR
+      - name: Build, tag, and push FastAPI image to ECR
         env:
           ECR_REGISTRY: 611058323802.dkr.ecr.eu-west-3.amazonaws.com
           ECR_REPOSITORY: homelens-fastapi
@@ -37,11 +37,22 @@ jobs:
           docker tag $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG $ECR_REGISTRY/$ECR_REPOSITORY:latest
           docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
 
+      - name: Build, tag, and push Celery Worker image to ECR
+        env:
+          ECR_REGISTRY: 611058323802.dkr.ecr.eu-west-3.amazonaws.com
+          ECR_REPOSITORY: homelens-celeryworker
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG ./backend -f ./backend/Dockerfile.celery
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+          docker tag $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG $ECR_REGISTRY/$ECR_REPOSITORY:latest
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
+
       - name: Update kubeconfig
         run: |
           aws eks update-kubeconfig --region eu-west-3 --name homelens-dev-eks
 
-      - name: Deploy to EKS
+      - name: Deploy FastAPI to EKS
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
           ECR_REPOSITORY: homelens-fastapi
@@ -52,15 +63,28 @@ jobs:
             -n homelens
           kubectl rollout status deployment/fastapi -n homelens
 
+      - name: Deploy Celery Worker to EKS
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          ECR_REPOSITORY: homelens-celeryworker
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          kubectl set image deployment/celery-worker \
+            celery-worker=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG \
+            -n homelens
+
       - name: Run Alembic Migration
         run: |
           RDS_SECRET=$(aws secretsmanager get-secret-value \
             --secret-id homelens/dev/rds/postgres \
             --query SecretString --output text)
+          DB_HOST=$(echo $RDS_SECRET | python3 -c "import sys,json;print(json.load(sys.stdin)['host'])")
+          DB_NAME=$(echo $RDS_SECRET | python3 -c "import sys,json;print(json.load(sys.stdin)['dbname'])")
+          DB_USER=$(echo $RDS_SECRET | python3 -c "import sys,json;print(json.load(sys.stdin)['username'])")
           PW_ARN=$(echo $RDS_SECRET | python3 -c "import sys,json;print(json.load(sys.stdin)['password_secret_arn'])")
           SECRET_JSON=$(aws secretsmanager get-secret-value \
             --secret-id "$PW_ARN" \
             --query SecretString --output text)
           DB_PASS=$(echo $SECRET_JSON | python3 -c "import sys,json;print(json.load(sys.stdin)['password'])")
           POD=$(kubectl get pod -n homelens -l app=fastapi -o jsonpath='{.items[0].metadata.name}')
-          kubectl exec -n homelens $POD -- bash -c "DATABASE_URL='postgresql://homelens_admin:${DB_PASS}@homelens-dev-postgres.clk6su6ui84v.eu-west-3.rds.amazonaws.com:5432/homelens' alembic upgrade heads"
+          kubectl exec -n homelens $POD -- bash -c "DATABASE_URL='postgresql://${DB_USER}:${DB_PASS}@${DB_HOST}:5432/${DB_NAME}' alembic upgrade heads"

@@ -104,14 +104,21 @@ resource "aws_iam_role_policy" "fastapi_api" {
     Version = "2012-10-17"
     Statement = [
       {
-        Effect   = "Allow"
-        Action   = ["sqs:SendMessage"]
+        Effect = "Allow"
+        Action = [
+          "sqs:SendMessage",
+          "sqs:GetQueueAttributes",
+          "sqs:GetQueueUrl",
+        ]
         Resource = "*"
       },
       {
-        Effect   = "Allow"
-        Action   = ["secretsmanager:GetSecretValue"]
-        Resource = "arn:aws:secretsmanager:${var.aws_region}:*:secret:homelens/${var.environment}/*"
+        Effect = "Allow"
+        Action = ["secretsmanager:GetSecretValue"]
+        Resource = [
+          "arn:aws:secretsmanager:${var.aws_region}:*:secret:homelens/${var.environment}/*",
+          "arn:aws:secretsmanager:${var.aws_region}:*:secret:rds!db-*"
+        ]
       }
     ]
   })

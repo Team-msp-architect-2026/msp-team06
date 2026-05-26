@@ -71,8 +71,7 @@ const ComplexScreen: React.FC<ComplexScreenProps> = ({
   go,
 }) => {
   const { selectedRegion, prevScreen } = useAppStore();
-  const { data: reportData } = useReport(rcReportId);
-
+  const { data: reportData } = useReport(rcReportId, rcStatus === 'done' ? 'completed' : rcStatus);
   const scrollRef = useRef<ScrollView>(null);
 
   const { data: markerData, isLoading: markerLoading } = useMapMarkers(
