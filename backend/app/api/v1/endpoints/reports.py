@@ -128,4 +128,4 @@ async def get_report(
         "generatedAt": report.generated_at.isoformat() if report.generated_at else datetime.now().isoformat(),
         "dataBaseDate": str(report.data_base_date) if report.data_base_date else str(date.today()),
     }
-kubectl logs -n homelens $(kubectl get pod -n homelens -l app=celery-worker -o jsonpath='{.items[0].metadata.name}') --tail=30
+kubectl logs -n homelens $(kubectl get pod -n homelens -l app=celery-worker -o jsonpath='{.items[0].metadata.name}') --tail=30# trigger
