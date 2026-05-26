@@ -138,14 +138,15 @@ def save_by_apt_seq(conn, apt_seq_groups: dict, deal_type: str, month: str):
 
             avg_price = sum(prices) // len(prices)
             trade_count = len(prices)
+            apt_name = data.get("apt_name", "")
 
             cur.execute("""
                 INSERT INTO price_trends (
                     region_id, month, deal_type,
-                    avg_price, trade_count, apt_seq, created_at
+                    avg_price, trade_count, apt_seq, apt_name, created_at
                 ) VALUES (
                     (SELECT id FROM regions WHERE legal_dong_code LIKE %s LIMIT 1),
-                    %s, %s, %s, %s, %s, NOW()
+                    %s, %s, %s, %s, %s, %s, NOW()
                 )
                 ON CONFLICT DO NOTHING
             """, (
@@ -155,6 +156,7 @@ def save_by_apt_seq(conn, apt_seq_groups: dict, deal_type: str, month: str):
                 avg_price,
                 trade_count,
                 apt_seq,
+                apt_name,
             ))
 
 
