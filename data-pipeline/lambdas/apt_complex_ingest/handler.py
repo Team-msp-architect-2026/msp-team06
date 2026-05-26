@@ -23,31 +23,31 @@ APT_COMPLEX_API_URL = "https://apis.data.go.kr/1613000/AptListService3"
 
 # 서울 25개 구 코드
 SEOUL_SIGUNGU_CODES = {
-    "종로구": "11010",
-    "중구": "11020",
-    "용산구": "11030",
-    "성동구": "11040",
-    "광진구": "11050",
-    "동대문구": "11060",
-    "중랑구": "11070",
-    "성북구": "11080",
-    "강북구": "11090",
-    "도봉구": "11100",
-    "노원구": "11110",
-    "은평구": "11120",
-    "서대문구": "11130",
-    "마포구": "11140",
-    "양천구": "11150",
-    "강서구": "11160",
-    "구로구": "11170",
-    "금천구": "11180",
-    "영등포구": "11190",
-    "동작구": "11200",
-    "관악구": "11210",
-    "서초구": "11220",
-    "강남구": "11230",
-    "송파구": "11240",
-    "강동구": "11250",
+    "종로구": "11110",
+    "중구": "11140",
+    "용산구": "11170",
+    "성동구": "11200",
+    "광진구": "11215",
+    "동대문구": "11230",
+    "중랑구": "11260",
+    "성북구": "11290",
+    "강북구": "11305",
+    "도봉구": "11320",
+    "노원구": "11350",
+    "은평구": "11380",
+    "서대문구": "11410",
+    "마포구": "11440",
+    "양천구": "11470",
+    "강서구": "11500",
+    "구로구": "11530",
+    "금천구": "11545",
+    "영등포구": "11560",
+    "동작구": "11590",
+    "관악구": "11620",
+    "서초구": "11650",
+    "강남구": "11680",
+    "송파구": "11710",
+    "강동구": "11740",
 }
 
 
@@ -114,22 +114,18 @@ def fetch_apt_complex_list(sigungu_cd: str, api_key: str) -> list:
         return []
 
 
-def get_region_id(conn, sigungu_cd: str) -> str:
-    """법정동 코드로 region_id 조회"""
-    try:
-        with conn.cursor() as cur:
-            cur.execute("""
-                SELECT id FROM regions
-                WHERE LEFT(legal_dong_code, 5) = %s
-                AND source_type = 'region'
-                LIMIT 1
-            """, (sigungu_cd,))
-            row = cur.fetchone()
-            return row[0] if row else f"REGION_{sigungu_cd}"
-    except Exception as e:
-        print(f"region_id 조회 실패: {e}")
-        return f"REGION_{sigungu_cd}"
-
+def get_region_id(conn, lawd_cd: str) -> str:
+    with conn.cursor() as cur:
+        cur.execute("""
+            SELECT id FROM regions
+            WHERE legal_dong_code = %s
+            AND source_type = 'region'
+            LIMIT 1
+        """, (lawd_cd,))
+        row = cur.fetchone()
+        if row:
+            return row[0]
+        return f"REGION_{lawd_cd}"
 
 def save_location(conn, item: dict, region_id: str):
     """locations 테이블에 단지 정보 저장"""

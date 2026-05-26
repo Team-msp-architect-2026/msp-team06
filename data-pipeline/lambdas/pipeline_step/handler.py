@@ -96,7 +96,7 @@ def process_price_data(event: dict) -> dict:
         max_price = max(prices)
         trade_count = len(prices)
         month = f"{deal_ymd[:4]}-{deal_ymd[4:6]}"
-        region_id = f"REGION_{lawd_cd}"
+        region_id = get_region_id(conn, lawd_cd)
         data_base_date = f"{deal_ymd[:4]}-{deal_ymd[4:6]}-01"
 
         with conn.cursor() as cur:
@@ -249,6 +249,16 @@ def process_news_data(event: dict) -> dict:
 
     return {"success": True, "saved": saved_count}
 
+def get_region_id(conn, lawd_cd: str) -> str:
+    with conn.cursor() as cur:
+        cur.execute("""
+            SELECT id FROM regions
+            WHERE legal_dong_code = %s
+            AND source_type = 'region'
+            LIMIT 1
+        """, (lawd_cd,))
+        row = cur.fetchone()
+        return row[0] if row else f"REGION_{lawd_cd}"
 
 def extract_region_ids(conn, text: str) -> list:
     """
