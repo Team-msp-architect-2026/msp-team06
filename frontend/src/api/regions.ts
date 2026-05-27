@@ -10,6 +10,7 @@ export interface RegionSearchItem {
   propertyType: string;
   lat: number;
   lng: number;
+  aptSeq?: string;
 }
 
 // 동·단지 자동완성 검색

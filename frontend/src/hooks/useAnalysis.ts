@@ -1,6 +1,4 @@
 // HomeLens AI - 가격/이슈 분석 데이터 조회 훅
-// TanStack Query로 캐시 및 로딩 상태 관리
-
 import { useQuery } from "@tanstack/react-query";
 import {
   getIssues,
@@ -8,6 +6,7 @@ import {
   getPriceStats,
   getPriceTrend,
 } from "../api/analysis";
+import { useAppStore } from "../store/useAppStore";
 
 // 가격 현황 조회 훅
 export function usePrice(
@@ -17,9 +16,12 @@ export function usePrice(
   dealYmd: string,
   regionName?: string,
 ) {
+  const { selectedRegion } = useAppStore();
+  const aptSeq = selectedRegion?.aptSeq;
+
   return useQuery({
-    queryKey: ["price", regionId, lat, lng, dealYmd, regionName],
-    queryFn: () => getPrice(regionId, lat, lng, dealYmd, "all", regionName),
+    queryKey: ["price", regionId, lat, lng, dealYmd, regionName, aptSeq],
+    queryFn: () => getPrice(regionId, lat, lng, dealYmd, "all", regionName, aptSeq),
     enabled: !!regionId && !!lat && !!lng && !!dealYmd,
   });
 }
@@ -32,9 +34,12 @@ export function usePriceTrend(
   period: string = "1y",
   regionName?: string,
 ) {
+  const { selectedRegion } = useAppStore();
+  const aptSeq = selectedRegion?.aptSeq;
+
   return useQuery({
-    queryKey: ["price", "trend", regionId, lat, lng, period, regionName],
-    queryFn: () => getPriceTrend(regionId, lat, lng, period, "all", regionName),
+    queryKey: ["price", "trend", regionId, lat, lng, period, regionName, aptSeq],
+    queryFn: () => getPriceTrend(regionId, lat, lng, period, "all", regionName, aptSeq),
     enabled: !!regionId && !!lat && !!lng,
   });
 }
@@ -48,12 +53,16 @@ export function usePriceStats(
   period: string = "1m",
   regionName?: string,
 ) {
+  const { selectedRegion } = useAppStore();
+  const aptSeq = selectedRegion?.aptSeq;
+
   return useQuery({
-    queryKey: ["price", "stats", regionId, lat, lng, dealYmd, period],
-    queryFn: () => getPriceStats(regionId, lat, lng, dealYmd, "all", period, regionName),
+    queryKey: ["price", "stats", regionId, lat, lng, dealYmd, period, aptSeq],
+    queryFn: () => getPriceStats(regionId, lat, lng, dealYmd, "all", period, regionName, aptSeq),
     enabled: !!regionId && !!lat && !!lng && !!dealYmd,
   });
 }
+
 // 이슈/뉴스 목록 조회 훅
 export function useIssues(regionId: string, regionName: string) {
   return useQuery({

@@ -23,6 +23,9 @@ from app.services.price import (
     get_kapt_name,
     filter_by_name,
     fetch_price_trend_from_api,
+    get_price_snapshot_by_apt_seq,      
+    get_price_trend_by_apt_seq,         
+    get_price_stats_by_apt_seq,
 )
 from app.services.news import get_region_issues
 
@@ -31,15 +34,32 @@ router = APIRouter()
 
 @router.get("/price", response_model=PriceResponse)
 async def get_price(
-    regionId: str = Query(..., description="서비스 내부 지역 ID"),
-    lat: float = Query(..., description="위도"),
-    lng: float = Query(..., description="경도"),
-    dealYmd: str = Query(..., description="조회 계약년월 (YYYYMM 형식)"),
-    regionName: Optional[str] = Query(None, description="단지명 필터링용"),
-    dealType: Optional[str] = Query("all", description="sale | jeonse | monthly | all"),
+    regionId: str = Query(...),
+    lat: float = Query(...),
+    lng: float = Query(...),
+    dealYmd: str = Query(...),
+    regionName: Optional[str] = Query(None),
+    dealType: Optional[str] = Query("all"),
+    aptSeq: Optional[str] = Query(None),  
     db: AsyncSession = Depends(get_db),
 ):
-    # 1순위: DB → Redis 조회
+    # 1순위: apt_seq 기반 DB 조회
+    if aptSeq:
+        data = await get_price_snapshot_by_apt_seq(aptSeq, db)
+        if data:
+            return {
+                "avgSalePrice": data.get("avgSalePrice"),
+                "avgJeonsePrice": data.get("avgJeonsePrice"),
+                "avgMonthlyRent": data.get("avgMonthlyRent"),
+                "avgMonthlyDeposit": data.get("avgMonthlyDeposit"),
+                "jeonseRatio": data.get("jeonseRatio"),
+                "recentTradeCount": data.get("recentTradeCount") or 0,
+                "priceStabilityGrade": data.get("priceStabilityGrade", "normal"),
+                "priceLevel": data.get("priceLevel", "avg"),
+                "dataBaseDate": data.get("dataBaseDate", str(date.today())),
+            }
+
+    # 2순위: region_id 기반 DB → Redis 조회
     snapshot = await get_price_snapshot(regionId, db)
     if snapshot:
         return {
@@ -54,27 +74,21 @@ async def get_price(
             "dataBaseDate": snapshot.get("data_base_date", str(date.today())),
         }
 
-    # 2순위: 외부 API 직접 호출 (fallback)
+    # 3순위: 외부 API fallback
     try:
         lawd_cd_5, lawd_cd_10 = await get_lawd_cd(lat, lng)
-
-        # 단지목록 API로 공식 단지명 조회
         matched_name = None
         if regionName:
             matched_name = await get_kapt_name(lawd_cd_10, regionName)
-            if matched_name:
-                print(f"최종 사용 단지명: {matched_name}")
+        filter_name = matched_name or regionName
 
         sale_data = await fetch_sale_price(lawd_cd_5, dealYmd)
         rent_data = await fetch_rent_price(lawd_cd_5, dealYmd)
 
-        # 매매 데이터 파싱
         sale_items = sale_data.get("response", {}).get("body", {}).get("items", {}).get("item", [])
         if isinstance(sale_items, dict):
             sale_items = [sale_items]
 
-        # 단지명 필터링 (공식 단지명 우선, 없으면 카카오맵 단지명)
-        filter_name = matched_name or regionName
         if filter_name and sale_items:
             filtered = filter_by_name(sale_items, filter_name)
             if filtered:
@@ -85,7 +99,6 @@ async def get_price(
             for i in sale_items
         ) / len(sale_items)) if sale_items else None
 
-        # 전월세 데이터 파싱
         rent_items = rent_data.get("response", {}).get("body", {}).get("items", {}).get("item", [])
         if isinstance(rent_items, dict):
             rent_items = [rent_items]
@@ -139,9 +152,22 @@ async def get_price_trend_endpoint(
     period: Optional[str] = Query("1y"),
     dealType: Optional[str] = Query("all"),
     regionName: Optional[str] = Query(None),
+    aptSeq: Optional[str] = Query(None),  
     db: AsyncSession = Depends(get_db),
 ):
-    # DB → Redis 조회
+    # 1순위: apt_seq 기반 DB 조회
+    if aptSeq:
+        trend = await get_price_trend_by_apt_seq(aptSeq, dealType, period, db)
+        if trend:
+            return {
+                "trend": trend,
+                "changeRate1m": 0.0,
+                "changeRate3m": 0.0,
+                "changeRate1y": 0.0,
+                "dataBaseDate": date.today(),
+            }
+
+    # 2순위: region_id 기반 DB 조회
     trend = await get_price_trend(regionId, dealType, period, db)
     if trend:
         return {
@@ -152,13 +178,9 @@ async def get_price_trend_endpoint(
             "dataBaseDate": date.today(),
         }
 
-    # 외부 API fallback
+    # 3순위: 외부 API fallback
     try:
-        print(f"[trend] fetch_price_trend_from_api 호출 시작")
         all_trend = await fetch_price_trend_from_api(lat, lng, regionName)
-        print(f"[trend] 결과: {len(all_trend)}건")
-        
-        # dealType별로 각각 최근 6개월
         if dealType == "all":
             sale = [t for t in all_trend if t["dealType"] == "sale"][:6]
             jeonse = [t for t in all_trend if t["dealType"] == "jeonse"][:6]
@@ -176,7 +198,6 @@ async def get_price_trend_endpoint(
         }
     except Exception as e:
         print(f"가격 추이 API 오류: {e}")
-        print(traceback.format_exc())
         return {
             "trend": [],
             "changeRate1m": 0.0,
@@ -187,16 +208,31 @@ async def get_price_trend_endpoint(
 
 @router.get("/price/stats", response_model=PriceStatResponse)
 async def get_price_stats_endpoint(
-    regionId: str = Query(..., description="서비스 내부 지역 ID"),
-    lat: float = Query(..., description="위도"),
-    lng: float = Query(..., description="경도"),
-    dealYmd: str = Query(..., description="조회 계약년월 (YYYYMM 형식)"),
-    dealType: Optional[str] = Query("all", description="sale | jeonse | monthly | all"),
-    period: Optional[str] = Query("1m", description="1m | 3m | 1y"),
-    regionName: Optional[str] = Query(None, description="단지명 필터링용"),
+    regionId: str = Query(...),
+    lat: float = Query(...),
+    lng: float = Query(...),
+    dealYmd: str = Query(...),
+    dealType: Optional[str] = Query("all"),
+    period: Optional[str] = Query("1m"),
+    regionName: Optional[str] = Query(None),
+    aptSeq: Optional[str] = Query(None),  
     db: AsyncSession = Depends(get_db),
 ):
-    # 1순위: DB → Redis 조회
+    # 1순위: apt_seq 기반 DB 조회
+    if aptSeq:
+        stats = await get_price_stats_by_apt_seq(aptSeq, dealType, period, db)
+        if stats:
+            return {
+                "minPrice": stats.get("minPrice"),
+                "avgPrice": stats.get("avgPrice"),
+                "maxPrice": stats.get("maxPrice"),
+                "totalTradeCount": stats.get("totalTradeCount"),
+                "recentTradeCount": stats.get("recentTradeCount"),
+                "tradeSignal": stats.get("tradeSignal", "normal"),
+                "dataBaseDate": stats.get("dataBaseDate", str(date.today())),
+            }
+
+    # 2순위: region_id 기반 DB 조회
     stats = await get_price_stats(regionId, dealType, period, db)
     if stats:
         return {
@@ -209,7 +245,7 @@ async def get_price_stats_endpoint(
             "dataBaseDate": stats.get("data_base_date", str(date.today())),
         }
 
-    # 2순위: 외부 API fallback
+    # 3순위: 외부 API fallback
     try:
         lawd_cd_5, lawd_cd_10 = await get_lawd_cd(lat, lng)
         matched_name = None

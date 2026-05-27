@@ -1,9 +1,4 @@
 // HomeLens AI - 가격/이슈 분석 API 호출 함수
-// GET /api/v1/analysis/price
-// GET /api/v1/analysis/price/trend
-// GET /api/v1/analysis/price/stats
-// GET /api/v1/analysis/issues
-
 import { apiGet } from "./client";
 
 export interface PriceResponse {
@@ -65,6 +60,7 @@ export async function getPrice(
   dealYmd: string,
   dealType: string = "all",
   regionName?: string,
+  aptSeq?: string,  
 ): Promise<PriceResponse> {
   return apiGet<PriceResponse>("/analysis/price", {
     regionId,
@@ -73,6 +69,7 @@ export async function getPrice(
     dealYmd,
     dealType,
     regionName,
+    aptSeq,  
   });
 }
 
@@ -84,6 +81,7 @@ export async function getPriceTrend(
   period: string = "1y",
   dealType: string = "all",
   regionName?: string,
+  aptSeq?: string,  
 ): Promise<PriceTrendResponse> {
   return apiGet<PriceTrendResponse>("/analysis/price/trend", {
     regionId,
@@ -92,6 +90,7 @@ export async function getPriceTrend(
     period,
     dealType,
     regionName,
+    aptSeq,  
   });
 }
 
@@ -104,6 +103,7 @@ export async function getPriceStats(
   dealType: string = "all",
   period: string = "1m",
   regionName?: string,
+  aptSeq?: string, 
 ): Promise<PriceStatResponse> {
   return apiGet<PriceStatResponse>("/analysis/price/stats", {
     regionId,
@@ -113,6 +113,7 @@ export async function getPriceStats(
     dealType,
     period,
     regionName,
+    aptSeq,  
   });
 }
 
