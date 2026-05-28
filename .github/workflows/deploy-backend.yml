@@ -48,6 +48,16 @@ jobs:
           docker tag $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG $ECR_REGISTRY/$ECR_REPOSITORY:latest
           docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
 
+      - name: Debug PAT
+        env:
+          GH_PAT: ${{ secrets.GH_PAT }}
+        run: |
+          if [ -z "$GH_PAT" ]; then
+            echo "GH_PAT is empty!"
+          else
+            echo "GH_PAT is set (length: ${#GH_PAT})"
+          fi
+
       - name: Update image tag in manifest
         env:
           IMAGE_TAG: ${{ github.sha }}
