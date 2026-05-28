@@ -123,6 +123,10 @@ def lambda_handler(event, context):
     if not api_key:
         return {"statusCode": 500, "body": json.dumps({"error": "API 키 없음"})}
 
+    if event.get("debug_kapt_code"):
+        fetch_apt_detail_debug(event["debug_kapt_code"], api_key)
+        return {"statusCode": 200, "body": "debug done"}
+
     target_gu = event.get("target_gu", list(SEOUL_SIGUNGU_CODES.keys()))
     conn = None
     total_saved = 0
@@ -171,3 +175,23 @@ def lambda_handler(event, context):
             "target_gu_count": len(target_gu),
         })
     }
+
+def fetch_apt_detail_debug(kapt_code: str, api_key: str):
+    """디버그용 - 단지 상세 API 응답 RAW 출력"""
+    encoded_key = urllib.parse.quote(api_key)
+    url = (
+        f"https://apis.data.go.kr/1613000/AptBasisInfoServiceV4/getAphusBassInfoV4"
+        f"?serviceKey={encoded_key}"
+        f"&kaptCode={kapt_code}"
+    )
+    try:
+        with urllib.request.urlopen(url, timeout=10) as response:
+            raw = response.read().decode("utf-8")
+            print(f"[DEBUG] kaptCode={kapt_code}")
+            print(f"[DEBUG] RAW 응답: {raw}")
+            result = json.loads(raw)
+            item = result.get("response", {}).get("body", {}).get("item", {})
+            print(f"[DEBUG] item keys: {list(item.keys()) if isinstance(item, dict) else type(item)}")
+    except Exception as e:
+        print(f"[DEBUG] API 실패: {e}")
+

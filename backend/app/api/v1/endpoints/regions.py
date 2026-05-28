@@ -13,18 +13,25 @@ DONG_KEYWORDS = ["동", "읍", "면", "리", "가"]
 def is_dong(name: str) -> bool:
     return any(name.endswith(kw) for kw in DONG_KEYWORDS)
 
-async def get_apt_seq_by_name(name: str, db: AsyncSession) -> str | None:
-    """단지명으로 price_trends에서 apt_seq 조회"""
+async def get_apt_seq_by_name(name: str, lat: float, lng: float, db: AsyncSession) -> str | None:
     try:
+        clean_name = name.replace("아파트", "").replace(" ", "").strip()
+        
+        # 1. 카카오 좌표로 법정동 구코드 5자리 조회
+        from app.services.price import get_lawd_cd
+        lawd_cd_5, _ = await get_lawd_cd(lat, lng)
+        
+        # 2. 같은 구 안에서 단지명 매칭
         result = await db.execute(
             text("""
                 SELECT apt_seq FROM price_trends
-                WHERE apt_name ILIKE :name
+                WHERE LEFT(apt_seq, 5) = :lawd_cd
+                AND REPLACE(apt_name, ' ', '') ILIKE :name
                 AND apt_seq IS NOT NULL
                 AND apt_name IS NOT NULL
                 LIMIT 1
             """),
-            {"name": f"%{name}%"}
+            {"lawd_cd": lawd_cd_5, "name": f"%{clean_name}%"}
         )
         row = result.fetchone()
         return row[0] if row else None
