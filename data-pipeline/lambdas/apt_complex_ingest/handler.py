@@ -180,7 +180,7 @@ def fetch_apt_detail_debug(kapt_code: str, api_key: str):
     """디버그용 - 단지 상세 API 응답 RAW 출력"""
     encoded_key = urllib.parse.quote(api_key)
     url = (
-        f"https://apis.data.go.kr/1613000/AptBasisInfoServiceV4/getAphusDtlInfoV4"
+        f"https://apis.data.go.kr/1613000/AptBasisInfoServiceV4/getAphusBassInfoV4"
         f"?serviceKey={encoded_key}"
         f"&kaptCode={kapt_code}"
     )
