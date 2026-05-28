@@ -180,20 +180,19 @@ bash destroy.sh          # Helm 정리 후 terraform destroy 자동 실행
 cd homelens-terraform/environments/dev
 terraform init           # .terraform 폴더 없을 때만 (destroy해도 폴더 유지됨)
 
-# Terraform apply 3단계 완료 후 → kubectl apply
-# 1. EKS kubeconfig 업데이트 (경로 무관)
+# Terraform apply 3단계 완료 후 → ArgoCD가 k8s 리소스를 자동 sync
+# (kubectl apply 수동 불필요 — ArgoCD가 infra/k8s/ 전체를 자동으로 EKS에 적용)
+# 1. EKS kubeconfig 업데이트 (Route53 업데이트 및 aws-auth 등록에 필요)
 aws eks update-kubeconfig --name homelens-dev-eks --region eu-west-3
 
-# 2. kubectl apply (homelens/ 루트에서 실행)
-cd ~/homelens
-kubectl apply -f k8s/configmap.yaml
-kubectl apply -f k8s/fastapi-serviceaccount.yaml
-kubectl apply -f k8s/fastapi-deployment.yaml
-kubectl apply -f k8s/fastapi-service.yaml
-kubectl apply -f k8s/ingress.yaml
-# celery-deployment.yaml은 ECR 이미지 준비 후 CI/CD에서 배포 — 수동 apply 불필요
+# 2. ArgoCD sync 확인 (~3분 이내 자동 완료)
+kubectl get pods -n argocd          # argocd-server, argocd-repo-server 등 Running 확인
+kubectl get applicationset -n argocd  # homelens ApplicationSet 확인
+kubectl get application -n argocd     # homelens-dev Synced/Healthy 확인
+kubectl get pods -n homelens          # fastapi, celery-worker 파드 확인
 
-# fastapi_role_arn은 매번 동일 (IAM Role 이름 고정) → serviceaccount.yaml 수정 불필요
+# ※ infra/k8s/ 내 모든 파일(configmap, serviceaccount, deployment, service, ingress)은
+#   ArgoCD가 자동 적용하므로 kubectl apply 불필요
 
 # 3. Route53 api-dev 레코드 업데이트 (ingress 컨트롤러가 매번 새 ALB 생성)
 # ingress Address 확인 (ALB DNS 출력까지 1~2분 소요)
@@ -235,9 +234,11 @@ terraform apply \
   -target=module.secrets
 
 # 2단계: Helm 사용 모듈 (EKS endpoint 확보 후)
+# argocd는 celery 이후 — celery가 homelens 네임스페이스와 ServiceAccount를 먼저 생성해야 함
 terraform apply \
   -target=module.alb \
-  -target=module.celery
+  -target=module.celery \
+  -target=module.argocd
 
 # 3단계: 나머지
 terraform apply \

@@ -127,3 +127,10 @@ variable "mois_service_key" {
   default   = ""
 }
 
+variable "github_token" {
+  type        = string
+  sensitive   = true
+  description = "ArgoCD용 GitHub PAT (private repo 접근). public repo면 빈 문자열"
+  default     = ""
+}
+

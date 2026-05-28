@@ -31,102 +31,6 @@ resource "kubernetes_service_account" "celery_worker" {
 }
 
 # ---------------------------------------------------------------------------
-# Deployment — Celery worker
-# worker 노드그룹에만 스케줄링 (nodeSelector + toleration)
-# ---------------------------------------------------------------------------
-resource "kubernetes_deployment" "celery_worker" {
-  metadata {
-    name      = local.app_label
-    namespace = kubernetes_namespace.homelens.metadata[0].name
-    labels = {
-      app = local.app_label
-    }
-  }
-
-  spec {
-    replicas = var.replicas
-
-    selector {
-      match_labels = { app = local.app_label }
-    }
-
-    template {
-      metadata {
-        labels = { app = local.app_label }
-      }
-
-      spec {
-        service_account_name = kubernetes_service_account.celery_worker.metadata[0].name
-
-        # worker 노드그룹에만 배치 (terraform_instructions.md §4-4)
-        node_selector = { role = "worker" }
-
-        toleration {
-          key      = "dedicated"
-          value    = "worker"
-          operator = "Equal"
-          effect   = "NoSchedule"
-        }
-
-        container {
-          name              = "celery-worker"
-          image             = var.celery_image
-          image_pull_policy = "Always"
-
-          command = ["celery", "-A", "app.worker", "worker", "--loglevel=info", "--concurrency=4"]
-
-          env {
-            name  = "CELERY_BROKER_URL"
-            value = "sqs://"
-          }
-          env {
-            name  = "SQS_QUEUE_URL"
-            value = var.sqs_queue_url
-          }
-          env {
-            name  = "AWS_REGION"
-            value = var.aws_region
-          }
-          env {
-            name  = "ENVIRONMENT"
-            value = var.environment
-          }
-
-          resources {
-            requests = {
-              cpu    = "250m"
-              memory = "512Mi"
-            }
-            limits = {
-              cpu    = "1000m"
-              memory = "1Gi"
-            }
-          }
-
-          liveness_probe {
-            exec {
-              command = ["celery", "-A", "app.worker", "inspect", "ping", "-d", "celery@$HOSTNAME"]
-            }
-            initial_delay_seconds = 30
-            period_seconds        = 60
-            timeout_seconds       = 10
-            failure_threshold     = 3
-          }
-        }
-      }
-    }
-  }
-
-  lifecycle {
-    # 이미지 태그는 CI/CD에서 관리
-    ignore_changes = [
-      spec[0].template[0].spec[0].container[0].image,
-      spec[0].replicas,
-    ]
-  }
-}
-
-# ---------------------------------------------------------------------------
 # KEDA Operator — Helm (kedacore/charts)
 # ScaledObject CRD 설치 전에 반드시 먼저 배포
 # ---------------------------------------------------------------------------
@@ -174,7 +78,7 @@ resource "null_resource" "keda_scaled_object" {
         namespace: ${local.namespace}
       spec:
         scaleTargetRef:
-          name: ${kubernetes_deployment.celery_worker.metadata[0].name}
+          name: celery-worker
         minReplicaCount: ${var.environment == "prod" ? 1 : 0}
         maxReplicaCount: ${var.environment == "prod" ? 10 : 4}
         cooldownPeriod: 60
@@ -189,5 +93,5 @@ resource "null_resource" "keda_scaled_object" {
     EOF
   }
 
-  depends_on = [helm_release.keda, kubernetes_deployment.celery_worker]
+  depends_on = [helm_release.keda]
 }

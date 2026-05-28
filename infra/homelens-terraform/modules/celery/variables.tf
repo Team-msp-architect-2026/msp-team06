@@ -29,18 +29,6 @@ variable "aws_region" {
   default     = "eu-west-3"
 }
 
-variable "replicas" {
-  description = "Initial Celery worker replica count (0 = CI/CD가 실제 이미지 배포 전까지 파드 미생성)"
-  type        = number
-  default     = 0
-}
-
-variable "celery_image" {
-  description = "Celery worker container image (repo:tag)"
-  type        = string
-  default     = "placeholder:latest"
-}
-
 variable "keda_operator_role_arn" {
   description = "IRSA role ARN for KEDA Operator ServiceAccount"
   type        = string

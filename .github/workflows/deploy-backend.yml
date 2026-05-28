@@ -1,4 +1,4 @@
-name: Deploy Backend to ECR & EKS
+name: Build & Push to ECR (ArgoCD deploys)
 
 on:
   push:
@@ -8,12 +8,14 @@ on:
       - '.github/workflows/deploy-backend.yml'
 
 jobs:
-  deploy:
+  build-and-update:
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout
         uses: actions/checkout@v3
+        with:
+          token: ${{ secrets.GH_PAT }}  # git push 권한이 있는 PAT
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v2
@@ -26,7 +28,7 @@ jobs:
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v1
 
-      - name: Build, tag, and push FastAPI image to ECR
+      - name: Build, tag, and push FastAPI image
         env:
           ECR_REGISTRY: 611058323802.dkr.ecr.eu-west-3.amazonaws.com
           ECR_REPOSITORY: homelens-fastapi
@@ -34,10 +36,8 @@ jobs:
         run: |
           docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG ./backend
           docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
-          docker tag $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG $ECR_REGISTRY/$ECR_REPOSITORY:latest
-          docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
 
-      - name: Build, tag, and push Celery Worker image to ECR
+      - name: Build, tag, and push Celery Worker image
         env:
           ECR_REGISTRY: 611058323802.dkr.ecr.eu-west-3.amazonaws.com
           ECR_REPOSITORY: homelens-celeryworker
@@ -45,33 +45,36 @@ jobs:
         run: |
           docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG ./backend -f ./backend/Dockerfile.celery
           docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
-          docker tag $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG $ECR_REGISTRY/$ECR_REPOSITORY:latest
-          docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
 
-      - name: Update kubeconfig
+      # ── GitOps: 이미지 태그를 k8s 매니페스트에 반영하고 커밋 ──────────────
+      - name: Update image tags in k8s manifests
+        env:
+          ECR_REGISTRY: 611058323802.dkr.ecr.eu-west-3.amazonaws.com
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          sed -i "s|homelens-fastapi:.*|homelens-fastapi:${IMAGE_TAG}|g" \
+            infra/k8s/fastapi-deployment.yaml
+          sed -i "s|homelens-celeryworker:.*|homelens-celeryworker:${IMAGE_TAG}|g" \
+            infra/k8s/celery-deployment.yaml
+
+      - name: Commit and push manifest changes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add infra/k8s/fastapi-deployment.yaml infra/k8s/celery-deployment.yaml
+          # 변경사항이 없으면(이미 동일 태그) 커밋 생략
+          git diff --staged --quiet && echo "No manifest changes" && exit 0
+          git commit -m "ci: update image tags to ${GITHUB_SHA::8} [skip ci]"
+          git push
+
+      # ── ArgoCD가 자동 sync하므로 kubectl apply 불필요 ─────────────────────
+      # ArgoCD polling 주기: 기본 3분 (webhook 설정 시 즉시 반영 가능)
+
+      # ── DB 마이그레이션: ArgoCD sync 후 FastAPI pod가 뜨면 실행 ──────────
+      - name: Wait for kubeconfig & FastAPI rollout
         run: |
           aws eks update-kubeconfig --region eu-west-3 --name homelens-dev-eks
-
-      - name: Deploy FastAPI to EKS
-        env:
-          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-          ECR_REPOSITORY: homelens-fastapi
-          IMAGE_TAG: ${{ github.sha }}
-        run: |
-          kubectl set image deployment/fastapi \
-            fastapi=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG \
-            -n homelens
-          kubectl rollout status deployment/fastapi -n homelens
-
-      - name: Deploy Celery Worker to EKS
-        env:
-          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-          ECR_REPOSITORY: homelens-celeryworker
-          IMAGE_TAG: ${{ github.sha }}
-        run: |
-          kubectl set image deployment/celery-worker \
-            celery-worker=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG \
-            -n homelens
+          kubectl rollout status deployment/fastapi -n homelens --timeout=300s
 
       - name: Run Alembic Migration
         run: |
@@ -87,4 +90,5 @@ jobs:
             --query SecretString --output text)
           DB_PASS=$(echo $SECRET_JSON | python3 -c "import sys,json;print(json.load(sys.stdin)['password'])")
           POD=$(kubectl get pod -n homelens -l app=fastapi -o jsonpath='{.items[0].metadata.name}')
-          kubectl exec -n homelens $POD -- bash -c "DATABASE_URL='postgresql://${DB_USER}:${DB_PASS}@${DB_HOST}:5432/${DB_NAME}' alembic upgrade heads"
+          kubectl exec -n homelens $POD -- bash -c \
+            "DATABASE_URL='postgresql://${DB_USER}:${DB_PASS}@${DB_HOST}:5432/${DB_NAME}' alembic upgrade heads"

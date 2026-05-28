@@ -41,3 +41,26 @@ variable "raw_data_bucket_name" {
 variable "raw_data_bucket_arn" {
   type = string
 }
+
+# ── VPC (networking 모듈에서 받음) ───────────────────
+variable "private_subnet_ids" {
+  description = "RDS 접근 Lambda용 private subnet IDs"
+  type        = list(string)
+}
+
+variable "lambda_sg_id" {
+  description = "RDS 접근 Lambda에 붙일 보안그룹 (eks-node-sg 재사용)"
+  type        = string
+}
+
+# ── ElastiCache ───────────────────────────────────────
+variable "redis_host" {
+  description = "Redis primary endpoint"
+  type        = string
+}
+
+variable "redis_port" {
+  description = "Redis port"
+  type        = number
+  default     = 6379
+}

@@ -4,8 +4,8 @@ output "namespace" {
 }
 
 output "deployment_name" {
-  description = "Celery worker Deployment name"
-  value       = kubernetes_deployment.celery_worker.metadata[0].name
+  description = "Celery worker Deployment name (ArgoCD가 infra/k8s/celery-deployment.yaml로 관리)"
+  value       = "celery-worker"
 }
 
 output "service_account_name" {
