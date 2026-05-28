@@ -1,10 +1,5 @@
 """
 apt_complex_ingest/handler.py
-공동주택 단지 목록 수집 및 DB 저장
-- 국토부 공동주택 단지 목록제공 서비스 API 호출 (getSigunguAptList3)
-- 단지 코드 + 단지명 + 주소 조회
-- locations 테이블에 저장
-- memory: 1024MB / timeout: 300s
 """
 import json
 import os
@@ -15,93 +10,54 @@ import urllib.parse
 from datetime import datetime, timezone
 
 AWS_REGION = os.environ.get("AWS_REGION", "eu-west-3")
-
 secretsmanager = boto3.client("secretsmanager", region_name=AWS_REGION)
-
-# 공동주택 단지 목록 API 엔드포인트
 APT_COMPLEX_API_URL = "https://apis.data.go.kr/1613000/AptListService3"
 
-# 서울 25개 구 코드
 SEOUL_SIGUNGU_CODES = {
-    "종로구": "11110",
-    "중구": "11140",
-    "용산구": "11170",
-    "성동구": "11200",
-    "광진구": "11215",
-    "동대문구": "11230",
-    "중랑구": "11260",
-    "성북구": "11290",
-    "강북구": "11305",
-    "도봉구": "11320",
-    "노원구": "11350",
-    "은평구": "11380",
-    "서대문구": "11410",
-    "마포구": "11440",
-    "양천구": "11470",
-    "강서구": "11500",
-    "구로구": "11530",
-    "금천구": "11545",
-    "영등포구": "11560",
-    "동작구": "11590",
-    "관악구": "11620",
-    "서초구": "11650",
-    "강남구": "11680",
-    "송파구": "11710",
+    "종로구": "11110", "중구": "11140", "용산구": "11170",
+    "성동구": "11200", "광진구": "11215", "동대문구": "11230",
+    "중랑구": "11260", "성북구": "11290", "강북구": "11305",
+    "도봉구": "11320", "노원구": "11350", "은평구": "11380",
+    "서대문구": "11410", "마포구": "11440", "양천구": "11470",
+    "강서구": "11500", "구로구": "11530", "금천구": "11545",
+    "영등포구": "11560", "동작구": "11590", "관악구": "11620",
+    "서초구": "11650", "강남구": "11680", "송파구": "11710",
     "강동구": "11740",
 }
 
 
 def get_api_key() -> str:
-    """Secrets Manager에서 국토부 API 키 조회"""
     env = os.environ.get("ENV", "dev")
-    secret_name = f"homelens/{env}/molit/real-estate-api"
-
     try:
-        response = secretsmanager.get_secret_value(SecretId=secret_name)
-        secret = json.loads(response["SecretString"])
-        return secret["api_key"]
+        response = secretsmanager.get_secret_value(SecretId=f"homelens/{env}/molit/real-estate-api")
+        return json.loads(response["SecretString"])["api_key"]
     except Exception as e:
         print(f"API 키 조회 실패: {e}")
-        return os.environ.get("MOLIT_API_KEY", "")
+        return ""
 
 
 def get_db_connection():
-    """Secrets Manager에서 DB 연결 정보 조회 후 연결"""
     env = os.environ.get("ENV", "dev")
-    secret_name = f"homelens/{env}/rds/postgres"
-
-    response = secretsmanager.get_secret_value(SecretId=secret_name)
+    response = secretsmanager.get_secret_value(SecretId=f"homelens/{env}/rds/postgres")
     creds = json.loads(response["SecretString"])
-
-    # password_secret_arn에서 실제 비밀번호 조회
     password = creds.get("password", "")
     if not password and creds.get("password_secret_arn"):
-        pw_response = secretsmanager.get_secret_value(
-            SecretId=creds["password_secret_arn"]
-        )
-        pw_secret = json.loads(pw_response["SecretString"])
-        password = pw_secret.get("password", "")
-
+        pw_response = secretsmanager.get_secret_value(SecretId=creds["password_secret_arn"])
+        password = json.loads(pw_response["SecretString"]).get("password", "")
     return psycopg2.connect(
-        host=creds["host"],
-        port=int(creds["port"]),
-        user=creds["username"],
-        password=password,
-        dbname=creds["dbname"],
+        host=creds["host"], port=int(creds["port"]),
+        user=creds["username"], password=password, dbname=creds["dbname"],
     )
 
 
 def fetch_apt_complex_list(sigungu_cd: str, api_key: str) -> list:
-    """공동주택 단지 목록 API 호출"""
     encoded_key = urllib.parse.quote(api_key)
     url = (
         f"{APT_COMPLEX_API_URL}/getSigunguAptList3"
         f"?serviceKey={encoded_key}"
         f"&sigunguCode={sigungu_cd}"
-        f"&numOfRows=1000"
-        f"&pageNo=1"
+        f"&numOfRows=1000&pageNo=1"
     )
-
     try:
         with urllib.request.urlopen(url, timeout=30) as response:
             result = json.loads(response.read().decode("utf-8"))
@@ -118,59 +74,49 @@ def get_region_id(conn, lawd_cd: str) -> str:
     with conn.cursor() as cur:
         cur.execute("""
             SELECT id FROM regions
-            WHERE legal_dong_code = %s
-            AND source_type = 'region'
+            WHERE legal_dong_code = %s AND source_type = 'region'
             LIMIT 1
         """, (lawd_cd,))
         row = cur.fetchone()
-        if row:
-            return row[0]
-        return f"REGION_{lawd_cd}"
+        return row[0] if row else f"REGION_{lawd_cd}"
+
 
 def save_location(conn, item: dict, region_id: str):
-    """locations 테이블에 단지 정보 저장"""
     address = " ".join(filter(None, [
-        item.get("as1", ""),
-        item.get("as2", ""),
-        item.get("as3", ""),
-        item.get("as4", ""),
+        item.get("as1", ""), item.get("as2", ""),
+        item.get("as3", ""), item.get("as4", ""),
     ]))
+    kapt_code = item.get("kaptCode", "")
+    loc_id = f"LOC_{kapt_code}"
 
-    loc_id = f"LOC_{item.get('kaptCode', '')}"
-    
+    # kaptCode를 apt_seq로 직접 사용 (단지 상세 API 500 오류로 우회)
+    apt_seq = kapt_code
+
     with conn.cursor() as cur:
         cur.execute("SELECT id FROM locations WHERE id = %s", (loc_id,))
         exists = cur.fetchone()
-        
         if exists:
             cur.execute("""
-                UPDATE locations SET
-                    name = %s,
-                    address = %s
+                UPDATE locations SET name = %s, address = %s, apt_seq = %s
                 WHERE id = %s
-            """, (item.get("kaptName", ""), address, loc_id))
+            """, (item.get("kaptName", ""), address, apt_seq, loc_id))
         else:
             cur.execute("""
                 INSERT INTO locations (
                     id, region_id, name, address,
                     property_type, lat, lng,
-                    floors, build_year, created_at
-                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())
+                    floors, build_year, apt_seq, created_at
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())
             """, (
-                loc_id,
-                region_id,
+                loc_id, region_id,
                 item.get("kaptName", ""),
-                address,
-                "apartment",
-                0.0,  # lat 기본값
-                0.0,  # lng 기본값
-                None,
-                None,
+                address, "apartment",
+                0.0, 0.0, None, None,
+                apt_seq,
             ))
 
 
 def lambda_handler(event, context):
-    """Lambda 핸들러 - 공동주택 단지 목록 수집 및 DB 저장"""
     print(f"단지 목록 수집 시작: {datetime.now(timezone.utc).isoformat()}")
 
     api_key = get_api_key()
@@ -178,14 +124,12 @@ def lambda_handler(event, context):
         return {"statusCode": 500, "body": json.dumps({"error": "API 키 없음"})}
 
     target_gu = event.get("target_gu", list(SEOUL_SIGUNGU_CODES.keys()))
-
     conn = None
     total_saved = 0
     total_failed = 0
 
     try:
         conn = get_db_connection()
-
         for gu_name in target_gu:
             sigungu_cd = SEOUL_SIGUNGU_CODES.get(gu_name)
             if not sigungu_cd:
@@ -194,12 +138,10 @@ def lambda_handler(event, context):
 
             items = fetch_apt_complex_list(sigungu_cd, api_key)
             print(f"{gu_name}: {len(items)}개 단지 조회")
-
             if not items:
                 continue
 
             region_id = get_region_id(conn, sigungu_cd)
-
             for item in items:
                 try:
                     save_location(conn, item, region_id)
@@ -221,7 +163,6 @@ def lambda_handler(event, context):
             conn.close()
 
     print(f"전체 완료: 저장 {total_saved}개 / 실패 {total_failed}개")
-
     return {
         "statusCode": 200,
         "body": json.dumps({
