@@ -112,6 +112,17 @@ module "secrets" {
   source       = "../../modules/secrets"
   project_name = var.project_name
   env          = var.environment
+
+  kakao_rest_api_key  = var.kakao_rest_api_key
+  kakao_js_api_key    = var.kakao_js_api_key
+  naver_client_id     = var.naver_client_id
+  naver_client_secret = var.naver_client_secret
+  molit_service_key   = var.molit_service_key
+  mois_service_key    = var.mois_service_key
+
+  rds_endpoint   = module.rds.rds_endpoint
+  rds_secret_arn = module.rds.rds_secret_arn
+  redis_endpoint = module.elasticache.redis_primary_endpoint
 }
 
 module "s3" {
@@ -147,6 +158,10 @@ module "lambda" {
   price_ingest_queue_arn = module.sqs.price_ingest_queue_arn
   raw_data_bucket_name   = module.s3.raw_data_bucket_name
   raw_data_bucket_arn    = module.s3.raw_data_bucket_arn
+
+  private_subnet_ids = module.networking.private_subnet_ids
+  lambda_sg_id       = module.networking.eks_node_sg_id
+  redis_host         = module.elasticache.redis_primary_endpoint
 }
 
 module "step_functions" {
@@ -195,6 +210,7 @@ module "monitoring" {
   source       = "../../modules/monitoring"
   project_name = var.project_name
   env          = var.environment
+  aws_region   = var.aws_region
 
   alb_arn_suffix = module.alb.alb_arn_suffix
 }
@@ -220,4 +236,19 @@ module "celery" {
   sqs_queue_url          = module.sqs.report_queue_url
 
   depends_on = [module.eks, module.sqs]
+}
+
+module "argocd" {
+  source       = "../../modules/argocd"
+  project_name = var.project_name
+  environment  = var.environment
+  aws_region   = var.aws_region
+
+  eks_cluster_name   = module.eks.cluster_name
+  repo_url           = "https://github.com/Team-msp-architect-2026/msp-team06"
+  git_revision       = "main"
+  k8s_manifests_path = "infra/k8s"
+  github_token       = var.github_token
+
+  depends_on = [module.eks, module.alb, module.celery]
 }
