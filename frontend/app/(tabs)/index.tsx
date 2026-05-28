@@ -42,22 +42,22 @@ function AppContent(): React.ReactElement {
 
   /* 화면 전환 */
   const go = (s: Screen): void => {
-  setPrevScreen(screen);
-  setScreen(s);
+    setPrevScreen(screen);
+    setScreen(s);
   // 다른 화면으로 이동 시 리포트 초기화
-  if (s === "complex") {
-    setRcReportId(null);
-    setRcStatus("idle");
-    setCxTab(0);
-    setPriceTab(0);
-    setRentTab(0);
-  }
-  if (s === "area") {
-    setRaReportId(null);
-    setRaStatus("idle");
-    setAreaTab(0);
-  }
-};
+    if (s === "complex" || s === "area") {
+      setRcReportId(null);
+      setRcStatus("idle");
+      setCxTab(0);
+      setPriceTab(0);
+      setRentTab(0);
+    }
+    if (s === "area") {
+      setRaReportId(null);
+      setRaStatus("idle");
+      setAreaTab(0);
+    }
+  };
 
   /* AI 리포트 생성 요청 */
   const generate = async (which: ReportTarget): Promise<void> => {
@@ -72,7 +72,8 @@ function AppContent(): React.ReactElement {
           lng: selectedRegion.lng,
         });
         setRaReportId(res.reportId);
-      } catch {
+      } catch (e: unknown){
+        console.error("리포트 생성 실패:", e);
         setRaStatus("idle");
       }
     } else {

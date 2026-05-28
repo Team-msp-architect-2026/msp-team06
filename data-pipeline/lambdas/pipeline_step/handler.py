@@ -77,6 +77,7 @@ def process_price_data(event: dict) -> dict:
 
         # 월별 평균가 계산
         prices = []
+        apt_seq_groups = {}
         for item in price_data:
             if deal_type == "sale":
                 amount = item.get("deal_amount", "0")
@@ -84,7 +85,17 @@ def process_price_data(event: dict) -> dict:
                 amount = item.get("deposit", "0")
 
             try:
-                prices.append(int(amount.replace(",", "")))
+                val = int(amount.replace(",", ""))
+                prices.append(val)
+
+                apt_seq = item.get("apt_seq", "")
+                if apt_seq:
+                    if apt_seq not in apt_seq_groups:
+                        apt_seq_groups[apt_seq] = {
+                            "prices": [],
+                            "apt_name": item.get("apt_name", ""),
+                        }
+                    apt_seq_groups[apt_seq]["prices"].append(val)
             except ValueError:
                 continue
 
@@ -96,7 +107,7 @@ def process_price_data(event: dict) -> dict:
         max_price = max(prices)
         trade_count = len(prices)
         month = f"{deal_ymd[:4]}-{deal_ymd[4:6]}"
-        region_id = f"REGION_{lawd_cd}"
+        region_id = get_region_id(conn, lawd_cd)
         data_base_date = f"{deal_ymd[:4]}-{deal_ymd[4:6]}-01"
 
         with conn.cursor() as cur:
@@ -134,6 +145,29 @@ def process_price_data(event: dict) -> dict:
             ))
 
             saved_count = cur.rowcount
+
+            # apt_seq별 저장
+            for apt_seq, data in apt_seq_groups.items():
+                apt_prices = data["prices"]
+                if not apt_prices:
+                    continue
+                apt_avg = sum(apt_prices) // len(apt_prices)
+                apt_name = data.get("apt_name", "")
+                cur.execute("""
+                    INSERT INTO price_trends (
+                        region_id, month, deal_type,
+                        avg_price, trade_count, apt_seq, apt_name, created_at
+                    ) VALUES (
+                        (SELECT id FROM regions WHERE legal_dong_code LIKE %s LIMIT 1),
+                        %s, %s, %s, %s, %s, %s, NOW()
+                    )
+                    ON CONFLICT DO NOTHING
+                """, (
+                    apt_seq[:5] + "%",
+                    month, deal_type,
+                    apt_avg, len(apt_prices),
+                    apt_seq, apt_name,
+                ))
 
         conn.commit()
         print(f"DB 저장 완료: {region_id} {deal_type} {month} ({trade_count}건)")
@@ -249,6 +283,16 @@ def process_news_data(event: dict) -> dict:
 
     return {"success": True, "saved": saved_count}
 
+def get_region_id(conn, lawd_cd: str) -> str:
+    with conn.cursor() as cur:
+        cur.execute("""
+            SELECT id FROM regions
+            WHERE legal_dong_code = %s
+            AND source_type = 'region'
+            LIMIT 1
+        """, (lawd_cd,))
+        row = cur.fetchone()
+        return row[0] if row else f"REGION_{lawd_cd}"
 
 def extract_region_ids(conn, text: str) -> list:
     """

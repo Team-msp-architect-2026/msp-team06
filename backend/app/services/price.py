@@ -5,7 +5,8 @@ import httpx
 import xmltodict
 from difflib import SequenceMatcher
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, desc
+from sqlalchemy import select, desc, text
+from datetime import date
 from app.core.config import settings
 from app.core.redis import cache_get, cache_set, TTL_PRICE
 from app.models.price import PriceSnapshot, PriceTrend, PriceStat
@@ -372,3 +373,164 @@ async def fetch_price_trend_from_api(
 
     trend.sort(key=lambda x: x["month"], reverse=True)
     return trend
+
+async def get_price_snapshot_by_apt_seq(apt_seq: str, db: AsyncSession) -> dict | None:
+    """apt_seq 기반 가격 현황 조회"""
+    cache_key = f"price:snapshot:apt:{apt_seq}"
+    
+    cached = await cache_get(cache_key)
+    if cached:
+        return cached
+
+    try:
+        result = await db.execute(
+            text("""
+                SELECT 
+                    deal_type,
+                    avg_price,
+                    trade_count,
+                    month
+                FROM price_trends
+                WHERE apt_seq = :apt_seq
+                AND apt_seq IS NOT NULL
+                ORDER BY month DESC
+                LIMIT 10
+            """),
+            {"apt_seq": apt_seq}
+        )
+        rows = result.fetchall()
+        if not rows:
+            return None
+
+        sale_rows = [r for r in rows if r[0] == "sale"]
+        jeonse_rows = [r for r in rows if r[0] == "jeonse"]
+        monthly_rows = [r for r in rows if r[0] == "monthly"]
+
+        data = {
+            "avgSalePrice": sale_rows[0][1] if sale_rows else None,
+            "avgJeonsePrice": jeonse_rows[0][1] if jeonse_rows else None,
+            "avgMonthlyRent": monthly_rows[0][1] if monthly_rows else None,
+            "avgMonthlyDeposit": None,
+            "jeonseRatio": round(jeonse_rows[0][1] / sale_rows[0][1] * 100, 2)
+                if jeonse_rows and sale_rows and sale_rows[0][1] else None,
+            "recentTradeCount": sale_rows[0][2] if sale_rows else 0,
+            "priceStabilityGrade": "normal",
+            "priceLevel": "avg",
+            "dataBaseDate": sale_rows[0][3] + "-01" if sale_rows else str(date.today()),
+            "source": "db_apt_seq",
+        }
+        await cache_set(cache_key, data, TTL_PRICE)
+        return data
+    except Exception as e:
+        print(f"apt_seq 기반 가격 조회 실패: {e}")
+        return None
+
+
+async def get_price_trend_by_apt_seq(apt_seq: str, deal_type: str, period: str, db: AsyncSession) -> list | None:
+    """apt_seq 기반 가격 추이 조회"""
+    cache_key = f"price:trend:apt:{apt_seq}:{deal_type}:{period}"
+
+    cached = await cache_get(cache_key)
+    if cached:
+        return cached
+
+    try:
+        limit = 12 if period == "1y" else 3 if period == "3m" else 1
+
+        if deal_type == "all":
+            result = await db.execute(
+                text("""
+                    SELECT month, avg_price, deal_type, trade_count
+                    FROM price_trends
+                    WHERE apt_seq = :apt_seq
+                    AND apt_seq IS NOT NULL
+                    ORDER BY month DESC
+                    LIMIT :limit
+                """),
+                {"apt_seq": apt_seq, "limit": limit * 3}
+            )
+        else:
+            result = await db.execute(
+                text("""
+                    SELECT month, avg_price, deal_type, trade_count
+                    FROM price_trends
+                    WHERE apt_seq = :apt_seq
+                    AND deal_type = :deal_type
+                    AND apt_seq IS NOT NULL
+                    ORDER BY month DESC
+                    LIMIT :limit
+                """),
+                {"apt_seq": apt_seq, "deal_type": deal_type, "limit": limit}
+            )
+
+        rows = result.fetchall()
+        if not rows:
+            return None
+
+        data = [
+            {
+                "month": r[0],
+                "avgPrice": r[1],
+                "dealType": r[2],
+                "tradeCount": r[3],
+            }
+            for r in rows
+        ]
+        await cache_set(cache_key, data, TTL_PRICE)
+        return data
+    except Exception as e:
+        print(f"apt_seq 기반 추이 조회 실패: {e}")
+        return None
+
+
+async def get_price_stats_by_apt_seq(apt_seq: str, deal_type: str, period: str, db: AsyncSession) -> dict | None:
+    """apt_seq 기반 가격 통계 조회"""
+    cache_key = f"price:stats:apt:{apt_seq}:{deal_type}:{period}"
+
+    cached = await cache_get(cache_key)
+    if cached:
+        return cached
+
+    try:
+        if deal_type == "all":
+            result = await db.execute(
+                text("""
+                    SELECT MIN(avg_price), AVG(avg_price), MAX(avg_price), SUM(trade_count)
+                    FROM price_trends
+                    WHERE apt_seq = :apt_seq
+                    AND apt_seq IS NOT NULL
+                """),
+                {"apt_seq": apt_seq}
+            )
+        else:
+            result = await db.execute(
+                text("""
+                    SELECT MIN(avg_price), AVG(avg_price), MAX(avg_price), SUM(trade_count)
+                    FROM price_trends
+                    WHERE apt_seq = :apt_seq
+                    AND deal_type = :deal_type
+                    AND apt_seq IS NOT NULL
+                """),
+                {"apt_seq": apt_seq, "deal_type": deal_type}
+            )
+
+        row = result.fetchone()
+        if not row or not row[0]:
+            return None
+
+        trade_count = int(row[3]) if row[3] else 0
+        data = {
+            "minPrice": int(row[0]),
+            "avgPrice": int(row[1]),
+            "maxPrice": int(row[2]),
+            "totalTradeCount": trade_count,
+            "recentTradeCount": trade_count,
+            "tradeSignal": "active" if trade_count >= 10 else "normal" if trade_count >= 3 else "low",
+            "dataBaseDate": str(date.today()),
+            "source": "db_apt_seq",
+        }
+        await cache_set(cache_key, data, TTL_PRICE)
+        return data
+    except Exception as e:
+        print(f"apt_seq 기반 통계 조회 실패: {e}")
+        return None

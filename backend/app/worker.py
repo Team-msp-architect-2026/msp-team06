@@ -22,10 +22,14 @@ celery_app = Celery(
             }
         },
         "is_secure": True,
+        "connect_timeout": 5,  
+        "read_timeout": 30, 
     },
     task_default_queue="homelens-dev-report-generation",
 )
 celery_app.conf.broker_connection_retry_on_startup = True
+celery_app.conf.broker_transport = "sqs"
+celery_app.conf.task_always_eager = False  
 
 
 def get_db_session():

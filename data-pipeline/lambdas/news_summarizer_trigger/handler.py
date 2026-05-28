@@ -59,14 +59,30 @@ def lambda_handler(event, context):
     """Lambda 핸들러 - 뉴스 요약 요청 분배"""
     print(f"뉴스 요약 분배 시작: {datetime.now(timezone.utc).isoformat()}")
 
-    # Step Functions에서 전달받은 S3 키
+    # SQS 트리거 또는 Step Functions에서 전달받은 S3 키
     s3_key = event.get("s3_key", "")
 
-    # s3_key 없으면 오늘 날짜로 자동 생성
+    # SQS 트리거로 실행된 경우 메시지 파싱
+    if not s3_key and "Records" in event:
+        for record in event.get("Records", []):
+            body = json.loads(record.get("body", "{}"))
+            s3_key = body.get("s3_key", "")
+            if s3_key:
+                break
+
+    # s3_key 없으면 오늘 날짜로 자동 조회
     if not s3_key:
         today = datetime.now(timezone.utc).strftime("%Y%m%d")
-        s3_key = f"raw/news/{today[:10]}"
-        print(f"s3_key 없음 - 오늘 날짜로 조회: {s3_key}")
+        prefix = f"raw/news/{today}_0/"
+        print(f"s3_key 없음 - 오늘 날짜로 조회: {prefix}")
+        try:
+            response = s3_client.list_objects_v2(Bucket=S3_BUCKET, Prefix=prefix)
+            objects = response.get("Contents", [])
+            if objects:
+                s3_key = sorted(objects, key=lambda x: x["LastModified"], reverse=True)[0]["Key"]
+                print(f"최신 파일 조회: {s3_key}")
+        except Exception as e:
+            print(f"S3 목록 조회 실패: {e}")
 
     # S3에서 뉴스 목록 조회
     news_items = get_news_from_s3(s3_key)

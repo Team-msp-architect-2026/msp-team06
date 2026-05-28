@@ -1,5 +1,4 @@
 // 검색 목록 화면 - 검색어 기반 지역/단지 결과 목록 표시
-
 import React from "react";
 import {
   ScrollView,
@@ -24,21 +23,16 @@ const ListScreen: React.FC<ListScreenProps> = ({ go }) => {
 
   return (
     <View style={styles.scr}>
-      {/* 상단 헤더 */}
       <View style={styles.bar}>
         <TouchableOpacity onPress={() => go("home")}>
           <Text style={styles.bk}>‹</Text>
         </TouchableOpacity>
         <Text style={styles.title}>{`"${listSearchVal}" 검색 결과`}</Text>
       </View>
-
       <ScrollView style={styles.sc} showsVerticalScrollIndicator={false}>
-        {/* 검색 결과 수 */}
         <Text style={styles.count}>
           {isLoading ? "검색 중..." : `총 ${searchData?.length || 0}개 결과`}
         </Text>
-
-        {/* 검색 결과 목록 */}
         <View style={styles.list}>
           {searchData?.map((item, i) => (
             <DropdownItem
@@ -53,6 +47,7 @@ const ListScreen: React.FC<ListScreenProps> = ({ go }) => {
                   fullAddress: item.fullAddress,
                   lat: item.lat,
                   lng: item.lng,
+                  aptSeq: item.aptSeq ?? undefined,
                 });
                 addRecentSearch(item.name);
                 setSearchVal("");

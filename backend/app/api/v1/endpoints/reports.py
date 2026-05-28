@@ -64,8 +64,12 @@ async def create_report(
     db.add(report)
     await db.commit()
 
-    from app.worker import generate_report_task
-    generate_report_task.delay(report_id, request.regionId, region_name, lat, lng)
+    try:
+        from app.worker import generate_report_task
+        generate_report_task.delay(report_id, request.regionId, region_name, lat, lng)
+        print(f"[Report] SQS 태스크 전송 성공: {report_id}")
+    except Exception as e:
+        print(f"[Report] SQS 태스크 전송 실패: {e}")
 
     return {
         "reportId": report_id,

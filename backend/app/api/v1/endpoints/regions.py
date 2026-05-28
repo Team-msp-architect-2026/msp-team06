@@ -1,20 +1,36 @@
 # HomeLens AI - 지역 검색 API 엔드포인트
-
 from fastapi import APIRouter, Depends, Query, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import text
 from app.core.database import get_db
 from app.schemas.region import RegionSearchResponse
 from app.services.search import search_address, search_kakao_keyword, search_kakao_address
+
 router = APIRouter()
 
-# 행정동 키워드
 DONG_KEYWORDS = ["동", "읍", "면", "리", "가"]
 
-
 def is_dong(name: str) -> bool:
-    # 행정동 여부 판단
     return any(name.endswith(kw) for kw in DONG_KEYWORDS)
 
+async def get_apt_seq_by_name(name: str, db: AsyncSession) -> str | None:
+    """단지명으로 price_trends에서 apt_seq 조회"""
+    try:
+        result = await db.execute(
+            text("""
+                SELECT apt_seq FROM price_trends
+                WHERE apt_name ILIKE :name
+                AND apt_seq IS NOT NULL
+                AND apt_name IS NOT NULL
+                LIMIT 1
+            """),
+            {"name": f"%{name}%"}
+        )
+        row = result.fetchone()
+        return row[0] if row else None
+    except Exception as e:
+        print(f"apt_seq 조회 실패: {e}")
+        return None
 
 @router.get("/search", response_model=list[RegionSearchResponse])
 async def search_regions(
@@ -26,7 +42,6 @@ async def search_regions(
         results = []
         seen_names = set()
 
-        # 1. 도로명주소 API - 동 이름 검색일 때만 사용
         DONG_SUFFIXES = ["동", "읍", "면", "리", "가"]
         if any(q.endswith(suffix) for suffix in DONG_SUFFIXES):
             try:
@@ -48,11 +63,11 @@ async def search_regions(
                             "propertyType": "area",
                             "lat": lat,
                             "lng": lng,
+                            "aptSeq": None,
                         })
             except Exception:
                 pass
 
-        # 2. 카카오맵 API로 장소/단지 검색
         kakao_result = await search_kakao_keyword(q)
         documents = kakao_result.get("documents", [])
         for doc in documents[:limit]:
@@ -60,6 +75,12 @@ async def search_regions(
             if name and name not in seen_names:
                 seen_names.add(name)
                 property_type = "area" if is_dong(name) else "complex"
+
+                # 단지인 경우 apt_seq 조회
+                apt_seq = None
+                if property_type == "complex":
+                    apt_seq = await get_apt_seq_by_name(name, db)
+
                 results.append({
                     "regionId": f"KAKAO_{doc.get('id', '')}",
                     "name": name,
@@ -67,6 +88,7 @@ async def search_regions(
                     "propertyType": property_type,
                     "lat": float(doc.get("y", 0)),
                     "lng": float(doc.get("x", 0)),
+                    "aptSeq": apt_seq,
                 })
 
         return results[:limit]
