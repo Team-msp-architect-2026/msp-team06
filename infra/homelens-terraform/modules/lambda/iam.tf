@@ -35,6 +35,11 @@ resource "aws_iam_role_policy" "lambda_exec" {
       },
       {
         Effect   = "Allow"
+        Action   = ["secretsmanager:GetSecretValue"]
+        Resource = "arn:aws:secretsmanager:eu-west-3:*:secret:homelens/${var.env}/*"
+      },
+      {
+        Effect   = "Allow"
         Action   = ["logs:CreateLogGroup", "logs:CreateLogStream", "logs:PutLogEvents"]
         Resource = "arn:aws:logs:eu-west-3:*:*"
       }
