@@ -61,8 +61,15 @@ def parse_prices(price_data: list, deal_type: str) -> dict:
         try:
             if deal_type == "sale":
                 amount = int(item.get("deal_amount", "0").replace(",", ""))
-            else:
+            elif deal_type == "jeonse":
                 amount = int(item.get("deposit", "0").replace(",", ""))
+            elif deal_type == "monthly":
+                monthly = int(item.get("monthly_rent", "0").replace(",", ""))
+                if monthly <= 0:
+                    continue
+                amount = monthly
+            else:
+                amount = 0
 
             if amount <= 0:
                 continue
