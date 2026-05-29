@@ -67,6 +67,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ mapTab, setMapTab, go }) => {
             fullAddress: first.fullAddress,
             lat: first.lat,
             lng: first.lng,
+            aptSeq: first.aptSeq ?? undefined,
           });
           addRecentSearch(first.name);
           setSearchVal("");
@@ -133,6 +134,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ mapTab, setMapTab, go }) => {
                     fullAddress: item.fullAddress,
                     lat: item.lat,
                     lng: item.lng,
+                    aptSeq: item.aptSeq ?? undefined,
                   });
                   addRecentSearch(item.name);
                   setSearchVal("");
