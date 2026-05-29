@@ -13,15 +13,30 @@ DONG_KEYWORDS = ["동", "읍", "면", "리", "가"]
 def is_dong(name: str) -> bool:
     return any(name.endswith(kw) for kw in DONG_KEYWORDS)
 
+async def get_apt_seq_by_kakao_id(kakao_place_id: str, db: AsyncSession) -> str | None:
+    """kakao_place_id로 locations에서 apt_seq 조회"""
+    try:
+        result = await db.execute(
+            text("""
+                SELECT apt_seq FROM locations
+                WHERE kakao_place_id = :kakao_place_id
+                AND apt_seq IS NOT NULL
+                LIMIT 1
+            """),
+            {"kakao_place_id": kakao_place_id}
+        )
+        row = result.fetchone()
+        return row[0] if row else None
+    except Exception as e:
+        print(f"kakao_place_id 기반 apt_seq 조회 실패: {e}")
+        return None
+
 async def get_apt_seq_by_name(name: str, lat: float, lng: float, db: AsyncSession) -> str | None:
+    """단지명 + 구코드로 price_trends에서 apt_seq 조회 (fallback)"""
     try:
         clean_name = name.replace("아파트", "").replace(" ", "").strip()
-        
-        # 1. 카카오 좌표로 법정동 구코드 5자리 조회
         from app.services.price import get_lawd_cd
         lawd_cd_5, _ = await get_lawd_cd(lat, lng)
-        
-        # 2. 같은 구 안에서 단지명 매칭
         result = await db.execute(
             text("""
                 SELECT apt_seq FROM price_trends
@@ -79,17 +94,23 @@ async def search_regions(
         documents = kakao_result.get("documents", [])
         for doc in documents[:limit]:
             name = doc.get("place_name", "")
+            kakao_place_id = doc.get("id", "")
             if name and name not in seen_names:
                 seen_names.add(name)
                 property_type = "area" if is_dong(name) else "complex"
 
-                # 단지인 경우 apt_seq 조회
                 apt_seq = None
                 if property_type == "complex":
-                    apt_seq = await get_apt_seq_by_name(name, db)
+                    # 1순위: kakao_place_id로 locations에서 조회
+                    apt_seq = await get_apt_seq_by_kakao_id(kakao_place_id, db)
+                    # 2순위: 단지명 + 구코드로 price_trends에서 조회 (fallback)
+                    if not apt_seq:
+                        lat = float(doc.get("y", 0))
+                        lng = float(doc.get("x", 0))
+                        apt_seq = await get_apt_seq_by_name(name, lat, lng, db)
 
                 results.append({
-                    "regionId": f"KAKAO_{doc.get('id', '')}",
+                    "regionId": f"KAKAO_{kakao_place_id}",
                     "name": name,
                     "fullAddress": doc.get("road_address_name") or doc.get("address_name", ""),
                     "propertyType": property_type,
