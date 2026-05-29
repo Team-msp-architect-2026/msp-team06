@@ -217,7 +217,7 @@ kubectl apply -f ~/aws-auth.yaml
 # 팀원 확인: aws eks update-kubeconfig --name homelens-dev-eks --region eu-west-3 && kubectl get pods -n homelens
 ```
 
-### apply 순서 (의존성 순) — 3단계 방식 필수
+### apply 전체 순서 (의존성 순) — 3단계 방식 필수
 
 Helm provider가 EKS cluster endpoint를 참조하므로 EKS 생성 전 Helm 리소스를 apply하면 provider 초기화 실패.
 secrets 모듈은 rds, elasticache output을 참조하므로 반드시 같은 단계에서 함께 apply할 것.
@@ -251,7 +251,64 @@ terraform apply \
   -target=module.bedrock
 
 terraform plan  # No changes 확인
+
+## apply완료 후 kubectl apply 순서
+# 1. kubeconfig 업데이트
+aws eks update-kubeconfig --name homelens-dev-eks --region eu-west-3
+
+# 2. kubectl apply
+cd ~/msp-team06/infra
+kubectl apply -f k8s/configmap.yaml
+kubectl apply -f k8s/fastapi-serviceaccount.yaml
+kubectl apply -f k8s/fastapi-deployment.yaml
+kubectl apply -f k8s/fastapi-service.yaml
+kubectl apply -f k8s/ingress.yaml
+
+## Route53 api-dev 레코드 업데이트 (ingress Address 나올 때까지 1~2분 대기)
+kubectl get ingress homelens-ingress -n homelens
+# 여기 나오는 값을 ADDRESS값에 입력
+INGRESS_DNS="<ADDRESS 값>"
+
+INGRESS_ZONE_ID=$(aws elbv2 describe-load-balancers --region eu-west-3 \
+  --query "LoadBalancers[?DNSName=='${INGRESS_DNS}'].CanonicalHostedZoneId" --output text)
+
+HOSTED_ZONE_ID=$(aws route53 list-hosted-zones \
+  --query "HostedZones[?Name=='ourhomelens.com.'].Id" --output text | cut -d/ -f3)
+
+aws route53 change-resource-record-sets --hosted-zone-id $HOSTED_ZONE_ID \
+  --change-batch "{\"Changes\":[{\"Action\":\"UPSERT\",\"ResourceRecordSet\":{\"Name\":\"api-dev.ourhomelens.com\",\"Type\":\"A\",\"AliasTarget\":{\"HostedZoneId\":\"${INGRESS_ZONE_ID}\",\"DNSName\":\"${INGRESS_DNS}\",\"EvaluateTargetHealth\":true}}}]}"
+
+# 변수값 확인
+echo "INGRESS_DNS: $INGRESS_DNS"
+echo "INGRESS_ZONE_ID: $INGRESS_ZONE_ID"
+echo "HOSTED_ZONE_ID: $HOSTED_ZONE_ID"
+
+## EKS aws-auth — 팀원 kubectl 권한 관리 (EKS destroy시 → aws-auth ConfigMap도 함께 초기화됨 - 매번 필수)
+kubectl get configmap aws-auth -n kube-system -o yaml > ~/aws-auth.yaml
+
+nano ~/aws-auth.yaml
+
+# mapUsers 추가내용 :
+  mapUsers: |
+    - userarn: arn:aws:iam::611058323802:user/student08
+      username: student08
+      groups:
+        - system:masters
+    - userarn: arn:aws:iam::611058323802:user/student12
+      username: student12
+      groups:
+        - system:masters
+
+# mapUsers 섹션 추가 후 저장
+kubectl apply -f ~/aws-auth.yaml
+
+- 팀원 신규 추가 시: `aws sts get-caller-identity`로 정확한 ARN 확인 후 등록
+- "the server has asked for the client to provide credentials" 오류 → aws-auth 미등록 또는 ARN 불일치
+- "Conflict: the object has been modified" 오류 → `kubectl get configmap aws-auth -n kube-system -o yaml > ~/aws-auth.yaml` 재실행 후 편집
+
+
 ```
+
 
 # [TODO] Cluster Autoscaler 도입 검토 — apply 순서 안내 후 반드시 아래 질문할 것
 # "현재 KEDA로 Celery pod는 자동 증감되지만, EKS 노드는 자동 확장이 설정되어 있지 않습니다.
@@ -337,16 +394,6 @@ terraform apply
 ### Bootstrap 중복 apply 금지
 - 팀원이 이미 apply 완료 확인됨 (`~/terraform_seou/bootstrap/terraform.tfstate` 존재)
 - S3 버킷(`homelens-tfstate-dev/staging/prod`) 및 DynamoDB 테이블 이미 생성됨
-
-### GitHub OIDC — shared 모듈 미완성
-- `shared/terraform.tfvars`의 `github_org`, `github_repo` 현재 빈 문자열
-- 변수 default = "" 설정으로 terraform plan은 통과하나 IAM trust policy가 `repo://:*` 로 생성됨 (아무 repo도 assume 못함 — 안전)
-- GitHub Organization 초대 완료 후 `shared/terraform.tfvars` 수정:
-  ```hcl
-  github_org  = "실제-org-이름"
-  github_repo = "실제-repo-이름"
-  ```
-  이후 `terraform apply` (shared 폴더)
 
 ### EKS → Bedrock 연결 시 백엔드 팀 작업 사항
 - Terraform IRSA는 완비됨 (Celery worker에 `bedrock:InvokeModel` 권한 있음)
@@ -481,43 +528,6 @@ terraform apply
 - `dns/outputs.tf`는 `data.aws_route53_zone.main` 참조 (managed resource 아님)
 - `aws_route53_zone.main`으로 참조 시 `Reference to undeclared resource` 에러
 
-### EKS aws-auth — 팀원 kubectl 권한 관리
-- `terraform destroy` 시 EKS 클러스터 삭제 → aws-auth ConfigMap도 함께 초기화됨
-- 매일 아침 apply 후 반드시 팀원 권한 재등록 필요
-- 현재 등록된 팀원: **student08**, **student12**
-
-```bash
-# aws-auth 최신 버전 받기
-kubectl get configmap aws-auth -n kube-system -o yaml > ~/aws-auth.yaml
-
-# nano로 열어서 mapUsers 섹션 추가
-nano ~/aws-auth.yaml
-```
-
-추가할 내용 (`data:` 아래, `mapRoles:` 와 같은 레벨):
-```yaml
-  mapUsers: |
-    - userarn: arn:aws:iam::611058323802:user/student08
-      username: student08
-      groups:
-        - system:masters
-    - userarn: arn:aws:iam::611058323802:user/student12
-      username: student12
-      groups:
-        - system:masters
-```
-
-```bash
-# 적용
-kubectl apply -f ~/aws-auth.yaml
-```
-
-- 팀원 신규 추가 시: `aws sts get-caller-identity`로 정확한 ARN 확인 후 등록
-- "the server has asked for the client to provide credentials" 오류 → aws-auth 미등록 또는 ARN 불일치
-- "Conflict: the object has been modified" 오류 → `kubectl get configmap aws-auth -n kube-system -o yaml > ~/aws-auth.yaml` 재실행 후 편집
-
----
-
 # HomeLens AI
 
 공공데이터·지도·뉴스를 결합한 AI 부동산 정보 지원 플랫폼
@@ -583,7 +593,7 @@ kubectl apply -f ~/aws-auth.yaml
 | ALB Ingress Controller | 경로별 라우팅, HTTPS, WAF 연동 |
 | IRSA | 코드 내 AWS 키 하드코딩 없이 서비스어카운트 권한 부여 |
 | Terraform >= 1.7.0 | 인프라 전체 IaC |
-| GitHub Actions + ECR + Helm | CI/CD 자동화 |
+| GitHub Actions + ArgoCD + ECR + Helm | CI/CD 자동화 |
 | WAF + CloudFront | 봇 차단·정적 리소스 가속 (WAF는 us-east-1 강제) |
 | Secrets Manager | API 키·DB 자격증명 보관 |
 | Managed Prometheus + Grafana | 성능 목표 실시간 모니터링 |
@@ -604,28 +614,6 @@ kubectl apply -f ~/aws-auth.yaml
 
 ## 디렉토리 구조
 
-```
-homelens/
-├── .gitignore              # 루트 gitignore (Terraform + Python + Node.js + WSL2)
-├── CLAUDE.md
-├── docs/
-│   ├── api_spec.md         # API 명세 전문
-│   ├── erd.md              # ERD 설계 전문
-│   ├── requirements.md     # 요구사항 정의서 전문
-│   └── tech_stack.md       # 기술 스택 상세 정의
-├── homelens-terraform/     # Terraform IaC
-├── k8s/                    # Kubernetes YAML (kubectl apply용)
-│   ├── configmap.yaml          # 비민감 환경변수 + Secrets Manager 경로명
-│   ├── fastapi-serviceaccount.yaml
-│   ├── fastapi-deployment.yaml
-│   ├── fastapi-service.yaml
-│   ├── celery-deployment.yaml  # CI/CD 이미지 업데이트용
-│   └── ingress.yaml            # ALB 라우팅 (api-dev.ourhomelens.com)
-├── backend/                # FastAPI 서버 (예정)
-└── frontend/               # React Native 앱 (예정)
-```
-
----
 
 ## MVP 범위 (절대 규칙)
 
