@@ -175,7 +175,9 @@ const ComplexScreen: React.FC<ComplexScreenProps> = ({
                 {priceLoading
                   ? "조회 중..."
                   : priceData?.avgMonthlyRent
-                    ? `보증금 ${Math.round((priceData.avgMonthlyDeposit || 0) / 1000)}천/월 ${priceData.avgMonthlyRent}만`
+                    ? priceData.avgMonthlyDeposit
+                      ? `보증금 ${Math.round(priceData.avgMonthlyDeposit / 1000)}천/월 ${priceData.avgMonthlyRent}만`
+                      : `월 ${priceData.avgMonthlyRent}만`
                     : "데이터 없음"}
               </Text>
             </View>
