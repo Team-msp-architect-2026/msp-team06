@@ -121,6 +121,9 @@ async def search_regions(
 
         return results[:limit]
     except Exception as e:
+        print(f"검색 오류: {e}", flush=True)
+        import traceback
+        traceback.print_exc()
         raise HTTPException(status_code=503, detail="외부 API 연결 실패")
 
 
