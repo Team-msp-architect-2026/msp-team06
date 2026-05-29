@@ -61,10 +61,10 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add infra/k8s/fastapi-deployment.yaml infra/k8s/celery-deployment.yaml
-          # 변경사항이 없으면(이미 동일 태그) 커밋 생략
           git diff --staged --quiet && echo "No manifest changes" && exit 0
           git commit -m "ci: update image tags to ${GITHUB_SHA::8} [skip ci]"
-          git push
+          git pull --rebase origin dev
+          git push origin dev
 
       # ── ArgoCD가 자동 sync하므로 kubectl apply 불필요 ─────────────────────
       # ArgoCD polling 주기: 기본 3분 (webhook 설정 시 즉시 반영 가능)
