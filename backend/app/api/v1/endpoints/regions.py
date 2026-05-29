@@ -31,22 +31,19 @@ async def get_apt_seq_by_kakao_id(kakao_place_id: str, db: AsyncSession) -> str 
         print(f"kakao_place_id 기반 apt_seq 조회 실패: {e}")
         return None
 
-async def get_apt_seq_by_name(name: str, lat: float, lng: float, db: AsyncSession) -> str | None:
-    """단지명 + 구코드로 price_trends에서 apt_seq 조회 (fallback)"""
+async def get_apt_seq_by_name(name: str, db: AsyncSession) -> str | None:
+    """단지명으로 price_trends에서 apt_seq 조회 (fallback)"""
     try:
         clean_name = name.replace("아파트", "").replace(" ", "").strip()
-        from app.services.price import get_lawd_cd
-        lawd_cd_5, _ = await get_lawd_cd(lat, lng)
         result = await db.execute(
             text("""
                 SELECT apt_seq FROM price_trends
-                WHERE LEFT(apt_seq, 5) = :lawd_cd
-                AND REPLACE(apt_name, ' ', '') ILIKE :name
+                WHERE REPLACE(apt_name, ' ', '') ILIKE :name
                 AND apt_seq IS NOT NULL
                 AND apt_name IS NOT NULL
                 LIMIT 1
             """),
-            {"lawd_cd": lawd_cd_5, "name": f"%{clean_name}%"}
+            {"name": f"%{clean_name}%"}
         )
         row = result.fetchone()
         return row[0] if row else None
@@ -103,11 +100,9 @@ async def search_regions(
                 if property_type == "complex":
                     # 1순위: kakao_place_id로 locations에서 조회
                     apt_seq = await get_apt_seq_by_kakao_id(kakao_place_id, db)
-                    # 2순위: 단지명 + 구코드로 price_trends에서 조회 (fallback)
+                    # 2순위: 단지명으로 price_trends에서 조회 (fallback)
                     if not apt_seq:
-                        lat = float(doc.get("y", 0))
-                        lng = float(doc.get("x", 0))
-                        apt_seq = await get_apt_seq_by_name(name, lat, lng, db)
+                        apt_seq = await get_apt_seq_by_name(name, db)
 
                 results.append({
                     "regionId": f"KAKAO_{kakao_place_id}",
