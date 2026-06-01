@@ -64,28 +64,26 @@ async def search_regions(
         results = []
         seen_names = set()
 
-        # 1순위: 동 단위 검색 (도로명주소 API)
+        # 1순위: 동 단위 검색 (카카오 주소 검색 API)
         DONG_SUFFIXES = ["동", "읍", "면", "리", "가"]
         if any(q.endswith(suffix) for suffix in DONG_SUFFIXES):
             try:
-                juso_result = await search_address(q)
-                juso_items = juso_result.get("results", {}).get("juso", []) or []
-                for item in juso_items[:3]:
-                    name = item.get("emdNm", "") or item.get("liNm", "")
-                    full_address = item.get("roadAddr", "") or item.get("jibunAddr", "")
-                    if name and name not in seen_names:
-                        coord = await search_kakao_address(full_address)
-                        coord_docs = coord.get("documents", [])
-                        lat = float(coord_docs[0].get("y", 0)) if coord_docs else 0.0
-                        lng = float(coord_docs[0].get("x", 0)) if coord_docs else 0.0
+                kakao_addr_result = await search_kakao_address(q)
+                addr_docs = kakao_addr_result.get("documents", [])
+                for doc in addr_docs[:3]:
+                    address = doc.get("address", {})
+                    road_address = doc.get("road_address", {})
+                    name = address.get("region_3depth_name", "")  # 동 이름
+                    full_address = f"서울특별시 {address.get('region_1depth_name', '')} {address.get('region_2depth_name', '')} {name}"
+                    if name and name not in seen_names and name.endswith(tuple(DONG_SUFFIXES)):
                         seen_names.add(name)
                         results.append({
-                            "regionId": f"JUSO_{item.get('bdMgtSn', '')}",
+                            "regionId": f"KAKAO_DONG_{doc.get('x', '')}_{doc.get('y', '')}",
                             "name": name,
                             "fullAddress": full_address,
                             "propertyType": "area",
-                            "lat": lat,
-                            "lng": lng,
+                            "lat": float(doc.get("y", 0)),
+                            "lng": float(doc.get("x", 0)),
                             "aptSeq": None,
                         })
             except Exception:
