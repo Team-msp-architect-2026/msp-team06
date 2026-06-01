@@ -36,15 +36,15 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 10,
     borderBottomWidth: 0.5,
-    borderBottomColor: "#E8E5DA",
+    borderBottomColor: "#E5E5E5",
     gap: 8,
   },
   icon: { width: 20, alignItems: "center" },
   iconText: { fontSize: 12 },
   info: { flex: 1 },
-  ddn: { fontSize: 13, color: "#1A1A18", fontWeight: "500" },
-  dds: { fontSize: 11, color: "#6B6B66", marginTop: 1 },
-  dda: { fontSize: 16, color: "#9B9B95" },
+  ddn: { fontSize: 13, color: "#111111", fontWeight: "500" },
+  dds: { fontSize: 11, color: "#888888", marginTop: 1 },
+  dda: { fontSize: 16, color: "#AAAAAA" },
 });
 
 export default DropdownItem;

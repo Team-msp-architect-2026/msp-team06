@@ -204,7 +204,7 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     overflow: "hidden",
     borderWidth: 0.5,
-    borderColor: "#E8E5DA",
+    borderColor: "#E5E5E5",
   },
   map: { flex: 1 },
 });

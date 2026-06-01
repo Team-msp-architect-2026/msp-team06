@@ -29,9 +29,9 @@ const IssueRow: React.FC<IssueRowProps> = ({
     try {
       if (await InAppBrowser.isAvailable()) {
         await InAppBrowser.open(url, {
-          toolbarColor: "#FAF9F5",
-          secondaryToolbarColor: "#1A1A18",
-          navigationBarColor: "#FAF9F5",
+          toolbarColor: "#FFFFFF",
+          secondaryToolbarColor: "#111111",
+          navigationBarColor: "#FFFFFF",
           showTitle: true,
           enableUrlBarHiding: true,
           enableDefaultShare: true,
@@ -66,10 +66,10 @@ const IssueRow: React.FC<IssueRowProps> = ({
 
 const styles = StyleSheet.create({
   ir: {
-    backgroundColor: "#FAF9F5",
+    backgroundColor: "#FFFFFF",
     borderRadius: 10,
     borderWidth: 0.5,
-    borderColor: "#E8E5DA",
+    borderColor: "#E5E5E5",
     padding: 10,
     marginBottom: 8,
   },
@@ -86,9 +86,9 @@ const styles = StyleSheet.create({
     flexShrink: 0,
   },
   ib: { fontSize: 9, fontWeight: "500" },
-  date: { fontSize: 10, color: "#9B9B95", flexShrink: 0 },
-  text: { fontSize: 11, color: "#1A1A18", flex: 1 },
-  summary: { fontSize: 11, color: "#6B6B66", marginTop: 6, lineHeight: 16 },
+  date: { fontSize: 10, color: "#AAAAAA", flexShrink: 0 },
+  text: { fontSize: 11, color: "#111111", flex: 1 },
+  summary: { fontSize: 11, color: "#888888", marginTop: 6, lineHeight: 16 },
 });
 
 export default IssueRow;
