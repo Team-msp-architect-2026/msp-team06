@@ -61,6 +61,12 @@ variable "redis_endpoint" {
   default = ""
 }
 
+variable "redis_auth_token" {
+  type      = string
+  sensitive = true
+  default   = null
+}
+
 # Bedrock 설정 — 민감정보 아님
 variable "bedrock_model_id" {
   type    = string

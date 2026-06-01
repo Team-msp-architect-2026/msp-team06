@@ -120,9 +120,10 @@ module "secrets" {
   molit_service_key   = var.molit_service_key
   mois_service_key    = var.mois_service_key
 
-  rds_endpoint   = module.rds.rds_endpoint
-  rds_secret_arn = module.rds.rds_secret_arn
-  redis_endpoint = module.elasticache.redis_primary_endpoint
+  rds_endpoint     = module.rds.rds_endpoint
+  rds_secret_arn   = module.rds.rds_secret_arn
+  redis_endpoint   = module.elasticache.redis_primary_endpoint
+  redis_auth_token = var.redis_auth_token
 }
 
 module "s3" {

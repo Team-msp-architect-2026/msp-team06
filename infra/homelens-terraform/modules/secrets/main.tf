@@ -129,8 +129,9 @@ resource "aws_secretsmanager_secret" "redis" {
 resource "aws_secretsmanager_secret_version" "redis" {
   secret_id = aws_secretsmanager_secret.redis.id
   secret_string = jsonencode({
-    host = var.redis_endpoint
-    port = 6379
+    host       = var.redis_endpoint
+    port       = 6379
+    auth_token = var.redis_auth_token != null ? var.redis_auth_token : ""
   })
 }
 

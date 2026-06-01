@@ -76,7 +76,7 @@ resource "aws_secretsmanager_secret_version" "bedrock_config" {
   secret_id = data.aws_secretsmanager_secret.bedrock_config.id
 
   secret_string = jsonencode({
-    model_id   = "anthropic.claude-sonnet-4-6"
+    model_id   = "eu.anthropic.claude-sonnet-4-6"
     region     = var.aws_region
     max_tokens = 4096
   })

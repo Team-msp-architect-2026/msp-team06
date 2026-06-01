@@ -4,6 +4,100 @@ resource "aws_prometheus_workspace" "main" {
     tags = { Env = var.env}
 }
 
+# ---------------------------------------------------------------------------
+# kube-prometheus-stack — Prometheus + Grafana (EKS Helm)
+# ---------------------------------------------------------------------------
+resource "helm_release" "kube_prometheus_stack" {
+  name       = "kube-prometheus-stack"
+  repository = "https://prometheus-community.github.io/helm-charts"
+  chart      = "kube-prometheus-stack"
+  version    = var.prometheus_stack_version
+  namespace  = "monitoring"
+
+  create_namespace = true
+  timeout          = 900
+
+  values = [
+    yamlencode({
+      prometheus = {
+        prometheusSpec = {
+          # homelens 네임스페이스 pod를 annotation 기반으로 자동 scrape
+          additionalScrapeConfigs = [
+            {
+              job_name = "homelens-celery-metrics"
+              kubernetes_sd_configs = [{
+                role = "pod"
+                namespaces = { names = ["homelens"] }
+              }]
+              relabel_configs = [
+                # prometheus.io/scrape: "true" 인 pod만 수집
+                {
+                  source_labels = ["__meta_kubernetes_pod_annotation_prometheus_io_scrape"]
+                  action        = "keep"
+                  regex         = "true"
+                },
+                # prometheus.io/path 로 메트릭 경로 지정 (없으면 /metrics)
+                {
+                  source_labels = ["__meta_kubernetes_pod_annotation_prometheus_io_path"]
+                  action        = "replace"
+                  target_label  = "__metrics_path__"
+                  regex         = "(.+)"
+                },
+                # prometheus.io/port 로 scrape 포트 지정
+                {
+                  source_labels = ["__address__", "__meta_kubernetes_pod_annotation_prometheus_io_port"]
+                  action        = "replace"
+                  regex         = "([^:]+)(?::\\d+)?;(\\d+)"
+                  replacement   = "$1:$2"
+                  target_label  = "__address__"
+                },
+                # pod label을 Prometheus label로 복사
+                {
+                  action = "labelmap"
+                  regex  = "__meta_kubernetes_pod_label_(.+)"
+                },
+                {
+                  source_labels = ["__meta_kubernetes_namespace"]
+                  action        = "replace"
+                  target_label  = "kubernetes_namespace"
+                },
+                {
+                  source_labels = ["__meta_kubernetes_pod_name"]
+                  action        = "replace"
+                  target_label  = "kubernetes_pod_name"
+                }
+              ]
+            }
+          ]
+          # 셀프 모니터링 — Prometheus 자체 메트릭도 수집
+          podMonitorSelectorNilUsesHelmValues     = false
+          serviceMonitorSelectorNilUsesHelmValues = false
+        }
+      }
+
+      grafana = {
+        adminPassword = var.grafana_admin_password
+        sidecar = {
+          dashboards = {
+            enabled         = true
+            label           = "grafana_dashboard"
+            labelValue      = "1"
+            searchNamespace = "monitoring"
+          }
+        }
+        service = {
+          type = "ClusterIP"
+        }
+      }
+
+      # AlertManager 비활성화 (dev 환경 — 알람 불필요)
+      alertmanager = {
+        enabled = var.env == "prod" ? true : false
+      }
+    })
+  ]
+}
+
 resource "aws_xray_group" "main" {
     group_name      = "${var.project_name}-${var.env}"
     filter_expression = "service(\"${var.project_name}-${var.env}\")"

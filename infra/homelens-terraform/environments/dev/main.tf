@@ -211,7 +211,10 @@ module "monitoring" {
   env          = var.environment
   aws_region   = var.aws_region
 
-  alb_arn_suffix = module.alb.alb_arn_suffix
+  alb_arn_suffix   = module.alb.alb_arn_suffix
+  eks_cluster_name = module.eks.cluster_name
+
+  depends_on = [module.eks, module.celery]
 }
 
 module "bedrock" {

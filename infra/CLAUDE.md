@@ -11,6 +11,7 @@
 4. 민감정보는 코드에 하드코딩하지 않고 Secrets Manager 또는 변수로 분리
 5. 각 단계마다 생성/수정 파일 목록, 코드, 검증 명령어 함께 제시
 6. 한 번에 전체 인프라를 만들지 않고 모듈 단위로 나눠서 진행
+7. 프로젝트 경로 ~/msp-team06
 
 ### Terraform 작업 순서 (Phase)
 - Phase 0: Bootstrap (S3 버킷 + DynamoDB) — 완료 (팀원 apply 확인됨)
@@ -144,7 +145,7 @@ EKS FastAPI (homelens 네임스페이스)
 | `ourhomelens.com` 도메인 등록 (Route53) | 완료 |
 | ACM 인증서 eu-west-3 (`*.ourhomelens.com`) | 완료 |
 | ACM 인증서 us-east-1 (`*.ourhomelens.com`) | 완료 |
-| Bedrock 모델 액세스 활성화 (`claude-sonnet-4-6`, eu-west-3) | 필요 — AWS 콘솔 → Bedrock → Model Access |
+| Bedrock 모델 액세스 활성화 (`eu.anthropic.claude-sonnet-4-6`, eu-west-3) | 완료 — Model Access 페이지 폐지됨, 첫 호출 시 자동 활성화 |
 | Bootstrap apply | 완료 (팀원 tfstate 확인됨) |
 | GitHub 조직 초대 | 미완료 — 완료 후 `shared/terraform.tfvars`에 입력 |
 
@@ -178,51 +179,13 @@ bash destroy.sh          # Helm 정리 후 terraform destroy 자동 실행
 
 # ── 매일 아침 ──────────────────────────────
 cd homelens-terraform/environments/dev
-terraform init           # .terraform 폴더 없을 때만 (destroy해도 폴더 유지됨)
+terraform init           # .terraform 폴더 없을 때만 (destroy해도 폴더 유지됨) + 새로운 리소스 추가 시
 
-# Terraform apply 3단계 완료 후 → ArgoCD가 k8s 리소스를 자동 sync
-# (kubectl apply 수동 불필요 — ArgoCD가 infra/k8s/ 전체를 자동으로 EKS에 적용)
-# 1. EKS kubeconfig 업데이트 (Route53 업데이트 및 aws-auth 등록에 필요)
-aws eks update-kubeconfig --name homelens-dev-eks --region eu-west-3
-
-# 2. ArgoCD sync 확인 (~3분 이내 자동 완료)
-kubectl get pods -n argocd          # argocd-server, argocd-repo-server 등 Running 확인
-kubectl get applicationset -n argocd  # homelens ApplicationSet 확인
-kubectl get application -n argocd     # homelens-dev Synced/Healthy 확인
-kubectl get pods -n homelens          # fastapi, celery-worker 파드 확인
-
-# ※ infra/k8s/ 내 모든 파일(configmap, serviceaccount, deployment, service, ingress)은
-#   ArgoCD가 자동 적용하므로 kubectl apply 불필요
-
-# 3. Route53 api-dev 레코드 업데이트 (ingress 컨트롤러가 매번 새 ALB 생성)
-# ingress Address 확인 (ALB DNS 출력까지 1~2분 소요)
-kubectl get ingress homelens-ingress -n homelens
-# ADDRESS 컬럼 값(k8s-homelens-homelens-*.eu-west-3.elb.amazonaws.com)을 INGRESS_DNS에 입력
-INGRESS_DNS="<위에서 확인한 ADDRESS 값>"
-INGRESS_ZONE_ID=$(aws elbv2 describe-load-balancers --region eu-west-3 \
-  --query "LoadBalancers[?DNSName=='${INGRESS_DNS}'].CanonicalHostedZoneId" --output text)
-HOSTED_ZONE_ID=$(aws route53 list-hosted-zones \
-  --query "HostedZones[?Name=='ourhomelens.com.'].Id" --output text | cut -d/ -f3)
-aws route53 change-resource-record-sets --hosted-zone-id $HOSTED_ZONE_ID \
-  --change-batch "{\"Changes\":[{\"Action\":\"UPSERT\",\"ResourceRecordSet\":{\"Name\":\"api-dev.ourhomelens.com\",\"Type\":\"A\",\"AliasTarget\":{\"HostedZoneId\":\"${INGRESS_ZONE_ID}\",\"DNSName\":\"${INGRESS_DNS}\",\"EvaluateTargetHealth\":true}}}]}"
-
-# [TODO] external-dns 도입 검토 — apply 순서 안내 후 반드시 아래 질문할 것
-# "현재 kubectl apply 후 Route53을 매번 수동 업데이트하고 있습니다.
-#  external-dns를 도입하면 ingress apply 시 Route53이 자동 동기화됩니다. 도입할까요?"
-
-# 4. aws-auth ConfigMap 팀원 권한 복원 (EKS destroy 시 초기화되므로 매번 필수)
-kubectl get configmap aws-auth -n kube-system -o yaml > ~/aws-auth.yaml
-# ~/aws-auth.yaml 열어서 mapUsers 섹션 추가 후 저장
-kubectl apply -f ~/aws-auth.yaml
-# 팀원 확인: aws eks update-kubeconfig --name homelens-dev-eks --region eu-west-3 && kubectl get pods -n homelens
-```
-
-### apply 전체 순서 (의존성 순) — 3단계 방식 필수
+# apply 전체 순서 (의존성 순) — 3단계 방식 필수
 
 Helm provider가 EKS cluster endpoint를 참조하므로 EKS 생성 전 Helm 리소스를 apply하면 provider 초기화 실패.
 secrets 모듈은 rds, elasticache output을 참조하므로 반드시 같은 단계에서 함께 apply할 것.
 
-```bash
 # 1단계: EKS까지 (Helm 없음) — 15~20분 소요
 terraform apply \
   -target=module.networking \
@@ -252,17 +215,23 @@ terraform apply \
 
 terraform plan  # No changes 확인
 
-## apply완료 후 kubectl apply 순서
-# 1. kubeconfig 업데이트
-aws eks update-kubeconfig --name homelens-dev-eks --region eu-west-3
-
-# 2. kubectl apply
+## Terraform apply 3단계 완료 후 → ArgoCD가 k8s 리소스를 자동 sync
+# 1. kubeconfig 업데이트 (Route53 업데이트 및 aws-auth 등록에 필요)
+aws eks update-kubeconfig --name homelens-dev-eks --region eu-west-3 # <-이것만 하면 됨
+# ※ infra/k8s/ 내 모든 파일(configmap, serviceaccount, deployment, service, ingress)은
+#   ArgoCD가 자동 적용하므로 kubectl apply 불필요
 cd ~/msp-team06/infra
 kubectl apply -f k8s/configmap.yaml
 kubectl apply -f k8s/fastapi-serviceaccount.yaml
 kubectl apply -f k8s/fastapi-deployment.yaml
 kubectl apply -f k8s/fastapi-service.yaml
 kubectl apply -f k8s/ingress.yaml
+
+# 2. ArgoCD sync 확인 (~3분 이내 자동 완료)
+kubectl get pods -n argocd          # argocd-server, argocd-repo-server 등 Running 확인
+kubectl get applicationset -n argocd  # homelens ApplicationSet 확인
+kubectl get application -n argocd     # homelens-dev Synced/Healthy 확인
+kubectl get pods -n homelens          # fastapi, celery-worker 파드 확인
 
 ## Route53 api-dev 레코드 업데이트 (ingress Address 나올 때까지 1~2분 대기)
 kubectl get ingress homelens-ingress -n homelens
@@ -283,7 +252,7 @@ echo "INGRESS_DNS: $INGRESS_DNS"
 echo "INGRESS_ZONE_ID: $INGRESS_ZONE_ID"
 echo "HOSTED_ZONE_ID: $HOSTED_ZONE_ID"
 
-## EKS aws-auth — 팀원 kubectl 권한 관리 (EKS destroy시 → aws-auth ConfigMap도 함께 초기화됨 - 매번 필수)
+## EKS aws-auth — 팀원 Configmap 권한 복원 (EKS destroy시 → aws-auth ConfigMap도 함께 초기화됨 - 매번 필수)
 kubectl get configmap aws-auth -n kube-system -o yaml > ~/aws-auth.yaml
 
 nano ~/aws-auth.yaml
@@ -306,16 +275,16 @@ kubectl apply -f ~/aws-auth.yaml
 - "the server has asked for the client to provide credentials" 오류 → aws-auth 미등록 또는 ARN 불일치
 - "Conflict: the object has been modified" 오류 → `kubectl get configmap aws-auth -n kube-system -o yaml > ~/aws-auth.yaml` 재실행 후 편집
 
-
-```
-
-
 # [TODO] Cluster Autoscaler 도입 검토 — apply 순서 안내 후 반드시 아래 질문할 것
 # "현재 KEDA로 Celery pod는 자동 증감되지만, EKS 노드는 자동 확장이 설정되어 있지 않습니다.
 #  pod가 Pending 상태가 될 경우 수동 개입이 필요합니다.
 #  Cluster Autoscaler를 도입하면 노드도 자동으로 증감됩니다. 도입할까요?
 #  (변경 범위: modules/eks/irsa.tf IRSA 추가, modules/eks/main.tf 노드그룹 태그 추가, Helm release 추가)"
+# [TODO] external-dns 도입 검토 — apply 순서 안내 후 반드시 아래 질문할 것
+# "현재 kubectl apply 후 Route53을 매번 수동 업데이트하고 있습니다.
+#  external-dns를 도입하면 ingress apply 시 Route53이 자동 동기화됩니다. 도입할까요?"
 
+```
 ### API 키 주입 방법 (secrets.auto.tfvars)
 
 민감한 API 키는 `secrets.auto.tfvars`(gitignore)에 보관. apply 시 자동으로 Secrets Manager에 주입됨.
@@ -382,7 +351,7 @@ terraform apply
 | `homelens/dev/mois/address-api` | service_key (행안부) | secrets.auto.tfvars |
 | `homelens/dev/rds/postgres` | host, port, dbname, username, password_secret_arn | RDS 모듈 output 자동 주입 |
 | `homelens/dev/redis/auth` | host, port | ElastiCache 모듈 output 자동 주입 |
-| `homelens/dev/bedrock/config` | model_id, region | 모듈 기본값 |
+| `homelens/dev/bedrock/config` | model_id (`eu.anthropic.claude-sonnet-4-6`), region, max_tokens | 모듈 기본값 |
 
 - RDS 비밀번호는 `manage_master_user_password=true`로 AWS가 관리 → `password_secret_arn`으로 참조
 - `secrets` 모듈 단독 apply 금지 — rds/elasticache output 없으면 rds_endpoint, redis_endpoint가 빈 값 저장됨
@@ -390,6 +359,30 @@ terraform apply
 ### terraform init — "empty directory" 오류
 - 원인: `environments/dev/` 가 아닌 다른 경로에서 실행
 - 해결: `cd homelens-terraform/environments/dev && ls backend.tf` 확인 후 `terraform init`
+
+### Bedrock — Claude 4.x 모델은 inference profile 필수
+- Claude 4.x 모델은 model ID 직접 호출 불가 → `ValidationException: on-demand throughput isn't supported` 오류 발생
+- eu-west-3에서는 반드시 `eu.` 프리픽스 inference profile 사용:
+  - 올바른 model_id: `eu.anthropic.claude-sonnet-4-6`
+  - 잘못된 model_id: `anthropic.claude-sonnet-4-6`
+- `modules/bedrock/main.tf`의 secret_string 및 백엔드 코드 모두 `eu.` 프리픽스 사용할 것
+- Bedrock 호출 테스트:
+  ```bash
+  echo '{"anthropic_version":"bedrock-2023-05-31","max_tokens":10,"messages":[{"role":"user","content":"hi"}]}' > /tmp/bedrock-body.json
+  aws bedrock-runtime invoke-model \
+    --region eu-west-3 \
+    --model-id eu.anthropic.claude-sonnet-4-6 \
+    --body fileb:///tmp/bedrock-body.json \
+    --content-type application/json \
+    /tmp/bedrock-test.json && cat /tmp/bedrock-test.json
+  ```
+- `homelens/dev/bedrock/config` 시크릿 수동 업데이트 방법 (destroy 후 재apply 시엔 코드값으로 자동 생성):
+  ```bash
+  aws secretsmanager put-secret-value \
+    --region eu-west-3 \
+    --secret-id homelens/dev/bedrock/config \
+    --secret-string '{"model_id":"eu.anthropic.claude-sonnet-4-6","region":"eu-west-3","max_tokens":4096}'
+  ```
 
 ### Bootstrap 중복 apply 금지
 - 팀원이 이미 apply 완료 확인됨 (`~/terraform_seou/bootstrap/terraform.tfstate` 존재)
@@ -527,6 +520,25 @@ terraform apply
 ### DNS outputs — data source 참조
 - `dns/outputs.tf`는 `data.aws_route53_zone.main` 참조 (managed resource 아님)
 - `aws_route53_zone.main`으로 참조 시 `Reference to undeclared resource` 에러
+
+### kube-prometheus-stack — Helm 타임아웃 + api 노드 용량 부족
+- **증상:** `context deadline exceeded` (13~21분 후 실패), Helm release failed 상태
+- **원인 1:** Helm 기본 타임아웃(5분)으로는 대형 차트 배포 불충분
+  - 해결: `modules/monitoring/main.tf`에 `timeout = 900` 추가
+- **원인 2:** api 노드(t3.medium 1대) Pod 한도 17개 초과
+  - t3.medium EKS 최대 Pod 수 = 17개
+  - 시스템 Pod만으로 17개 가득 참 (ArgoCD 7개 + KEDA 3개 + ALB Controller + FastAPI + CoreDNS 2개 + aws-node + kube-proxy + rds-proxy)
+  - worker 노드는 `dedicated=worker:NoSchedule` taint로 monitoring Pod 스케줄 불가 (Celery 전용 — taint 제거 금지)
+  - 해결: `environments/dev/terraform.tfvars`에서 `api_node_desired_size` 1 → 2, `api_node_max_size` 2 → 3
+- **재apply 순서:**
+  ```bash
+  helm uninstall kube-prometheus-stack -n monitoring
+  kubectl delete namespace monitoring --ignore-not-found
+  terraform apply -target=module.eks        # api 노드 2대 확장
+  kubectl get nodes                          # 2대 Ready 확인 후
+  terraform apply -target=module.monitoring
+  ```
+- **주의:** monitoring Pod에 worker taint toleration 추가는 잘못된 방향 — worker 노드는 Celery 전용으로 유지
 
 # HomeLens AI
 
