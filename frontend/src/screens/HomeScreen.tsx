@@ -18,6 +18,7 @@ import { useNewsHighlights } from "../hooks/useNews";
 import { useRegionSearch } from "../hooks/useRegions";
 import { useAppStore } from "../store/useAppStore";
 import { Screen } from "../types";
+import { usePriceLayer } from "../hooks/useMap";
 
 interface HomeScreenProps {
   mapTab: number;
@@ -40,6 +41,12 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ mapTab, setMapTab, go }) => {
     addRecentSearch,
     setListSearchVal,
   } = useAppStore();
+
+  const TAB_TYPES = ["sale_count", "jeonse_ratio", "monthly_burden"];
+  const { data: priceLayerData } = usePriceLayer(
+    "seoul-11680",  // 서울 전체 기준 (임시)
+    TAB_TYPES[mapTab]
+  );
 
   const scrollRef = useRef<ScrollView>(null);
 
@@ -180,7 +187,33 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ mapTab, setMapTab, go }) => {
             scrollRef.current?.setNativeProps({ scrollEnabled: true })
           }
         >
-          <KakaoMap lat={37.5665} lng={126.978} level={8} />
+          <KakaoMap
+            lat={37.5665}
+            lng={126.978}
+            level={8}
+            markers={priceLayerData?.zones.map((zone) => ({
+              lat: zone.lat,
+              lng: zone.lng,
+              type: "apartment",
+              name: zone.aptName || "",
+              markerId: zone.zoneId,
+              kakaoPlaceId: zone.kakaoPlaceId,
+              aptSeq: zone.aptSeq,
+            }))}
+            onMarkerClick={(marker) => {
+              if (marker.kakaoPlaceId) {
+                setSelectedRegion({
+                  regionId: `KAKAO_${marker.kakaoPlaceId}`,
+                  name: marker.name,
+                  fullAddress: "",
+                  lat: marker.lat,
+                  lng: marker.lng,
+                  aptSeq: marker.aptSeq,
+                });
+                go("complex");
+              }
+            }}
+          />
         </View>
 
         {/* 뉴스 목록 */}

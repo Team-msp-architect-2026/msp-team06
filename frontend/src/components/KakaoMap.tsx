@@ -10,6 +10,8 @@ interface MarkerInfo {
   type: string;
   name: string;
   markerId: string;
+  kakaoPlaceId?: string;
+  aptSeq?: string;
 }
 
 interface KakaoMapProps {
@@ -17,6 +19,7 @@ interface KakaoMapProps {
   lng: number;
   level?: number;
   markers?: MarkerInfo[];
+  onMarkerClick?: (marker: MarkerInfo) => void;
 }
 
 const KAKAO_APP_KEY = "644f705c07c7107a5ab76925f451797a";
@@ -26,6 +29,7 @@ const KakaoMap: React.FC<KakaoMapProps> = ({
   lng,
   level = 3,
   markers = [],
+  onMarkerClick,
 }) => {
   const markerColors: Record<string, string> = {
     subway: "#3CB44B",
@@ -33,22 +37,23 @@ const KakaoMap: React.FC<KakaoMapProps> = ({
     department: "#9B59B6",
     hospital: "#E74C3C",
     school: "#3498DB",
+    apartment: "#E74C3C",
   };
 
-  // 인프라 마커 JS 코드 생성
   const markerScript = markers
     .filter((m) => !m.markerId.endsWith("_none") && m.lat && m.lng)
     .map((m) => {
       const color = markerColors[m.type] || "#888";
+      const isApartment = m.type === "apartment";
       return `
         (function() {
           var el = document.createElement('div');
-          el.style.cssText = 'width:12px;height:12px;background:${color};border-radius:50%;border:2px solid white;box-shadow:0 1px 3px rgba(0,0,0,0.4);cursor:pointer;position:relative;';
+          el.style.cssText = 'width:${isApartment ? "14px" : "12px"};height:${isApartment ? "14px" : "12px"};background:${color};border-radius:50%;border:2px solid white;box-shadow:0 1px 3px rgba(0,0,0,0.4);cursor:pointer;position:relative;';
           var pos = new kakao.maps.LatLng(${m.lat}, ${m.lng});
           var overlay = new kakao.maps.CustomOverlay({ position: pos, content: el, yAnchor: 1 });
           overlay.setMap(map);
 
-          // 단지 중심에서 인프라까지 점선 연결
+          ${!isApartment ? `
           new kakao.maps.Polyline({
             path: [new kakao.maps.LatLng(${lat}, ${lng}), pos],
             strokeWeight: 2.5,
@@ -56,8 +61,34 @@ const KakaoMap: React.FC<KakaoMapProps> = ({
             strokeOpacity: 0.7,
             strokeStyle: 'shortdot',
           }).setMap(map);
+          ` : ""}
 
           el.addEventListener('click', function() {
+            ${isApartment ? `
+            // 아파트 마커 클릭 시 이름 표시 후 React Native로 이벤트 전달
+            var existing = document.getElementById('label-${m.markerId}');
+            if (existing) {
+              existing.remove();
+              return;
+            }
+            var label = document.createElement('div');
+            label.id = 'label-${m.markerId}';
+            label.style.cssText = 'position:absolute;background:white;border:1px solid #ddd;border-radius:6px;padding:4px 8px;font-size:11px;white-space:nowrap;box-shadow:0 1px 4px rgba(0,0,0,0.2);transform:translate(-50%,-150%);cursor:pointer;z-index:100;';
+            label.innerText = '${m.name.replace(/'/g, "\\'")} >';
+            label.addEventListener('click', function(e) {
+              e.stopPropagation();
+              window.ReactNativeWebView.postMessage(JSON.stringify({
+                type: 'markerClick',
+                markerId: '${m.markerId}',
+                name: '${m.name.replace(/'/g, "\\'")}',
+                lat: ${m.lat},
+                lng: ${m.lng},
+                kakaoPlaceId: '${m.kakaoPlaceId || ""}',
+                aptSeq: '${m.aptSeq || ""}',
+              }));
+            });
+            el.appendChild(label);
+            ` : `
             var existing = document.getElementById('label-${m.markerId}');
             if (existing) { existing.remove(); return; }
             var label = document.createElement('div');
@@ -65,6 +96,7 @@ const KakaoMap: React.FC<KakaoMapProps> = ({
             label.style.cssText = 'position:absolute;background:white;border:1px solid #ddd;border-radius:6px;padding:3px 7px;font-size:11px;white-space:nowrap;box-shadow:0 1px 4px rgba(0,0,0,0.2);transform:translate(-50%,-130%);pointer-events:none;';
             label.innerText = '${m.name.replace(/'/g, "\\'")}';
             el.appendChild(label);
+            `}
           });
         })();
       `;
@@ -149,6 +181,16 @@ const KakaoMap: React.FC<KakaoMapProps> = ({
         scrollEnabled={false}
         javaScriptEnabled={true}
         originWhitelist={["*"]}
+        onMessage={(event) => {
+          if (onMarkerClick) {
+            try {
+              const data = JSON.parse(event.nativeEvent.data);
+              if (data.type === "markerClick") {
+                onMarkerClick(data);
+              }
+            } catch (e) {}
+          }
+        }}
       />
     </View>
   );
