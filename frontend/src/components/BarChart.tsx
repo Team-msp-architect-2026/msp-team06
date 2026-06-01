@@ -64,7 +64,7 @@ const styles = StyleSheet.create({
   chtOuter: { marginVertical: 8 },
   chtBars: { flexDirection: "row", alignItems: "flex-end", height: 80 },
   cc: { flex: 1, alignItems: "center" },
-  cv: { fontSize: 8, color: "#6B6B66", marginBottom: 2 },
+  cv: { fontSize: 10, color: "#111111", marginBottom: 2, fontWeight: "500" },
   cbw: {
     width: "60%",
     alignItems: "center",
@@ -72,11 +72,11 @@ const styles = StyleSheet.create({
     height: 68,
   },
   cb: { width: "100%", borderRadius: 2 },
-  chtSep: { height: 0.5, backgroundColor: "#E8E5DA", marginTop: 2 },
+  chtSep: { height: 0.5, backgroundColor: "#E5E5E5", marginTop: 2 },
   chtLbls: { flexDirection: "row", marginTop: 4 },
-  cl: { flex: 1, fontSize: 8, color: "#9B9B95", textAlign: "center" },
+  cl: { flex: 1, fontSize: 10, color: "#888888", textAlign: "center", fontWeight: "500" },
   empty: { height: 80, justifyContent: "center", alignItems: "center" },
-  emptyText: { fontSize: 12, color: "#9B9B95" },
+  emptyText: { fontSize: 12, color: "#AAAAAA" },
 });
 
 export default BarChart;

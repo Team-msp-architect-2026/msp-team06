@@ -12,7 +12,6 @@ import AIReport from "../components/AIReport";
 import BarChart from "../components/BarChart";
 import IssueCard from "../components/IssueCard";
 import KakaoMap from "../components/KakaoMap";
-import Stats3 from "../components/Stats3";
 import { useIssues, usePrice, usePriceTrend, usePriceStats } from "../hooks/useAnalysis";
 import { useMapMarkers } from "../hooks/useMap";
 import { useAppStore } from "../store/useAppStore";
@@ -175,7 +174,9 @@ const ComplexScreen: React.FC<ComplexScreenProps> = ({
                 {priceLoading
                   ? "조회 중..."
                   : priceData?.avgMonthlyRent
-                    ? `보증금 ${Math.round((priceData.avgMonthlyDeposit || 0) / 1000)}천/월 ${priceData.avgMonthlyRent}만`
+                    ? priceData.avgMonthlyDeposit
+                      ? `보증금 ${Math.round(priceData.avgMonthlyDeposit / 1000)}천/월 ${priceData.avgMonthlyRent}만`
+                      : `월 ${priceData.avgMonthlyRent}만`
                     : "데이터 없음"}
               </Text>
             </View>
@@ -296,38 +297,22 @@ const ComplexScreen: React.FC<ComplexScreenProps> = ({
               {/* 매매 추이 차트 */}
               {priceTab === 0 && (
                 <View>
-                  <Text style={styles.chartTitle}>매매가 추이 (최근 6개월)</Text>
                   <BarChart
                     data={trendData?.trend.filter((t) => t.dealType === "sale") || []}
-                    color="#1A1A18"
+                    color="#111111"
                     unit="억"
                     divisor={10000}
-                  />
-                  <Stats3
-                    items={[
-                      ["최저가", statsData?.minPrice ? `${Math.round(statsData.minPrice / 10000)}억` : "데이터 없음"],
-                      ["평균가", statsData?.avgPrice ? `${Math.round(statsData.avgPrice / 10000)}억` : "데이터 없음"],
-                      ["최고가", statsData?.maxPrice ? `${Math.round(statsData.maxPrice / 10000)}억` : "데이터 없음"],
-                    ]}
                   />
                 </View>
               )}
               {/* 전세 추이 차트 */}
               {priceTab === 1 && (
                 <View>
-                  <Text style={styles.chartTitle}>전세가 추이 (최근 6개월)</Text>
                   <BarChart
                     data={trendData?.trend.filter((t) => t.dealType === "jeonse") || []}
                     color="#185FA5"
                     unit="억"
                     divisor={10000}
-                  />
-                  <Stats3
-                    items={[
-                      ["최저가", statsData?.minPrice ? `${Math.round(statsData.minPrice / 10000)}억` : "데이터 없음"],
-                      ["평균가", statsData?.avgPrice ? `${Math.round(statsData.avgPrice / 10000)}억` : "데이터 없음"],
-                      ["최고가", statsData?.maxPrice ? `${Math.round(statsData.maxPrice / 10000)}억` : "데이터 없음"],
-                    ]}
                   />
                 </View>
               )}
@@ -352,19 +337,11 @@ const ComplexScreen: React.FC<ComplexScreenProps> = ({
                   {/* 월세 추이 차트 */}
                   {rentTab === 0 && (
                     <View>
-                      <Text style={styles.chartTitle}>월세 추이 (최근 6개월)</Text>
                       <BarChart
                         data={trendData?.trend.filter((t) => t.dealType === "monthly") || []}
                         color="#854F0B"
                         unit="만"
                         divisor={1}
-                      />
-                      <Stats3
-                        items={[
-                          ["최저", statsData?.minPrice ? `${statsData.minPrice}만` : "데이터 없음"],
-                          ["평균", statsData?.avgPrice ? `${statsData.avgPrice}만` : "데이터 없음"],
-                          ["최고", statsData?.maxPrice ? `${statsData.maxPrice}만` : "데이터 없음"],
-                        ]}
                       />
                     </View>
                   )}
@@ -372,7 +349,6 @@ const ComplexScreen: React.FC<ComplexScreenProps> = ({
                   {/* 보증금 추이 차트 */}
                   {rentTab === 1 && (
                     <View>
-                      <Text style={styles.chartTitle}>보증금 추이 (최근 6개월)</Text>
                       <BarChart
                         data={trendData?.trend.filter((t) => t.dealType === "monthly").map((t) => ({
                           ...t,
@@ -381,13 +357,6 @@ const ComplexScreen: React.FC<ComplexScreenProps> = ({
                         color="#3B6D11"
                         unit="만"
                         divisor={10000}
-                      />
-                      <Stats3
-                        items={[
-                          ["최저", deposits.length ? `${Math.round(Math.min(...deposits) / 10000)}억` : "데이터 없음"],
-                          ["평균", deposits.length ? `${Math.round(deposits.reduce((a, b) => a + b, 0) / deposits.length / 10000)}억` : "데이터 없음"],
-                          ["최고", deposits.length ? `${Math.round(Math.max(...deposits) / 10000)}억` : "데이터 없음"],
-                        ]}
                       />
                     </View>
                   )}
@@ -440,40 +409,40 @@ const ComplexScreen: React.FC<ComplexScreenProps> = ({
 };
 
 const styles = StyleSheet.create({
-  scr: { flex: 1, backgroundColor: "#F0EEE6" },
+  scr: { flex: 1, backgroundColor: "#F5F5F5" },
   bar: {
     flexDirection: "row",
     alignItems: "center",
     paddingHorizontal: 16,
     paddingVertical: 13,
     borderBottomWidth: 0.5,
-    borderBottomColor: "#E8E5DA",
-    backgroundColor: "#FAF9F5",
+    borderBottomColor: "#E5E5E5",
+    backgroundColor: "#FFFFFF",
     gap: 10,
   },
-  bk: { fontSize: 22, color: "#1A1A18" },
-  regionName: { fontSize: 14, fontWeight: "500", color: "#1A1A18" },
-  regionAddr: { fontSize: 10, color: "#6B6B66" },
+  bk: { fontSize: 22, color: "#111111" },
+  regionName: { fontSize: 14, fontWeight: "500", color: "#111111" },
+  regionAddr: { fontSize: 10, color: "#888888" },
   sc: { flex: 1 },
   scard: {
-    backgroundColor: "#FAF9F5",
+    backgroundColor: "#FFFFFF",
     borderRadius: 14,
     borderWidth: 0.5,
-    borderColor: "#E8E5DA",
+    borderColor: "#E5E5E5",
     padding: 14,
     margin: 10,
     marginBottom: 0,
   },
   sr: { flexDirection: "row", alignItems: "flex-start" },
   si: { flex: 1 },
-  sp: { width: 0.5, backgroundColor: "#E8E5DA", marginHorizontal: 10 },
-  sdv: { height: 0.5, backgroundColor: "#E8E5DA", marginVertical: 10 },
-  sl: { fontSize: 10, color: "#6B6B66", marginBottom: 2 },
-  sv: { fontSize: 16, fontWeight: "600", color: "#1A1A18" },
-  svsm: { fontSize: 12, fontWeight: "500", color: "#1A1A18" },
+  sp: { width: 0.5, backgroundColor: "#E5E5E5", marginHorizontal: 10 },
+  sdv: { height: 0.5, backgroundColor: "#E5E5E5", marginVertical: 10 },
+  sl: { fontSize: 10, color: "#888888", marginBottom: 2 },
+  sv: { fontSize: 16, fontWeight: "600", color: "#111111" },
+  svsm: { fontSize: 12, fontWeight: "500", color: "#111111" },
   sd: { fontSize: 10, color: "#27AE60", marginTop: 1 },
-  tertiary: { fontSize: 10, color: "#9B9B95", marginTop: 1 },
-  loadingText: { fontSize: 11, color: "#9B9B95" },
+  tertiary: { fontSize: 10, color: "#AAAAAA", marginTop: 1 },
+  loadingText: { fontSize: 11, color: "#AAAAAA" },
   amenityList: { marginTop: 6 },
   amenityRow: {
     flexDirection: "row",
@@ -481,9 +450,9 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
   },
   amenityDot: { width: 8, height: 8, borderRadius: 4, marginRight: 6 },
-  amenityCat: { fontSize: 11, color: "#6B6B66", width: 50 },
-  amenityName: { flex: 1, fontSize: 11, color: "#1A1A18", fontWeight: "500" },
-  amenityDist: { fontSize: 11, color: "#9B9B95" },
+  amenityCat: { fontSize: 11, color: "#888888", width: 50 },
+  amenityName: { flex: 1, fontSize: 11, color: "#111111", fontWeight: "500" },
+  amenityDist: { fontSize: 11, color: "#AAAAAA" },
   mapPlaceholder: {
     margin: 10,
     marginBottom: 0,
@@ -491,24 +460,24 @@ const styles = StyleSheet.create({
     backgroundColor: "#E8EEE4",
     borderRadius: 14,
     borderWidth: 0.5,
-    borderColor: "#E8E5DA",
+    borderColor: "#E5E5E5",
   },
   tabbar: {
     flexDirection: "row",
     margin: 10,
     marginBottom: 0,
-    backgroundColor: "#F0EEE6",
+    backgroundColor: "#F5F5F5",
     borderRadius: 10,
     padding: 3,
   },
   ti: { flex: 1, alignItems: "center", paddingVertical: 7, borderRadius: 8 },
   tiOn: {
-    backgroundColor: "#FAF9F5",
+    backgroundColor: "#FFFFFF",
     borderWidth: 0.5,
-    borderColor: "#E8E5DA",
+    borderColor: "#E5E5E5",
   },
-  tiText: { fontSize: 12, color: "#6B6B66" },
-  tiTextOn: { color: "#1A1A18", fontWeight: "500" },
+  tiText: { fontSize: 12, color: "#888888" },
+  tiTextOn: { color: "#111111", fontWeight: "500" },
   tc: { padding: 10 },
   ptog: { flexDirection: "row", marginBottom: 10 },
   ptb: {
@@ -516,10 +485,10 @@ const styles = StyleSheet.create({
     alignItems: "center",
     paddingVertical: 6,
     borderRadius: 8,
-    backgroundColor: "#F0EEE6",
+    backgroundColor: "#F5F5F5",
   },
-  ptbOn: { backgroundColor: "#1A1A18" },
-  ptbText: { fontSize: 12, color: "#6B6B66" },
+  ptbOn: { backgroundColor: "#111111" },
+  ptbText: { fontSize: 12, color: "#888888" },
   ptbTextOn: { color: "white", fontWeight: "500" },
   rtog: { flexDirection: "row", marginBottom: 10 },
   rtb: {
@@ -527,15 +496,15 @@ const styles = StyleSheet.create({
     alignItems: "center",
     paddingVertical: 6,
     borderRadius: 8,
-    backgroundColor: "#F0EEE6",
+    backgroundColor: "#F5F5F5",
   },
-  rtbOn: { backgroundColor: "#1A1A18" },
-  rtbText: { fontSize: 12, color: "#6B6B66" },
+  rtbOn: { backgroundColor: "#111111" },
+  rtbText: { fontSize: 12, color: "#888888" },
   rtbTextOn: { color: "white", fontWeight: "500" },
-  chartTitle: { fontSize: 12, color: "#6B6B66", marginBottom: 8 },
+  chartTitle: { fontSize: 12, color: "#888888", marginBottom: 8 },
   emptyText: {
     fontSize: 12,
-    color: "#9B9B95",
+    color: "#AAAAAA",
     textAlign: "center",
     paddingVertical: 24,
   },

@@ -41,7 +41,8 @@ const AIReport: React.FC<AIReportProps> = ({ report, onGenerate, status }) => {
   if (status === "done" && !report) {
     return (
       <View style={styles.rstart}>
-        <Text style={styles.rst}>리포트를 불러오지 못했습니다</Text>
+        <Text style={styles.emoji}>⏳</Text>
+        <Text style={styles.rst}>리포트 불러오는 중...</Text>
       </View>
     );
   }
@@ -73,46 +74,46 @@ const AIReport: React.FC<AIReportProps> = ({ report, onGenerate, status }) => {
 const styles = StyleSheet.create({
   rstart: { alignItems: "center", paddingVertical: 24 },
   emoji: { fontSize: 36, marginBottom: 10 },
-  rst: { fontSize: 14, fontWeight: "500", color: "#1A1A18", marginBottom: 6 },
-  rss: { fontSize: 12, color: "#6B6B66", textAlign: "center", lineHeight: 18 },
+  rst: { fontSize: 14, fontWeight: "500", color: "#111111", marginBottom: 6 },
+  rss: { fontSize: 12, color: "#888888", textAlign: "center", lineHeight: 18 },
   rbtn: {
     marginTop: 14,
-    backgroundColor: "#1A1A18",
+    backgroundColor: "#111111",
     borderRadius: 10,
     paddingHorizontal: 20,
     paddingVertical: 10,
   },
   rbtnText: { fontSize: 13, color: "white", fontWeight: "500" },
   rsum: {
-    backgroundColor: "#F0EEE6",
+    backgroundColor: "#F5F5F5",
     borderRadius: 10,
     borderWidth: 0.5,
-    borderColor: "#D9D6CB",
+    borderColor: "#E0E0E0",
     padding: 12,
     marginBottom: 10,
   },
-  rsuml: { fontSize: 10, color: "#6B6B66", marginBottom: 4 },
-  rsumq: { fontSize: 13, color: "#1A1A18", lineHeight: 18 },
+  rsuml: { fontSize: 10, color: "#888888", marginBottom: 4 },
+  rsumq: { fontSize: 13, color: "#111111", lineHeight: 18 },
   rsec: {
-    backgroundColor: "#FAF9F5",
+    backgroundColor: "#FFFFFF",
     borderRadius: 10,
     borderWidth: 0.5,
-    borderColor: "#E8E5DA",
+    borderColor: "#E5E5E5",
     padding: 12,
     marginBottom: 8,
   },
   rset: {
     fontSize: 13,
     fontWeight: "500",
-    color: "#1A1A18",
+    color: "#111111",
     marginBottom: 6,
     paddingBottom: 6,
     borderBottomWidth: 0.5,
-    borderBottomColor: "#E8E5DA",
+    borderBottomColor: "#E5E5E5",
   },
   rbody: { fontSize: 12, color: "#3B3B38", lineHeight: 18 },
-  disc: { fontSize: 10, color: "#9B9B95", lineHeight: 15, marginTop: 10 },
-  rdate: { fontSize: 10, color: "#9B9B95", marginTop: 4 },
+  disc: { fontSize: 10, color: "#AAAAAA", lineHeight: 15, marginTop: 10 },
+  rdate: { fontSize: 10, color: "#AAAAAA", marginTop: 4 },
 });
 
 export default AIReport;

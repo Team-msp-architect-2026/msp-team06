@@ -213,14 +213,6 @@ const AreaScreen: React.FC<AreaScreenProps> = ({
           />
         </View>
 
-        {/* 아파트 목록 */}
-        <View style={styles.cp}>
-          <Text style={styles.cpt}>아파트 목록</Text>
-          <Text style={styles.cps}>
-            국토부 API 연동 후 실제 단지 목록 표시 예정
-          </Text>
-        </View>
-
         {/* 탭 버튼 */}
         <View style={styles.tabbar}>
           {["이슈 분석", "AI 리포트"].map((t, i) => (
@@ -279,37 +271,37 @@ const AreaScreen: React.FC<AreaScreenProps> = ({
 };
 
 const styles = StyleSheet.create({
-  scr: { flex: 1, backgroundColor: "#F0EEE6" },
+  scr: { flex: 1, backgroundColor: "#F5F5F5" },
   bar: {
     flexDirection: "row",
     alignItems: "center",
     paddingHorizontal: 16,
     paddingVertical: 13,
     borderBottomWidth: 0.5,
-    borderBottomColor: "#E8E5DA",
-    backgroundColor: "#FAF9F5",
+    borderBottomColor: "#E5E5E5",
+    backgroundColor: "#FFFFFF",
     gap: 10,
   },
-  bk: { fontSize: 22, color: "#1A1A18" },
-  regionName: { fontSize: 14, fontWeight: "500", color: "#1A1A18" },
-  regionAddr: { fontSize: 10, color: "#6B6B66" },
+  bk: { fontSize: 22, color: "#111111" },
+  regionName: { fontSize: 14, fontWeight: "500", color: "#111111" },
+  regionAddr: { fontSize: 10, color: "#888888" },
   sc: { flex: 1 },
   scard: {
-    backgroundColor: "#FAF9F5",
+    backgroundColor: "#FFFFFF",
     borderRadius: 14,
     borderWidth: 0.5,
-    borderColor: "#E8E5DA",
+    borderColor: "#E5E5E5",
     padding: 14,
     margin: 10,
     marginBottom: 0,
   },
   sr: { flexDirection: "row", alignItems: "flex-start" },
   si: { flex: 1 },
-  sp: { width: 0.5, backgroundColor: "#E8E5DA", marginHorizontal: 10 },
-  sdv: { height: 0.5, backgroundColor: "#E8E5DA", marginVertical: 10 },
-  sl: { fontSize: 10, color: "#6B6B66", marginBottom: 2 },
-  sv: { fontSize: 16, fontWeight: "600", color: "#1A1A18" },
-  svsm: { fontSize: 12, fontWeight: "500", color: "#1A1A18" },
+  sp: { width: 0.5, backgroundColor: "#E5E5E5", marginHorizontal: 10 },
+  sdv: { height: 0.5, backgroundColor: "#E5E5E5", marginVertical: 10 },
+  sl: { fontSize: 10, color: "#888888", marginBottom: 2 },
+  sv: { fontSize: 16, fontWeight: "600", color: "#111111" },
+  svsm: { fontSize: 12, fontWeight: "500", color: "#111111" },
   sd: { fontSize: 10, color: "#27AE60", marginTop: 1 },
   subwayRow: { flexDirection: "row", flexWrap: "wrap", gap: 5, marginTop: 5 },
   subwayTag: {
@@ -319,7 +311,7 @@ const styles = StyleSheet.create({
     paddingVertical: 3,
   },
   subwayTagText: { fontSize: 11, color: "#27AE60", fontWeight: "500" },
-  loadingText: { fontSize: 11, color: "#9B9B95" },
+  loadingText: { fontSize: 11, color: "#AAAAAA" },
   mapPlaceholder: {
     margin: 10,
     marginBottom: 0,
@@ -327,31 +319,31 @@ const styles = StyleSheet.create({
     backgroundColor: "#E8EEE4",
     borderRadius: 14,
     borderWidth: 0.5,
-    borderColor: "#E8E5DA",
+    borderColor: "#E5E5E5",
   },
   cp: { margin: 10, marginBottom: 0 },
-  cpt: { fontSize: 13, fontWeight: "500", color: "#1A1A18" },
-  cps: { fontSize: 11, color: "#9B9B95", marginTop: 4 },
+  cpt: { fontSize: 13, fontWeight: "500", color: "#111111" },
+  cps: { fontSize: 11, color: "#AAAAAA", marginTop: 4 },
   tabbar: {
     flexDirection: "row",
     margin: 10,
     marginBottom: 0,
-    backgroundColor: "#F0EEE6",
+    backgroundColor: "#F5F5F5",
     borderRadius: 10,
     padding: 3,
   },
   ti: { flex: 1, alignItems: "center", paddingVertical: 7, borderRadius: 8 },
   tiOn: {
-    backgroundColor: "#FAF9F5",
+    backgroundColor: "#FFFFFF",
     borderWidth: 0.5,
-    borderColor: "#E8E5DA",
+    borderColor: "#E5E5E5",
   },
-  tiText: { fontSize: 12, color: "#6B6B66" },
-  tiTextOn: { color: "#1A1A18", fontWeight: "500" },
+  tiText: { fontSize: 12, color: "#888888" },
+  tiTextOn: { color: "#111111", fontWeight: "500" },
   tc: { padding: 10 },
   emptyText: {
     fontSize: 12,
-    color: "#9B9B95",
+    color: "#AAAAAA",
     textAlign: "center",
     paddingVertical: 24,
   },

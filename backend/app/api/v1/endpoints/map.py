@@ -70,5 +70,75 @@ async def get_price_layer(
     type: Optional[str] = Query("sale_count", description="sale_count | jeonse_ratio | monthly_burden"),
     db: AsyncSession = Depends(get_db),
 ):
-    # TODO: 국토부 실거래가 API 연동 구현 필요
-    return {"zones": [], "dataBaseDate": date.today()}
+    try:
+        from sqlalchemy import text
+
+        if type == "sale_count":
+            # 매매 거래량 top3
+            result = await db.execute(text("""
+                SELECT pt.apt_name, pt.apt_seq, pt.avg_price, pt.trade_count,
+                       l.lat, l.lng, l.kakao_place_id
+                FROM price_trends pt
+                JOIN locations l ON pt.apt_seq = l.apt_seq
+                WHERE pt.deal_type = 'sale'
+                AND pt.month = TO_CHAR(CURRENT_DATE - INTERVAL '1 month', 'YYYY-MM')
+                AND l.lat IS NOT NULL AND l.lng IS NOT NULL
+                ORDER BY pt.trade_count DESC
+                LIMIT 3
+            """))
+
+        elif type == "jeonse_ratio":
+            # 전세가율 낮은 top3
+            result = await db.execute(text("""
+                SELECT pt.apt_name, pt.apt_seq, pt.avg_price, pt.trade_count,
+                       l.lat, l.lng, l.kakao_place_id
+                FROM price_trends pt
+                JOIN locations l ON pt.apt_seq = l.apt_seq
+                JOIN price_trends pt2 ON pt.apt_seq = pt2.apt_seq
+                    AND pt2.deal_type = 'sale'
+                    AND pt2.month = pt.month
+                WHERE pt.deal_type = 'jeonse'
+                AND pt.month = TO_CHAR(CURRENT_DATE - INTERVAL '1 month', 'YYYY-MM')
+                AND l.lat IS NOT NULL AND l.lng IS NOT NULL
+                AND pt2.avg_price > 0
+                ORDER BY (pt.avg_price::float / pt2.avg_price::float) ASC
+                LIMIT 3
+            """))
+
+        elif type == "monthly_burden":
+            # 월세 부담 낮은 top3
+            result = await db.execute(text("""
+                SELECT pt.apt_name, pt.apt_seq, pt.avg_price, pt.trade_count,
+                       l.lat, l.lng, l.kakao_place_id
+                FROM price_trends pt
+                JOIN locations l ON pt.apt_seq = l.apt_seq
+                WHERE pt.deal_type = 'monthly'
+                AND pt.month = TO_CHAR(CURRENT_DATE - INTERVAL '1 month', 'YYYY-MM')
+                AND l.lat IS NOT NULL AND l.lng IS NOT NULL
+                AND pt.avg_price > 0
+                ORDER BY pt.avg_price ASC
+                LIMIT 3
+            """))
+
+        else:
+            return {"zones": [], "dataBaseDate": date.today()}
+
+        rows = result.fetchall()
+        zones = []
+        for i, row in enumerate(rows):
+            zones.append({
+                "zoneId": f"{type}_{row.apt_seq}",
+                "lat": float(row.lat),
+                "lng": float(row.lng),
+                "value": float(row.avg_price),
+                "priceGrade": i + 1,
+                "aptName": row.apt_name,
+                "aptSeq": row.apt_seq,
+                "kakaoPlaceId": row.kakao_place_id,
+            })
+
+        return {"zones": zones, "dataBaseDate": date.today()}
+
+    except Exception as e:
+        print(f"price-layer 오류: {e}")
+        raise HTTPException(status_code=503, detail=str(e))

@@ -22,13 +22,13 @@ const styles = StyleSheet.create({
   s3: { flexDirection: "row", gap: 6, marginTop: 8 },
   s3b: {
     flex: 1,
-    backgroundColor: "#F0EEE6",
+    backgroundColor: "#F5F5F5",
     borderRadius: 8,
     padding: 8,
     alignItems: "center",
   },
-  s3l: { fontSize: 10, color: "#6B6B66", marginBottom: 2 },
-  s3v: { fontSize: 13, fontWeight: "600", color: "#1A1A18" },
+  s3l: { fontSize: 10, color: "#888888", marginBottom: 2 },
+  s3v: { fontSize: 13, fontWeight: "600", color: "#111111" },
 });
 
 export default Stats3;

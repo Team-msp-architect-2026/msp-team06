@@ -26,6 +26,9 @@ export interface PriceLayerZone {
   lng: number;
   value: number;
   priceGrade: number;
+  aptName?: string;
+  aptSeq?: string;
+  kakaoPlaceId?: string;
 }
 
 export interface PriceLayerResponse {

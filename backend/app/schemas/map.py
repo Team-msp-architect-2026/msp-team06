@@ -29,6 +29,9 @@ class PriceLayerZone(BaseModel):
     lng: float
     value: float
     priceGrade: int
+    aptName: Optional[str] = None
+    aptSeq: Optional[str] = None
+    kakaoPlaceId: Optional[str] = None
 
 # 가격 레이어 응답 형식
 # GET /api/v1/map/price-layer 응답에 사용

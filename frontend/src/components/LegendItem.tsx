@@ -18,7 +18,7 @@ const LegendItem: React.FC<LegendItemProps> = ({ color, label }) => (
 const styles = StyleSheet.create({
   legendItem: { flexDirection: "row", alignItems: "center", marginRight: 10 },
   legendDot: { width: 8, height: 8, borderRadius: 4, marginRight: 4 },
-  legendLabel: { fontSize: 10, color: "#6B6B66" },
+  legendLabel: { fontSize: 10, color: "#888888" },
 });
 
 export default LegendItem;

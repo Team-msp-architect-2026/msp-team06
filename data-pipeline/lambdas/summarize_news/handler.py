@@ -31,9 +31,9 @@ def get_bedrock_model_id() -> str:
     env = os.environ.get("ENV", "dev")
     try:
         response = secretsmanager.get_secret_value(SecretId=f"homelens/{env}/bedrock/config")
-        return json.loads(response["SecretString"]).get("model_id", "anthropic.claude-3-5-haiku-20241022-v1:0")
+        return json.loads(response["SecretString"]).get("model_id", "eu.anthropic.claude-sonnet-4-6")
     except:
-        return "anthropic.claude-3-5-haiku-20241022-v1:0"
+        return "eu.anthropic.claude-sonnet-4-6"
 
 
 def generate_summary(title: str, description: str, model_id: str) -> str:

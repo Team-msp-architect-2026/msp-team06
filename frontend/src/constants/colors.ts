@@ -2,14 +2,14 @@
 
 // 기본 색상 팔레트
 export const COLORS = {
-  bgPrimary: '#FAF9F5',
-  bgSecondary: '#F0EEE6',
-  textPrimary: '#1A1A18',
-  textSecondary: '#6B6B66',
-  textTertiary: '#9B9B95',
-  borderSecondary: '#D9D6CB',
-  borderTertiary: '#E8E5DA',
-  borderPrimary: '#1A1A18',
+  bgPrimary: '#FFFFFF',      
+  bgSecondary: '#F5F5F5',   
+  textPrimary: '#111111',
+  textSecondary: '#888888',
+  textTertiary: '#AAAAAA',
+  borderSecondary: '#E0E0E0', 
+  borderTertiary: '#EEEEEE',  
+  borderPrimary: '#111111',
 } as const;
 
 // 지도 마커 카테고리별 색상

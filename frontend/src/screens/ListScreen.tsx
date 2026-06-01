@@ -65,25 +65,25 @@ const ListScreen: React.FC<ListScreenProps> = ({ go }) => {
 };
 
 const styles = StyleSheet.create({
-  scr: { flex: 1, backgroundColor: "#F0EEE6" },
+  scr: { flex: 1, backgroundColor: "#F5F5F5" },
   bar: {
     flexDirection: "row",
     alignItems: "center",
     paddingHorizontal: 16,
     paddingVertical: 13,
     borderBottomWidth: 0.5,
-    borderBottomColor: "#E8E5DA",
-    backgroundColor: "#FAF9F5",
+    borderBottomColor: "#E5E5E5",
+    backgroundColor: "#FFFFFF",
     gap: 10,
   },
-  bk: { fontSize: 22, color: "#1A1A18" },
-  title: { fontSize: 13, fontWeight: "500", color: "#1A1A18" },
+  bk: { fontSize: 22, color: "#111111" },
+  title: { fontSize: 13, fontWeight: "500", color: "#111111" },
   sc: { flex: 1 },
-  count: { fontSize: 11, color: "#6B6B66", padding: 8, paddingHorizontal: 16 },
+  count: { fontSize: 11, color: "#888888", padding: 8, paddingHorizontal: 16 },
   list: { paddingHorizontal: 16, paddingBottom: 16 },
   empty: {
     fontSize: 12,
-    color: "#9B9B95",
+    color: "#AAAAAA",
     textAlign: "center",
     paddingVertical: 24,
   },

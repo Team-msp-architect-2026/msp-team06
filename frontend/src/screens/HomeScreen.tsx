@@ -18,6 +18,7 @@ import { useNewsHighlights } from "../hooks/useNews";
 import { useRegionSearch } from "../hooks/useRegions";
 import { useAppStore } from "../store/useAppStore";
 import { Screen } from "../types";
+import { usePriceLayer } from "../hooks/useMap";
 
 interface HomeScreenProps {
   mapTab: number;
@@ -40,6 +41,12 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ mapTab, setMapTab, go }) => {
     addRecentSearch,
     setListSearchVal,
   } = useAppStore();
+
+  const TAB_TYPES = ["sale_count", "jeonse_ratio", "monthly_burden"];
+  const { data: priceLayerData } = usePriceLayer(
+    "seoul-11680",  // 서울 전체 기준 (임시)
+    TAB_TYPES[mapTab]
+  );
 
   const scrollRef = useRef<ScrollView>(null);
 
@@ -67,6 +74,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ mapTab, setMapTab, go }) => {
             fullAddress: first.fullAddress,
             lat: first.lat,
             lng: first.lng,
+            aptSeq: first.aptSeq ?? undefined,
           });
           addRecentSearch(first.name);
           setSearchVal("");
@@ -133,6 +141,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ mapTab, setMapTab, go }) => {
                     fullAddress: item.fullAddress,
                     lat: item.lat,
                     lng: item.lng,
+                    aptSeq: item.aptSeq ?? undefined,
                   });
                   addRecentSearch(item.name);
                   setSearchVal("");
@@ -178,7 +187,33 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ mapTab, setMapTab, go }) => {
             scrollRef.current?.setNativeProps({ scrollEnabled: true })
           }
         >
-          <KakaoMap lat={37.5665} lng={126.978} level={8} />
+          <KakaoMap
+            lat={37.5665}
+            lng={126.978}
+            level={8}
+            markers={priceLayerData?.zones.map((zone) => ({
+              lat: zone.lat,
+              lng: zone.lng,
+              type: "apartment",
+              name: zone.aptName || "",
+              markerId: zone.zoneId,
+              kakaoPlaceId: zone.kakaoPlaceId,
+              aptSeq: zone.aptSeq,
+            }))}
+            onMarkerClick={(marker) => {
+              if (marker.kakaoPlaceId) {
+                setSelectedRegion({
+                  regionId: `KAKAO_${marker.kakaoPlaceId}`,
+                  name: marker.name,
+                  fullAddress: "",
+                  lat: marker.lat,
+                  lng: marker.lng,
+                  aptSeq: marker.aptSeq,
+                });
+                go("complex");
+              }
+            }}
+          />
         </View>
 
         {/* 뉴스 목록 */}
@@ -209,40 +244,40 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ mapTab, setMapTab, go }) => {
 };
 
 const styles = StyleSheet.create({
-  scr: { flex: 1, backgroundColor: "#F0EEE6" },
+  scr: { flex: 1, backgroundColor: "#F5F5F5" },
   bar: {
     paddingHorizontal: 16,
     paddingVertical: 13,
     borderBottomWidth: 0.5,
-    borderBottomColor: "#E8E5DA",
-    backgroundColor: "#FAF9F5",
+    borderBottomColor: "#E5E5E5",
+    backgroundColor: "#FFFFFF",
   },
-  logo: { fontSize: 19, fontWeight: "500", color: "#1A1A18" },
+  logo: { fontSize: 19, fontWeight: "500", color: "#111111" },
   sc: { flex: 1 },
-  title: { fontSize: 17, fontWeight: "500", color: "#1A1A18", marginBottom: 3 },
-  subtitle: { fontSize: 12, color: "#6B6B66" },
+  title: { fontSize: 17, fontWeight: "500", color: "#111111", marginBottom: 3 },
+  subtitle: { fontSize: 12, color: "#888888" },
   sb: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#FAF9F5",
+    backgroundColor: "#FFFFFF",
     borderWidth: 1,
-    borderColor: "#D9D6CB",
+    borderColor: "#E0E0E0",
     borderRadius: 11,
     paddingHorizontal: 12,
     paddingVertical: 9,
     marginHorizontal: 16,
     marginTop: 14,
   },
-  sbInput: { flex: 1, fontSize: 13, color: "#1A1A18" },
+  sbInput: { flex: 1, fontSize: 13, color: "#111111" },
   dd: {
     marginHorizontal: 16,
-    backgroundColor: "#FAF9F5",
+    backgroundColor: "#FFFFFF",
     borderWidth: 1,
-    borderColor: "#D9D6CB",
+    borderColor: "#E0E0E0",
     borderRadius: 11,
     marginTop: 4,
   },
-  loadingText: { fontSize: 11, color: "#9B9B95", padding: 10 },
+  loadingText: { fontSize: 11, color: "#AAAAAA", padding: 10 },
   mclb: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -250,11 +285,11 @@ const styles = StyleSheet.create({
     marginHorizontal: 16,
     marginTop: 10,
   },
-  mct: { fontSize: 12, fontWeight: "500", color: "#1A1A18" },
-  mcs: { fontSize: 10, color: "#9B9B95" },
+  mct: { fontSize: 12, fontWeight: "500", color: "#111111" },
+  mcs: { fontSize: 10, color: "#AAAAAA" },
   mtab: {
     flexDirection: "row",
-    backgroundColor: "#F0EEE6",
+    backgroundColor: "#F5F5F5",
     borderRadius: 10,
     padding: 3,
     marginHorizontal: 16,
@@ -262,12 +297,12 @@ const styles = StyleSheet.create({
   },
   mt: { flex: 1, alignItems: "center", paddingVertical: 6, borderRadius: 8 },
   mtOn: {
-    backgroundColor: "#FAF9F5",
+    backgroundColor: "#FFFFFF",
     borderWidth: 0.5,
-    borderColor: "#E8E5DA",
+    borderColor: "#E5E5E5",
   },
-  mtText: { fontSize: 10, color: "#6B6B66" },
-  mtTextOn: { color: "#1A1A18", fontWeight: "500" },
+  mtText: { fontSize: 10, color: "#888888" },
+  mtTextOn: { color: "#111111", fontWeight: "500" },
   mapPlaceholder: {
     marginHorizontal: 16,
     marginTop: 6,
@@ -275,10 +310,10 @@ const styles = StyleSheet.create({
     backgroundColor: "#E8EEE4",
     borderRadius: 14,
     borderWidth: 0.5,
-    borderColor: "#E8E5DA",
+    borderColor: "#E5E5E5",
   },
   sec: { marginTop: 10, paddingHorizontal: 16 },
-  st: { fontSize: 13, fontWeight: "500", color: "#1A1A18", marginBottom: 7 },
+  st: { fontSize: 13, fontWeight: "500", color: "#111111", marginBottom: 7 },
 });
 
 export default HomeScreen;
