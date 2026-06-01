@@ -213,14 +213,6 @@ const AreaScreen: React.FC<AreaScreenProps> = ({
           />
         </View>
 
-        {/* 아파트 목록 */}
-        <View style={styles.cp}>
-          <Text style={styles.cpt}>아파트 목록</Text>
-          <Text style={styles.cps}>
-            국토부 API 연동 후 실제 단지 목록 표시 예정
-          </Text>
-        </View>
-
         {/* 탭 버튼 */}
         <View style={styles.tabbar}>
           {["이슈 분석", "AI 리포트"].map((t, i) => (
