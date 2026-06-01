@@ -13,8 +13,12 @@ DONG_KEYWORDS = ["동", "읍", "면", "리", "가"]
 def is_dong(name: str) -> bool:
     return any(name.endswith(kw) for kw in DONG_KEYWORDS)
 
+def is_apartment(doc: dict) -> bool:
+    """카카오 검색 결과가 아파트인지 확인"""
+    category = doc.get("category_name", "")
+    return "아파트" in category
+
 async def get_apt_seq_by_kakao_id(kakao_place_id: str, db: AsyncSession) -> str | None:
-    """kakao_place_id로 locations에서 apt_seq 조회"""
     try:
         result = await db.execute(
             text("""
@@ -32,7 +36,6 @@ async def get_apt_seq_by_kakao_id(kakao_place_id: str, db: AsyncSession) -> str 
         return None
 
 async def get_apt_seq_by_name(name: str, db: AsyncSession) -> str | None:
-    """단지명으로 price_trends에서 apt_seq 조회 (fallback)"""
     try:
         clean_name = name.replace("아파트", "").replace(" ", "").strip()
         result = await db.execute(
@@ -61,12 +64,13 @@ async def search_regions(
         results = []
         seen_names = set()
 
+        # 1순위: 동 단위 검색 (도로명주소 API)
         DONG_SUFFIXES = ["동", "읍", "면", "리", "가"]
         if any(q.endswith(suffix) for suffix in DONG_SUFFIXES):
             try:
                 juso_result = await search_address(q)
                 juso_items = juso_result.get("results", {}).get("juso", []) or []
-                for item in juso_items[:5]:
+                for item in juso_items[:3]:
                     name = item.get("emdNm", "") or item.get("liNm", "")
                     full_address = item.get("roadAddr", "") or item.get("jibunAddr", "")
                     if name and name not in seen_names:
@@ -87,32 +91,35 @@ async def search_regions(
             except Exception:
                 pass
 
+        # 2순위: 아파트 단지 검색 (카카오 API - 아파트만 필터링)
         kakao_result = await search_kakao_keyword(q)
         documents = kakao_result.get("documents", [])
         for doc in documents[:limit]:
             name = doc.get("place_name", "")
             kakao_place_id = doc.get("id", "")
-            if name and name not in seen_names:
-                seen_names.add(name)
-                property_type = "area" if is_dong(name) else "complex"
 
-                apt_seq = None
-                if property_type == "complex":
-                    # 1순위: kakao_place_id로 locations에서 조회
-                    apt_seq = await get_apt_seq_by_kakao_id(kakao_place_id, db)
-                    # 2순위: 단지명으로 price_trends에서 조회 (fallback)
-                    if not apt_seq:
-                        apt_seq = await get_apt_seq_by_name(name, db)
+            if not name or name in seen_names:
+                continue
 
-                results.append({
-                    "regionId": f"KAKAO_{kakao_place_id}",
-                    "name": name,
-                    "fullAddress": doc.get("road_address_name") or doc.get("address_name", ""),
-                    "propertyType": property_type,
-                    "lat": float(doc.get("y", 0)),
-                    "lng": float(doc.get("x", 0)),
-                    "aptSeq": apt_seq,
-                })
+            # 아파트가 아니면 스킵
+            if not is_apartment(doc):
+                continue
+
+            seen_names.add(name)
+
+            apt_seq = await get_apt_seq_by_kakao_id(kakao_place_id, db)
+            if not apt_seq:
+                apt_seq = await get_apt_seq_by_name(name, db)
+
+            results.append({
+                "regionId": f"KAKAO_{kakao_place_id}",
+                "name": name,
+                "fullAddress": doc.get("road_address_name") or doc.get("address_name", ""),
+                "propertyType": "complex",
+                "lat": float(doc.get("y", 0)),
+                "lng": float(doc.get("x", 0)),
+                "aptSeq": apt_seq,
+            })
 
         return results[:limit]
     except Exception as e:
