@@ -515,7 +515,7 @@ async def get_price_stats_by_apt_seq(apt_seq: str, deal_type: str, period: str, 
             )
 
         row = result.fetchone()
-        if not row or not row[0]:
+        if not row or (row[0] is None and row[1] is None and row[2] is None):
             return None
 
         trade_count = int(row[3]) if row[3] else 0
@@ -557,7 +557,7 @@ async def get_price_by_dong_name(dong_name: str, db: AsyncSession) -> dict | Non
             {"dong_name": f"%{dong_name}%"}
         )
         row = result.fetchone()
-        if not row or not row[0]:
+        if not row or (row[0] is None and row[1] is None and row[2] is None):
             return None
 
         data = {
