@@ -82,7 +82,7 @@ async def get_price_layer(
                 JOIN locations l ON pt.apt_seq = l.apt_seq
                 WHERE pt.deal_type = 'sale'
                 AND pt.month = TO_CHAR(CURRENT_DATE - INTERVAL '1 month', 'YYYY-MM')
-                AND l.lat IS NOT NULL AND l.lng IS NOT NULL AND l.lat != 0.0 AND l.lng != 0.0
+                AND l.lat IS NOT NULL AND l.lng IS NOT NULL
                 ORDER BY pt.trade_count DESC
                 LIMIT 3
             """))
@@ -99,7 +99,7 @@ async def get_price_layer(
                     AND pt2.month = pt.month
                 WHERE pt.deal_type = 'jeonse'
                 AND pt.month = TO_CHAR(CURRENT_DATE - INTERVAL '1 month', 'YYYY-MM')
-                AND l.lat IS NOT NULL AND l.lng IS NOT NULL AND l.lat != 0.0 AND l.lng != 0.0
+                AND l.lat IS NOT NULL AND l.lng IS NOT NULL
                 AND pt2.avg_price > 0
                 ORDER BY (pt.avg_price::float / pt2.avg_price::float) ASC
                 LIMIT 3
@@ -114,7 +114,7 @@ async def get_price_layer(
                 JOIN locations l ON pt.apt_seq = l.apt_seq
                 WHERE pt.deal_type = 'monthly'
                 AND pt.month = TO_CHAR(CURRENT_DATE - INTERVAL '1 month', 'YYYY-MM')
-                AND l.lat IS NOT NULL AND l.lng IS NOT NULL AND l.lat != 0.0 AND l.lng != 0.0
+                AND l.lat IS NOT NULL AND l.lng IS NOT NULL
                 AND pt.avg_price > 0
                 ORDER BY pt.avg_price ASC
                 LIMIT 3
