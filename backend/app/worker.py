@@ -3,11 +3,20 @@
 
 import os
 import asyncio
+import time
 from datetime import datetime, date
 from celery import Celery
 from app.services.report import generate_report
 from app.services.news import get_region_issues
 from app.services.map import search_all_nearby_infra
+from app.metrics import (
+    BEDROCK_INVOKE_LATENCY,
+    DB_SAVE_LATENCY,
+    PIPELINE_TOTAL_LATENCY,
+    PIPELINE_ERRORS,
+    start_metrics_server,
+)
+start_metrics_server()
 
 AWS_REGION = os.getenv("AWS_REGION", "eu-west-3")
 
@@ -93,31 +102,37 @@ def generate_report_task(report_id: str, region_id: str, region_name: str, lat: 
         db.commit()
 
         # Bedrock 호출
-        result = loop.run_until_complete(generate_report(region_name, {}, news_data, infra_data))
+        pipeline_start = time.time()
+        with BEDROCK_INVOKE_LATENCY.time():
+            result = loop.run_until_complete(generate_report(region_name, {}, news_data, infra_data))
 
         # 리포트 완료 저장
-        report.status = "completed"
-        report.progress_pct = 100
-        report.summary = result.get("summary", "")
-        report.disclaimer = result.get("disclaimer", "")
-        report.generated_at = datetime.now()
-        report.completed_at = datetime.now()
-        report.data_base_date = date.today()
-        db.commit()
+        with DB_SAVE_LATENCY.time():
+            report.status = "completed"
+            report.progress_pct = 100
+            report.summary = result.get("summary", "")
+            report.disclaimer = result.get("disclaimer", "")
+            report.generated_at = datetime.now()
+            report.completed_at = datetime.now()
+            report.data_base_date = date.today()
+            db.commit()
 
-        # 섹션 저장
-        for section in result.get("sections", []):
-            db.add(ReportSection(
-                report_id=report_id,
-                section_key=section.get("sectionKey", ""),
-                section_title=section.get("sectionTitle", ""),
-                content=section.get("content", ""),
-                sort_order=section.get("sortOrder", 0),
-            ))
-        db.commit()
+            # 섹션 저장
+            for section in result.get("sections", []):
+                db.add(ReportSection(
+                    report_id=report_id,
+                    section_key=section.get("sectionKey", ""),
+                    section_title=section.get("sectionTitle", ""),
+                    content=section.get("content", ""),
+                    sort_order=section.get("sortOrder", 0),
+                ))
+            db.commit()
+
+        PIPELINE_TOTAL_LATENCY.observe(time.time() - pipeline_start)
         print(f"[Celery] 리포트 완료: {report_id}")
 
     except Exception as e:
+        PIPELINE_ERRORS.inc()
         print(f"[Celery] 리포트 실패: {e}")
         try:
             report = db.query(Report).filter(Report.id == report_id).first()
