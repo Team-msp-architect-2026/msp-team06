@@ -81,10 +81,14 @@ def parse_prices(price_data: list, deal_type: str) -> dict:
                 if apt_seq not in apt_seq_groups:
                     apt_seq_groups[apt_seq] = {
                         "prices": [],
+                        "deposits": [],
                         "apt_name": item.get("apt_name", ""),
                         "dong": dong
                     }
                 apt_seq_groups[apt_seq]["prices"].append(amount)
+                if deal_type == "monthly":
+                    deposit = int(item.get("deposit", "0").replace(",", ""))
+                    apt_seq_groups[apt_seq]["deposits"].append(deposit)
 
             # dong별 그룹
             if dong:
@@ -145,15 +149,17 @@ def save_by_apt_seq(conn, apt_seq_groups: dict, deal_type: str, month: str):
 
             avg_price = sum(prices) // len(prices)
             trade_count = len(prices)
+            deposits = data.get("deposits", [])
+            avg_deposit = sum(deposits) // len(deposits) if deposits else None
             apt_name = data.get("apt_name", "")
 
             cur.execute("""
                 INSERT INTO price_trends (
                     region_id, month, deal_type,
-                    avg_price, trade_count, apt_seq, apt_name, created_at
+                    avg_price, trade_count, apt_seq, apt_name, deposit, created_at
                 ) VALUES (
                     (SELECT id FROM regions WHERE legal_dong_code LIKE %s LIMIT 1),
-                    %s, %s, %s, %s, %s, %s, NOW()
+                    %s, %s, %s, %s, %s, %s, %s, NOW()
                 )
                 ON CONFLICT DO NOTHING
             """, (
@@ -164,6 +170,7 @@ def save_by_apt_seq(conn, apt_seq_groups: dict, deal_type: str, month: str):
                 trade_count,
                 apt_seq,
                 apt_name,
+                avg_deposit,
             ))
 
 
@@ -201,7 +208,7 @@ def save_price_snapshot(conn, region_id: str, stats: dict, deal_type: str, data_
                 INSERT INTO price_snapshots (
                     region_id, avg_sale_price, recent_trade_count,
                     price_stability_grade, price_level, data_base_date, created_at
-                ) VALUES (%s, %s, %s, %s, %s, %s, NOW())
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, NOW())
                 ON CONFLICT (region_id, data_base_date)
                 DO UPDATE SET
                     avg_sale_price = EXCLUDED.avg_sale_price,
@@ -219,7 +226,7 @@ def save_price_snapshot(conn, region_id: str, stats: dict, deal_type: str, data_
                 INSERT INTO price_snapshots (
                     region_id, avg_jeonse_price, recent_trade_count,
                     price_stability_grade, price_level, data_base_date, created_at
-                ) VALUES (%s, %s, %s, %s, %s, %s, NOW())
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, NOW())
                 ON CONFLICT (region_id, data_base_date)
                 DO UPDATE SET
                     avg_jeonse_price = EXCLUDED.avg_jeonse_price
@@ -236,7 +243,7 @@ def save_price_snapshot(conn, region_id: str, stats: dict, deal_type: str, data_
                 INSERT INTO price_snapshots (
                     region_id, avg_monthly_rent, recent_trade_count,
                     price_stability_grade, price_level, data_base_date, created_at
-                ) VALUES (%s, %s, %s, %s, %s, %s, NOW())
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, NOW())
                 ON CONFLICT (region_id, data_base_date)
                 DO UPDATE SET
                     avg_monthly_rent = EXCLUDED.avg_monthly_rent
@@ -278,7 +285,7 @@ def save_price_stats(conn, region_id: str, stats: dict, deal_type: str, data_bas
                     min_price, avg_price, max_price,
                     total_trade_count, recent_trade_count,
                     trade_signal, data_base_date, created_at
-                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())
                 ON CONFLICT (region_id, deal_type, period, data_base_date)
                 DO UPDATE SET
                     min_price = EXCLUDED.min_price,
