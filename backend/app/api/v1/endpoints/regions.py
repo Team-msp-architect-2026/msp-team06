@@ -72,8 +72,7 @@ async def search_regions(
                 addr_docs = kakao_addr_result.get("documents", [])
                 for doc in addr_docs[:3]:
                     address = doc.get("address", {})
-                    road_address = doc.get("road_address", {})
-                    name = address.get("region_3depth_name", "")  # 동 이름
+                    name = address.get("region_3depth_name", "")
                     full_address = f"서울특별시 {address.get('region_1depth_name', '')} {address.get('region_2depth_name', '')} {name}"
                     if name and name not in seen_names and name.endswith(tuple(DONG_SUFFIXES)):
                         seen_names.add(name)
@@ -86,6 +85,27 @@ async def search_regions(
                             "lng": float(doc.get("x", 0)),
                             "aptSeq": None,
                         })
+
+                apt_result = await search_kakao_keyword(f"{q} 아파트")
+                apt_docs = apt_result.get("documents", [])
+                for doc in apt_docs[:5]:
+                    name = doc.get("place_name", "")
+                    kakao_place_id = doc.get("id", "")
+                    if not name or name in seen_names or not is_apartment(doc):
+                        continue
+                    seen_names.add(name)
+                    apt_seq = await get_apt_seq_by_kakao_id(kakao_place_id, db)
+                    if not apt_seq:
+                        apt_seq = await get_apt_seq_by_name(name, db)
+                    results.append({
+                        "regionId": f"KAKAO_{kakao_place_id}",
+                        "name": name,
+                        "fullAddress": doc.get("road_address_name") or doc.get("address_name", ""),
+                        "propertyType": "complex",
+                        "lat": float(doc.get("y", 0)),
+                        "lng": float(doc.get("x", 0)),
+                        "aptSeq": apt_seq,
+                    })
             except Exception:
                 pass
 
