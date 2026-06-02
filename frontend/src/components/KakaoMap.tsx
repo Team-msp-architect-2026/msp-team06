@@ -14,12 +14,21 @@ interface MarkerInfo {
   aptSeq?: string;
 }
 
+interface PolygonInfo {
+  code: string;
+  grade: number;
+  name: string;
+  value: number;
+}
+
 interface KakaoMapProps {
   lat: number;
   lng: number;
   level?: number;
   markers?: MarkerInfo[];
   onMarkerClick?: (marker: MarkerInfo) => void;
+  polygons?: PolygonInfo[];
+  geoJson?: any;
 }
 
 const KAKAO_APP_KEY = "644f705c07c7107a5ab76925f451797a";
@@ -30,6 +39,8 @@ const KakaoMap: React.FC<KakaoMapProps> = ({
   level = 3,
   markers = [],
   onMarkerClick,
+  polygons = [],
+  geoJson,
 }) => {
   const markerColors: Record<string, string> = {
     subway: "#3CB44B",
@@ -39,6 +50,52 @@ const KakaoMap: React.FC<KakaoMapProps> = ({
     school: "#3498DB",
     apartment: "#E74C3C",
   };
+
+  const gradeColors: Record<number, string> = {
+    1: "#93C6E7",
+    2: "#4A90D9",
+    3: "#5BAD6F",
+    4: "#E8A838",
+    5: "#D9534F",
+  };
+
+  const polygonScript = geoJson && polygons.length > 0 ? `
+    (function() {
+      var gradeColors = {1: "#93C6E7", 2: "#4A90D9", 3: "#5BAD6F", 4: "#E8A838", 5: "#D9534F"};
+      var polygonData = ${JSON.stringify(polygons)};
+      var gradeMap = {};
+      var nameMap = {};
+      var valueMap = {};
+      polygonData.forEach(function(p) { 
+        gradeMap[p.code] = p.grade;
+        nameMap[p.code] = p.name;
+        valueMap[p.code] = p.value;
+      });
+      var features = ${JSON.stringify(geoJson.features)};
+      features.forEach(function(feature) {
+        var code = feature.properties.name;
+        var grade = gradeMap[code] || 3;
+        var color = gradeColors[grade] || "#5BAD6F";
+        var coords = feature.geometry.coordinates[0];
+        var path = coords.map(function(c) { return new kakao.maps.LatLng(c[1], c[0]); });
+        var polygon = new kakao.maps.Polygon({
+          path: path,
+          strokeWeight: 1,
+          strokeColor: "#FFFFFF",
+          strokeOpacity: 0.8,
+          fillColor: color,
+          fillOpacity: 0.6,
+        });
+        polygon.setMap(map);
+        kakao.maps.event.addListener(polygon, 'mouseover', function() {
+          polygon.setOptions({ fillOpacity: 0.85 });
+        });
+        kakao.maps.event.addListener(polygon, 'mouseout', function() {
+          polygon.setOptions({ fillOpacity: 0.6 });
+        });
+      });
+    })();
+  ` : "";
 
   const markerScript = markers
     .filter((m) => !m.markerId.endsWith("_none") && m.lat && m.lng)
@@ -159,6 +216,7 @@ const KakaoMap: React.FC<KakaoMapProps> = ({
             position: new kakao.maps.LatLng(${lat}, ${lng}),
             map: map
           });
+          ${polygonScript}
           ${markerScript}
         });
 

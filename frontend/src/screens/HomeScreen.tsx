@@ -12,6 +12,7 @@ import {
 import DropdownItem from "../components/DropdownItem";
 import IssueRow from "../components/IssueRow";
 import KakaoMap from "../components/KakaoMap";
+import seoulGu from "../constants/seoul_gu.json";
 import { COLORS } from "../constants/colors";
 import { MAP_TAB_LABELS } from "../constants/mockData";
 import { useNewsHighlights } from "../hooks/useNews";
@@ -42,7 +43,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ mapTab, setMapTab, go }) => {
     setListSearchVal,
   } = useAppStore();
 
-  const TAB_TYPES = ["sale_count", "jeonse_ratio", "monthly_burden"];
+  const TAB_TYPES = ["sale", "jeonse", "monthly"];
   const { data: priceLayerData } = usePriceLayer(
     "seoul-11680",  // 서울 전체 기준 (임시)
     TAB_TYPES[mapTab]
@@ -154,7 +155,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ mapTab, setMapTab, go }) => {
 
         {/* 지도 탭 버튼 */}
         <View style={styles.mtab}>
-          {["매매 거래량", "전세가율 낮은 곳", "월세 부담 낮은 곳"].map(
+          {["매매", "전세", "월세"].map(
             (t, i) => (
               <TouchableOpacity
                 key={i}
@@ -185,15 +186,14 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ mapTab, setMapTab, go }) => {
             lat={37.5665}
             lng={126.978}
             level={8}
-            markers={priceLayerData?.zones.map((zone) => ({
-              lat: zone.lat,
-              lng: zone.lng,
-              type: "apartment",
+            markers={[]}
+            polygons={priceLayerData?.zones.map((zone) => ({
+              code: zone.aptName || zone.zoneId,
+              grade: zone.priceGrade,
               name: zone.aptName || "",
-              markerId: zone.zoneId,
-              kakaoPlaceId: zone.kakaoPlaceId,
-              aptSeq: zone.aptSeq,
+              value: zone.value,
             }))}
+            geoJson={seoulGu}
             onMarkerClick={(marker) => {
               if (marker.kakaoPlaceId) {
                 setSelectedRegion({

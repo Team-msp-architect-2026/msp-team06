@@ -128,7 +128,7 @@ async def get_price_layer(
         zones = []
         for code, name, val in valid:
             zones.append({
-                "zoneId": code,
+                "zoneId": name,
                 "lat": 0.0,
                 "lng": 0.0,
                 "value": val,
