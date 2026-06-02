@@ -67,89 +67,75 @@ async def get_map_markers(
 @router.get("/price-layer", response_model=PriceLayerResponse)
 async def get_price_layer(
     regionId: str = Query(..., description="서비스 내부 지역 ID"),
-    type: Optional[str] = Query("sale_count", description="sale_count | jeonse_ratio | monthly_burden"),
+    type: Optional[str] = Query("sale", description="sale | jeonse | monthly"),
     db: AsyncSession = Depends(get_db),
 ):
     try:
         from sqlalchemy import text
 
-        if type == "sale_count":
-            # 매매 거래량 top3
-            result = await db.execute(text("""
-                SELECT pt.apt_name, pt.apt_seq, pt.avg_price, pt.trade_count,
-                       l.lat, l.lng, l.kakao_place_id
-                FROM price_trends pt
-                JOIN locations l ON pt.apt_seq = l.apt_seq
-                WHERE pt.deal_type = 'sale'
-                AND pt.month = TO_CHAR(CURRENT_DATE - INTERVAL '1 month', 'YYYY-MM')
-                AND l.lat IS NOT NULL AND l.lng IS NOT NULL
-                ORDER BY pt.trade_count DESC
-                LIMIT 3
-            """))
+        deal_type_map = {"sale": "sale", "jeonse": "jeonse", "monthly": "monthly"}
+        deal_type = deal_type_map.get(type, "sale")
 
-        elif type == "jeonse_ratio":
-            # 전세가율 낮은 top3
-            result = await db.execute(text("""
-                SELECT pt.apt_name, pt.apt_seq, pt.avg_price, pt.trade_count,
-                       l.lat, l.lng, l.kakao_place_id
-                FROM price_trends pt
-                JOIN locations l ON pt.apt_seq = l.apt_seq
-                JOIN price_trends pt2 ON pt.apt_seq = pt2.apt_seq
-                    AND pt2.deal_type = 'sale'
-                    AND pt2.month = pt.month
-                WHERE pt.deal_type = 'jeonse'
-                AND pt.month = TO_CHAR(CURRENT_DATE - INTERVAL '1 month', 'YYYY-MM')
-                AND l.lat IS NOT NULL AND l.lng IS NOT NULL
-                AND pt2.avg_price > 0
-                ORDER BY (pt.avg_price::float / pt2.avg_price::float) ASC
-                LIMIT 3
-            """))
-
-        elif type == "monthly_burden":
-            # 월세 부담 낮은 top3
-            result = await db.execute(text("""
-                SELECT pt.apt_name, pt.apt_seq, pt.avg_price, pt.trade_count,
-                       l.lat, l.lng, l.kakao_place_id
-                FROM price_trends pt
-                JOIN locations l ON pt.apt_seq = l.apt_seq
-                WHERE pt.deal_type = 'monthly'
-                AND pt.month = TO_CHAR(CURRENT_DATE - INTERVAL '1 month', 'YYYY-MM')
-                AND l.lat IS NOT NULL AND l.lng IS NOT NULL
-                AND pt.avg_price > 0
-                ORDER BY pt.avg_price ASC
-                LIMIT 3
-            """))
-
-        else:
-            return {"zones": [], "dataBaseDate": date.today()}
+        result = await db.execute(text("""
+            SELECT 
+                r.legal_dong_code,
+                r.name,
+                AVG(CASE WHEN ps.avg_sale_price > 0 THEN ps.avg_sale_price END) as avg_sale,
+                AVG(CASE WHEN ps.avg_jeonse_price > 0 THEN ps.avg_jeonse_price END) as avg_jeonse,
+                AVG(CASE WHEN ps.avg_monthly_rent > 0 THEN ps.avg_monthly_rent END) as avg_monthly
+            FROM regions r
+            LEFT JOIN price_snapshots ps ON r.id = ps.region_id
+            WHERE r.source_type = 'region'
+            AND r.property_type = 'area'
+            GROUP BY r.legal_dong_code, r.name
+            HAVING COUNT(ps.id) > 0
+        """))
 
         rows = result.fetchall()
+        if not rows:
+            return {"zones": [], "dataBaseDate": date.today()}
+
+        prices = []
+        for row in rows:
+            if deal_type == "sale":
+                val = float(row.avg_sale) if row.avg_sale else 0
+            elif deal_type == "jeonse":
+                val = float(row.avg_jeonse) if row.avg_jeonse else 0
+            else:
+                val = float(row.avg_monthly) if row.avg_monthly else 0
+            prices.append((row.legal_dong_code, row.name, val))
+
+        valid = [(c, n, v) for c, n, v in prices if v > 0]
+        if not valid:
+            return {"zones": [], "dataBaseDate": date.today()}
+
+        vals = sorted([v for _, _, v in valid])
+        n = len(vals)
+        thresholds = [
+            vals[int(n * 0.2)],
+            vals[int(n * 0.4)],
+            vals[int(n * 0.6)],
+            vals[int(n * 0.8)],
+        ]
+
+        def get_grade(v):
+            if v <= thresholds[0]: return 1
+            if v <= thresholds[1]: return 2
+            if v <= thresholds[2]: return 3
+            if v <= thresholds[3]: return 4
+            return 5
+
         zones = []
-        for i, row in enumerate(rows):
-            lat = float(row.lat)
-            lng = float(row.lng)
-
-            # 좌표가 0이면 카카오 API로 조회
-            if lat == 0.0 or lng == 0.0:
-                try:
-                    from app.services.search import search_kakao_keyword
-                    kakao_result = await search_kakao_keyword(row.apt_name)
-                    docs = kakao_result.get("documents", [])
-                    if docs:
-                        lat = float(docs[0].get("y", 0))
-                        lng = float(docs[0].get("x", 0))
-                except Exception as ke:
-                    print(f"카카오 좌표 조회 실패: {ke}")
-
+        for code, name, val in valid:
             zones.append({
-                "zoneId": f"{type}_{row.apt_seq}",
-                "lat": lat,
-                "lng": lng,
-                "value": float(row.avg_price),
-                "priceGrade": i + 1,
-                "aptName": row.apt_name,
-                "aptSeq": row.apt_seq,
-                "kakaoPlaceId": row.kakao_place_id,
+                "zoneId": code,
+                "lat": 0.0,
+                "lng": 0.0,
+                "value": val,
+                "priceGrade": get_grade(val),
+                "aptName": name,
+                "aptSeq": None,
+                "kakaoPlaceId": None,
             })
 
         return {"zones": zones, "dataBaseDate": date.today()}
