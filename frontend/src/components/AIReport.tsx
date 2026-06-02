@@ -47,6 +47,12 @@ const AIReport: React.FC<AIReportProps> = ({ report, onGenerate, status }) => {
     );
   }
 
+  const formatDate = (dateStr?: string) => {
+    if (!dateStr) return "2026년 4월";
+    const [year, month] = dateStr.split("-");
+    return `${year}년 ${parseInt(month)}월`;
+  };
+
   return (
     <View>
       <View style={styles.rsum}>
@@ -65,7 +71,7 @@ const AIReport: React.FC<AIReportProps> = ({ report, onGenerate, status }) => {
       ))}
       <Text style={styles.disc}>{report?.disclaimer}</Text>
       <Text style={styles.rdate}>
-        데이터 출처: 국토교통부 실거래가 공개시스템 (2026년 4월 기준)
+        데이터 출처: 국토교통부 실거래가 공개시스템 ({formatDate((report as any)?.dataBaseDate)} 기준)
       </Text>
     </View>
   );
@@ -97,7 +103,15 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 2,
   },
-  rsuml: { fontSize: 12, color: "#888888", marginBottom: 6, fontWeight: "500" },
+  rsuml: { 
+    fontSize: 15, 
+    color: "#111111", 
+    marginBottom: 8, 
+    fontWeight: "700",
+    paddingBottom: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: "#E5E5E5",
+  },
   rsumq: { fontSize: 14, color: "#111111", lineHeight: 22 },
   rsec: {
     backgroundColor: "#FFFFFF",

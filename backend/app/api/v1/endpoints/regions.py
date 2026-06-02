@@ -88,7 +88,7 @@ async def search_regions(
 
                 apt_result = await search_kakao_keyword(f"{q} 아파트")
                 apt_docs = apt_result.get("documents", [])
-                for doc in apt_docs[:5]:
+                for doc in apt_docs[:9]:
                     name = doc.get("place_name", "")
                     kakao_place_id = doc.get("id", "")
                     if not name or name in seen_names or not is_apartment(doc):

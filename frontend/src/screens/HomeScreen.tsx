@@ -271,15 +271,11 @@ const styles = StyleSheet.create({
   dd: {
     marginHorizontal: 16,
     backgroundColor: "#FFFFFF",
+    borderRadius: 12,
     borderWidth: 1,
     borderColor: "#E0E0E0",
-    borderRadius: 12,
     marginTop: 4,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 6,
-    elevation: 3,
+    overflow: "hidden",
   },
   loadingText: { fontSize: 12, color: "#AAAAAA", padding: 10 },
   mclb: {

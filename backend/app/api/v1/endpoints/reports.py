@@ -53,12 +53,20 @@ async def create_report(
     ).on_conflict_do_nothing(index_elements=["id"])
     await db.execute(region_stmt)
 
+    # price_trends 최신 month 기준으로 data_base_date 결정
+    from sqlalchemy import text as sa_text
+    latest_month_result = await db.execute(
+        sa_text("SELECT MAX(month) FROM price_trends WHERE apt_seq IS NOT NULL")
+    )
+    latest_month = latest_month_result.scalar()
+    data_base_date = date(int(latest_month[:4]), int(latest_month[5:7]), 1) if latest_month else date.today()
+
     report = Report(
         id=report_id,
         region_id=request.regionId,
         status="pending",
         progress_pct=0,
-        data_base_date=date.today(),
+        data_base_date=data_base_date,
         created_at=datetime.now(),
     )
     db.add(report)
