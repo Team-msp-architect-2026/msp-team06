@@ -266,6 +266,8 @@ def lambda_handler(event, context):
                 "deal_type": deal_type,
                 "count": len(data),
                 "s3_key": s3_key,
+                "lawd_cd": lawd_cd,
+                "deal_ymd": deal_ymd,
             })
             print(f"수집 완료: {gu_name} {deal_type} {len(data)}건")
 
