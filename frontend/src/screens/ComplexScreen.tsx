@@ -90,7 +90,7 @@ const ComplexScreen: React.FC<ComplexScreenProps> = ({
     dealYmd,
   );
 
-  const { data: trendData } = usePriceTrend(
+  const { data: trendData, isLoading: trendLoading } = usePriceTrend(
   selectedRegion?.regionId || "",
   selectedRegion?.lat || 0,
   selectedRegion?.lng || 0,
@@ -109,6 +109,13 @@ const ComplexScreen: React.FC<ComplexScreenProps> = ({
 
   const monthlyTrend = trendData?.trend.filter((t) => t.dealType === "monthly") || [];
   const deposits = monthlyTrend.map((t) => (t as any).avgDeposit || 0).filter((d) => d > 0);
+
+  const latestSale = trendData?.trend
+    ?.filter(t => t.dealType === "sale")
+    .sort((a, b) => b.month.localeCompare(a.month))[0];
+  const latestMonthly = trendData?.trend
+    ?.filter(t => t.dealType === "monthly")
+    .sort((a, b) => b.month.localeCompare(a.month))[0];
 
   const { data: issuesData, isLoading: issuesLoading } = useIssues(
     selectedRegion?.regionId || "",
@@ -142,10 +149,10 @@ const ComplexScreen: React.FC<ComplexScreenProps> = ({
             <View style={styles.si}>
               <Text style={styles.sl}>매매 평균가</Text>
               <Text style={styles.sv}>
-                {priceLoading
+                {priceLoading || trendLoading
                   ? "조회 중..."
-                  : priceData?.avgSalePrice
-                    ? `${Math.round(priceData.avgSalePrice / 10000)}억 ${Math.round((priceData.avgSalePrice % 10000) / 1000)}천`
+                  : latestSale?.avgPrice
+                    ? `${Math.floor(latestSale.avgPrice / 10000)}억 ${Math.round((latestSale.avgPrice % 10000) / 1000)}천`
                     : "데이터 없음"}
               </Text>
             </View>
@@ -153,15 +160,15 @@ const ComplexScreen: React.FC<ComplexScreenProps> = ({
             <View style={styles.si}>
               <Text style={styles.sl}>전세 평균가</Text>
               <Text style={styles.sv}>
-                {priceLoading
+                {priceLoading || trendLoading
                   ? "조회 중..."
-                  : priceData?.avgJeonsePrice
-                    ? `${Math.round(priceData.avgJeonsePrice / 10000)}억 ${Math.round((priceData.avgJeonsePrice % 10000) / 1000)}천`
+                  : latestJeonse?.avgPrice
+                    ? `${Math.floor(latestJeonse.avgPrice / 10000)}억 ${Math.round((latestJeonse.avgPrice % 10000) / 1000)}천`
                     : "데이터 없음"}
               </Text>
               <Text style={styles.tertiary}>
-                {priceData?.jeonseRatio
-                  ? `전세가율 ${priceData.jeonseRatio}%`
+                {latestJeonse && latestSale
+                  ? `전세가율 ${Math.round(latestJeonse.avgPrice / latestSale.avgPrice * 100)}%`
                   : ""}
               </Text>
             </View>
@@ -171,22 +178,25 @@ const ComplexScreen: React.FC<ComplexScreenProps> = ({
             <View style={styles.si}>
               <Text style={styles.sl}>월세 평균</Text>
               <Text style={styles.svsm}>
-                {priceLoading
+                {priceLoading || trendLoading
                   ? "조회 중..."
-                  : priceData?.avgMonthlyRent
-                    ? priceData.avgMonthlyDeposit
-                      ? `보증금 ${Math.round(priceData.avgMonthlyDeposit / 1000)}천/월 ${priceData.avgMonthlyRent}만`
-                      : `월 ${priceData.avgMonthlyRent}만`
+                  : latestMonthly?.avgPrice
+                    ? latestMonthly?.avgDeposit
+                      ? `보증금 ${Math.floor(latestMonthly.avgDeposit / 1000)}천/월 ${latestMonthly.avgPrice}만`
+                      : `월 ${latestMonthly.avgPrice}만`
                     : "데이터 없음"}
               </Text>
             </View>
             <View style={styles.sp} />
             <View style={styles.si}>
-              <Text style={styles.sl}>이번달 거래량</Text>
+              <Text style={styles.sl}>최근 거래량</Text>
               <Text style={styles.sv}>
-                {priceLoading
+                {priceLoading || trendLoading
                   ? "조회 중..."
-                  : `${priceData?.recentTradeCount ?? 0}건`}
+                  : `${latestSale?.tradeCount ?? 0}건`}
+              </Text>
+              <Text style={styles.tertiary}>
+                {latestSale?.month ? `${latestSale.month.slice(0,4)}년 ${parseInt(latestSale.month.slice(5))}월 기준` : ""}
               </Text>
             </View>
           </View>

@@ -129,7 +129,7 @@ const AreaScreen: React.FC<AreaScreenProps> = ({
               <Text style={styles.sl}>매매 평균가</Text>
               <Text style={styles.sv}>
                 {priceLoading ? "조회 중..." : priceData?.avgSalePrice
-                  ? `${Math.round(priceData.avgSalePrice / 10000)}억 ${Math.round((priceData.avgSalePrice % 10000) / 1000)}천`
+                  ? `${Math.floor(priceData.avgSalePrice / 10000)}억 ${Math.round((priceData.avgSalePrice % 10000) / 1000)}천`
                   : "데이터 없음"}
               </Text>
               {changeRate && (
@@ -143,7 +143,7 @@ const AreaScreen: React.FC<AreaScreenProps> = ({
               <Text style={styles.sl}>전세 평균가</Text>
               <Text style={styles.sv}>
                 {priceLoading ? "조회 중..." : priceData?.avgJeonsePrice
-                  ? `${Math.round(priceData.avgJeonsePrice / 10000)}억 ${Math.round((priceData.avgJeonsePrice % 10000) / 1000)}천`
+                  ? `${Math.floor(priceData.avgJeonsePrice / 10000)}억 ${Math.round((priceData.avgJeonsePrice % 10000) / 1000)}천`
                   : "데이터 없음"}
               </Text>
             </View>
