@@ -185,7 +185,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ mapTab, setMapTab, go }) => {
           <KakaoMap
             lat={37.5665}
             lng={126.978}
-            level={8}
+            level={10}
             markers={[]}
             polygons={priceLayerData?.zones.map((zone) => ({
               code: zone.aptName || zone.zoneId,

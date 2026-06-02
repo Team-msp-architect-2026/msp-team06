@@ -204,6 +204,14 @@ const KakaoMap: React.FC<KakaoMapProps> = ({
         <button class="zoom-btn" onclick="zoomIn()">+</button>
         <button class="zoom-btn" onclick="zoomOut()">−</button>
       </div>
+      <div id="legend" style="position:absolute;left:10px;bottom:30px;z-index:10;background:white;border:1px solid #ddd;border-radius:8px;padding:8px 10px;font-size:11px;box-shadow:0 1px 3px rgba(0,0,0,0.2);">
+        <div style="margin-bottom:3px;font-weight:600;color:#333;font-size:11px;">평균가</div>
+        <div style="display:flex;align-items:center;gap:5px;margin-bottom:2px;"><div style="width:12px;height:12px;border-radius:2px;background:#D9534F;"></div><span style="color:#555;">높음</span></div>
+        <div style="display:flex;align-items:center;gap:5px;margin-bottom:2px;"><div style="width:12px;height:12px;border-radius:2px;background:#E8A838;"></div><span style="color:#555;"></span></div>
+        <div style="display:flex;align-items:center;gap:5px;margin-bottom:2px;"><div style="width:12px;height:12px;border-radius:2px;background:#5BAD6F;"></div><span style="color:#555;">중간</span></div>
+        <div style="display:flex;align-items:center;gap:5px;margin-bottom:2px;"><div style="width:12px;height:12px;border-radius:2px;background:#4A90D9;"></div><span style="color:#555;"></span></div>
+        <div style="display:flex;align-items:center;gap:5px;"><div style="width:12px;height:12px;border-radius:2px;background:#93C6E7;"></div><span style="color:#555;">낮음</span></div>
+      </div>
       <script>
         var map;
         kakao.maps.load(function() {

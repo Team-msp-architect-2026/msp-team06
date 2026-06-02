@@ -17,9 +17,9 @@ export const CHART_DATA: ChartDataItem[] = [
 
 // 메인 지도 탭 레이블
 export const MAP_TAB_LABELS: string[] = [
-  '이번달 매매 거래량 TOP 3',
-  '이번달 전세가율 낮은 단지 TOP 3',
-  '이번달 월세 부담 낮은 단지 TOP 3',
+  '서울시 아파트 매매 평균가',
+  '서울시 아파트 전세 평균가',
+  '서울시 아파트 월세 평균가',
 ];
 
 // 메인 지도 탭별 마커 색상
