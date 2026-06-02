@@ -113,6 +113,9 @@ const ComplexScreen: React.FC<ComplexScreenProps> = ({
   const latestSale = trendData?.trend
     ?.filter(t => t.dealType === "sale")
     .sort((a, b) => b.month.localeCompare(a.month))[0];
+  const latestJeonse = trendData?.trend
+    ?.filter(t => t.dealType === "jeonse")
+    .sort((a, b) => b.month.localeCompare(a.month))[0];
   const latestMonthly = trendData?.trend
     ?.filter(t => t.dealType === "monthly")
     .sort((a, b) => b.month.localeCompare(a.month))[0];
