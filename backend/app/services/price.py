@@ -440,7 +440,7 @@ async def get_price_trend_by_apt_seq(apt_seq: str, deal_type: str, period: str, 
         if deal_type == "all":
             result = await db.execute(
                 text("""
-                    SELECT month, avg_price, deal_type, trade_count
+                    SELECT month, avg_price, deal_type, trade_count, deposit
                     FROM price_trends
                     WHERE apt_seq = :apt_seq
                     AND apt_seq IS NOT NULL
@@ -452,7 +452,7 @@ async def get_price_trend_by_apt_seq(apt_seq: str, deal_type: str, period: str, 
         else:
             result = await db.execute(
                 text("""
-                    SELECT month, avg_price, deal_type, trade_count
+                    SELECT month, avg_price, deal_type, trade_count, deposit
                     FROM price_trends
                     WHERE apt_seq = :apt_seq
                     AND deal_type = :deal_type
@@ -473,6 +473,7 @@ async def get_price_trend_by_apt_seq(apt_seq: str, deal_type: str, period: str, 
                 "avgPrice": r[1],
                 "dealType": r[2],
                 "tradeCount": r[3],
+                "avgDeposit": r[4] if len(r) > 4 else None,
             }
             for r in rows
         ]

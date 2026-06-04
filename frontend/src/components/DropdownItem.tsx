@@ -33,18 +33,19 @@ const styles = StyleSheet.create({
   ddi: {
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    borderBottomWidth: 0.5,
+    paddingHorizontal: 14,
+    paddingVertical: 14,
+    borderBottomWidth: 1,
     borderBottomColor: "#E5E5E5",
-    gap: 8,
+    backgroundColor: "#FFFFFF",
+    gap: 10,
   },
-  icon: { width: 20, alignItems: "center" },
-  iconText: { fontSize: 12 },
+  icon: { width: 22, alignItems: "center" },
+  iconText: { fontSize: 14 },
   info: { flex: 1 },
-  ddn: { fontSize: 13, color: "#111111", fontWeight: "500" },
-  dds: { fontSize: 11, color: "#888888", marginTop: 1 },
-  dda: { fontSize: 16, color: "#AAAAAA" },
+  ddn: { fontSize: 15, color: "#111111", fontWeight: "600" },
+  dds: { fontSize: 12, color: "#888888", marginTop: 2 },
+  dda: { fontSize: 18, color: "#CCCCCC" },
 });
 
 export default DropdownItem;

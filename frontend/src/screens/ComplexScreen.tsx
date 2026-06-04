@@ -90,7 +90,7 @@ const ComplexScreen: React.FC<ComplexScreenProps> = ({
     dealYmd,
   );
 
-  const { data: trendData } = usePriceTrend(
+  const { data: trendData, isLoading: trendLoading } = usePriceTrend(
   selectedRegion?.regionId || "",
   selectedRegion?.lat || 0,
   selectedRegion?.lng || 0,
@@ -109,6 +109,16 @@ const ComplexScreen: React.FC<ComplexScreenProps> = ({
 
   const monthlyTrend = trendData?.trend.filter((t) => t.dealType === "monthly") || [];
   const deposits = monthlyTrend.map((t) => (t as any).avgDeposit || 0).filter((d) => d > 0);
+
+  const latestSale = trendData?.trend
+    ?.filter(t => t.dealType === "sale")
+    .sort((a, b) => b.month.localeCompare(a.month))[0];
+  const latestJeonse = trendData?.trend
+    ?.filter(t => t.dealType === "jeonse")
+    .sort((a, b) => b.month.localeCompare(a.month))[0];
+  const latestMonthly = trendData?.trend
+    ?.filter(t => t.dealType === "monthly")
+    .sort((a, b) => b.month.localeCompare(a.month))[0];
 
   const { data: issuesData, isLoading: issuesLoading } = useIssues(
     selectedRegion?.regionId || "",
@@ -142,10 +152,10 @@ const ComplexScreen: React.FC<ComplexScreenProps> = ({
             <View style={styles.si}>
               <Text style={styles.sl}>매매 평균가</Text>
               <Text style={styles.sv}>
-                {priceLoading
+                {priceLoading || trendLoading
                   ? "조회 중..."
-                  : priceData?.avgSalePrice
-                    ? `${Math.round(priceData.avgSalePrice / 10000)}억 ${Math.round((priceData.avgSalePrice % 10000) / 1000)}천`
+                  : latestSale?.avgPrice
+                    ? `${Math.floor(latestSale.avgPrice / 10000)}억 ${Math.round((latestSale.avgPrice % 10000) / 1000)}천`
                     : "데이터 없음"}
               </Text>
             </View>
@@ -153,15 +163,15 @@ const ComplexScreen: React.FC<ComplexScreenProps> = ({
             <View style={styles.si}>
               <Text style={styles.sl}>전세 평균가</Text>
               <Text style={styles.sv}>
-                {priceLoading
+                {priceLoading || trendLoading
                   ? "조회 중..."
-                  : priceData?.avgJeonsePrice
-                    ? `${Math.round(priceData.avgJeonsePrice / 10000)}억 ${Math.round((priceData.avgJeonsePrice % 10000) / 1000)}천`
+                  : latestJeonse?.avgPrice
+                    ? `${Math.floor(latestJeonse.avgPrice / 10000)}억 ${Math.round((latestJeonse.avgPrice % 10000) / 1000)}천`
                     : "데이터 없음"}
               </Text>
               <Text style={styles.tertiary}>
-                {priceData?.jeonseRatio
-                  ? `전세가율 ${priceData.jeonseRatio}%`
+                {latestJeonse && latestSale
+                  ? `전세가율 ${Math.round(latestJeonse.avgPrice / latestSale.avgPrice * 100)}%`
                   : ""}
               </Text>
             </View>
@@ -171,22 +181,25 @@ const ComplexScreen: React.FC<ComplexScreenProps> = ({
             <View style={styles.si}>
               <Text style={styles.sl}>월세 평균</Text>
               <Text style={styles.svsm}>
-                {priceLoading
+                {priceLoading || trendLoading
                   ? "조회 중..."
-                  : priceData?.avgMonthlyRent
-                    ? priceData.avgMonthlyDeposit
-                      ? `보증금 ${Math.round(priceData.avgMonthlyDeposit / 1000)}천/월 ${priceData.avgMonthlyRent}만`
-                      : `월 ${priceData.avgMonthlyRent}만`
+                  : latestMonthly?.avgPrice
+                    ? latestMonthly?.avgDeposit
+                      ? `보증금 ${Math.floor(latestMonthly.avgDeposit / 1000)}천/월 ${latestMonthly.avgPrice}만`
+                      : `월 ${latestMonthly.avgPrice}만`
                     : "데이터 없음"}
               </Text>
             </View>
             <View style={styles.sp} />
             <View style={styles.si}>
-              <Text style={styles.sl}>이번달 거래량</Text>
+              <Text style={styles.sl}>최근 거래량</Text>
               <Text style={styles.sv}>
-                {priceLoading
+                {priceLoading || trendLoading
                   ? "조회 중..."
-                  : `${priceData?.recentTradeCount ?? 0}건`}
+                  : `${latestSale?.tradeCount ?? 0}건`}
+              </Text>
+              <Text style={styles.tertiary}>
+                {latestSale?.month ? `${latestSale.month.slice(0,4)}년 ${parseInt(latestSale.month.slice(5))}월 기준` : ""}
               </Text>
             </View>
           </View>
@@ -414,47 +427,52 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     paddingHorizontal: 16,
-    paddingVertical: 13,
-    borderBottomWidth: 0.5,
+    paddingVertical: 14,
+    borderBottomWidth: 1,
     borderBottomColor: "#E5E5E5",
     backgroundColor: "#FFFFFF",
     gap: 10,
   },
-  bk: { fontSize: 22, color: "#111111" },
-  regionName: { fontSize: 14, fontWeight: "500", color: "#111111" },
-  regionAddr: { fontSize: 10, color: "#888888" },
+  bk: { fontSize: 24, color: "#111111" },
+  regionName: { fontSize: 16, fontWeight: "700", color: "#111111" },
+  regionAddr: { fontSize: 12, color: "#888888" },
   sc: { flex: 1 },
   scard: {
     backgroundColor: "#FFFFFF",
     borderRadius: 14,
-    borderWidth: 0.5,
+    borderWidth: 1,
     borderColor: "#E5E5E5",
-    padding: 14,
-    margin: 10,
+    padding: 16,
+    margin: 12,
     marginBottom: 0,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.06,
+    shadowRadius: 4,
+    elevation: 2,
   },
   sr: { flexDirection: "row", alignItems: "flex-start" },
   si: { flex: 1 },
-  sp: { width: 0.5, backgroundColor: "#E5E5E5", marginHorizontal: 10 },
-  sdv: { height: 0.5, backgroundColor: "#E5E5E5", marginVertical: 10 },
-  sl: { fontSize: 10, color: "#888888", marginBottom: 2 },
-  sv: { fontSize: 16, fontWeight: "600", color: "#111111" },
-  svsm: { fontSize: 12, fontWeight: "500", color: "#111111" },
-  sd: { fontSize: 10, color: "#27AE60", marginTop: 1 },
-  tertiary: { fontSize: 10, color: "#AAAAAA", marginTop: 1 },
-  loadingText: { fontSize: 11, color: "#AAAAAA" },
-  amenityList: { marginTop: 6 },
+  sp: { width: 1, backgroundColor: "#E5E5E5", marginHorizontal: 12 },
+  sdv: { height: 1, backgroundColor: "#E5E5E5", marginVertical: 12 },
+  sl: { fontSize: 12, color: "#888888", marginBottom: 4 },
+  sv: { fontSize: 18, fontWeight: "700", color: "#111111" },
+  svsm: { fontSize: 14, fontWeight: "600", color: "#111111" },
+  sd: { fontSize: 11, color: "#27AE60", marginTop: 2 },
+  tertiary: { fontSize: 11, color: "#AAAAAA", marginTop: 2 },
+  loadingText: { fontSize: 12, color: "#AAAAAA" },
+  amenityList: { marginTop: 8 },
   amenityRow: {
     flexDirection: "row",
     alignItems: "center",
-    paddingVertical: 4,
+    paddingVertical: 6,
   },
-  amenityDot: { width: 8, height: 8, borderRadius: 4, marginRight: 6 },
-  amenityCat: { fontSize: 11, color: "#888888", width: 50 },
-  amenityName: { flex: 1, fontSize: 11, color: "#111111", fontWeight: "500" },
-  amenityDist: { fontSize: 11, color: "#AAAAAA" },
+  amenityDot: { width: 9, height: 9, borderRadius: 5, marginRight: 8 },
+  amenityCat: { fontSize: 12, color: "#888888", width: 56 },
+  amenityName: { flex: 1, fontSize: 13, color: "#111111", fontWeight: "500" },
+  amenityDist: { fontSize: 12, color: "#AAAAAA" },
   mapPlaceholder: {
-    margin: 10,
+    margin: 12,
     marginBottom: 0,
     height: 180,
     backgroundColor: "#E8EEE4",
@@ -464,46 +482,44 @@ const styles = StyleSheet.create({
   },
   tabbar: {
     flexDirection: "row",
-    margin: 10,
+    margin: 12,
     marginBottom: 0,
-    backgroundColor: "#F5F5F5",
+    backgroundColor: "#EEEEEE",
     borderRadius: 10,
     padding: 3,
   },
-  ti: { flex: 1, alignItems: "center", paddingVertical: 7, borderRadius: 8 },
+  ti: { flex: 1, alignItems: "center", paddingVertical: 8, borderRadius: 8 },
   tiOn: {
-    backgroundColor: "#FFFFFF",
-    borderWidth: 0.5,
-    borderColor: "#E5E5E5",
+    backgroundColor: "#2563EB",
   },
-  tiText: { fontSize: 12, color: "#888888" },
-  tiTextOn: { color: "#111111", fontWeight: "500" },
-  tc: { padding: 10 },
-  ptog: { flexDirection: "row", marginBottom: 10 },
+  tiText: { fontSize: 13, color: "#888888" },
+  tiTextOn: { color: "#FFFFFF", fontWeight: "600" },
+  tc: { padding: 12 },
+  ptog: { flexDirection: "row", marginBottom: 12 },
   ptb: {
     flex: 1,
     alignItems: "center",
-    paddingVertical: 6,
+    paddingVertical: 8,
     borderRadius: 8,
-    backgroundColor: "#F5F5F5",
+    backgroundColor: "#EEEEEE",
   },
-  ptbOn: { backgroundColor: "#111111" },
-  ptbText: { fontSize: 12, color: "#888888" },
-  ptbTextOn: { color: "white", fontWeight: "500" },
-  rtog: { flexDirection: "row", marginBottom: 10 },
+  ptbOn: { backgroundColor: "#2563EB" },
+  ptbText: { fontSize: 13, color: "#888888" },
+  ptbTextOn: { color: "#FFFFFF", fontWeight: "600" },
+  rtog: { flexDirection: "row", marginBottom: 12 },
   rtb: {
     flex: 1,
     alignItems: "center",
-    paddingVertical: 6,
+    paddingVertical: 8,
     borderRadius: 8,
-    backgroundColor: "#F5F5F5",
+    backgroundColor: "#EEEEEE",
   },
-  rtbOn: { backgroundColor: "#111111" },
-  rtbText: { fontSize: 12, color: "#888888" },
-  rtbTextOn: { color: "white", fontWeight: "500" },
-  chartTitle: { fontSize: 12, color: "#888888", marginBottom: 8 },
+  rtbOn: { backgroundColor: "#2563EB" },
+  rtbText: { fontSize: 13, color: "#888888" },
+  rtbTextOn: { color: "#FFFFFF", fontWeight: "600" },
+  chartTitle: { fontSize: 13, color: "#888888", marginBottom: 8 },
   emptyText: {
-    fontSize: 12,
+    fontSize: 13,
     color: "#AAAAAA",
     textAlign: "center",
     paddingVertical: 24,

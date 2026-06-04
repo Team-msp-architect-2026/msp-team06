@@ -12,6 +12,7 @@ import {
 import DropdownItem from "../components/DropdownItem";
 import IssueRow from "../components/IssueRow";
 import KakaoMap from "../components/KakaoMap";
+import seoulGu from "../constants/seoul_gu.json";
 import { COLORS } from "../constants/colors";
 import { MAP_TAB_LABELS } from "../constants/mockData";
 import { useNewsHighlights } from "../hooks/useNews";
@@ -42,7 +43,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ mapTab, setMapTab, go }) => {
     setListSearchVal,
   } = useAppStore();
 
-  const TAB_TYPES = ["sale_count", "jeonse_ratio", "monthly_burden"];
+  const TAB_TYPES = ["sale", "jeonse", "monthly"];
   const { data: priceLayerData } = usePriceLayer(
     "seoul-11680",  // 서울 전체 기준 (임시)
     TAB_TYPES[mapTab]
@@ -102,17 +103,12 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ mapTab, setMapTab, go }) => {
         showsVerticalScrollIndicator={false}
         scrollEventThrottle={16}
       >
-        {/* 검색 안내 텍스트 */}
-        <View style={{ padding: 14, paddingBottom: 4 }}>
-          <Text style={styles.title}>어디서 살고 싶으세요?</Text>
-          <Text style={styles.subtitle}>동 이름이나 아파트명으로 검색</Text>
-        </View>
 
         {/* 검색창 */}
         <View style={styles.sb}>
           <TextInput
             style={styles.sbInput}
-            placeholder="성수동, 성수 롯데캐슬 파크..."
+            placeholder="동 이름이나 아파트명으로 검색"
             placeholderTextColor={COLORS.textTertiary}
             value={searchVal}
             onChangeText={(text) => setSearchVal(text.trim())}
@@ -155,12 +151,11 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ mapTab, setMapTab, go }) => {
         {/* 지도 탭 라벨 */}
         <View style={styles.mclb}>
           <Text style={styles.mct}>{MAP_TAB_LABELS[mapTab]}</Text>
-          <Text style={styles.mcs}>단지 단위 · 탭하면 분석 이동</Text>
         </View>
 
         {/* 지도 탭 버튼 */}
         <View style={styles.mtab}>
-          {["매매 거래량", "전세가율 낮은 곳", "월세 부담 낮은 곳"].map(
+          {["매매", "전세", "월세"].map(
             (t, i) => (
               <TouchableOpacity
                 key={i}
@@ -190,16 +185,15 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ mapTab, setMapTab, go }) => {
           <KakaoMap
             lat={37.5665}
             lng={126.978}
-            level={8}
-            markers={priceLayerData?.zones.map((zone) => ({
-              lat: zone.lat,
-              lng: zone.lng,
-              type: "apartment",
+            level={10}
+            markers={[]}
+            polygons={priceLayerData?.zones.map((zone) => ({
+              code: zone.aptName || zone.zoneId,
+              grade: zone.priceGrade,
               name: zone.aptName || "",
-              markerId: zone.zoneId,
-              kakaoPlaceId: zone.kakaoPlaceId,
-              aptSeq: zone.aptSeq,
+              value: zone.value,
             }))}
+            geoJson={seoulGu}
             onMarkerClick={(marker) => {
               if (marker.kakaoPlaceId) {
                 setSelectedRegion({
@@ -247,62 +241,67 @@ const styles = StyleSheet.create({
   scr: { flex: 1, backgroundColor: "#F5F5F5" },
   bar: {
     paddingHorizontal: 16,
-    paddingVertical: 13,
-    borderBottomWidth: 0.5,
+    paddingVertical: 14,
+    borderBottomWidth: 1,
     borderBottomColor: "#E5E5E5",
     backgroundColor: "#FFFFFF",
   },
-  logo: { fontSize: 19, fontWeight: "500", color: "#111111" },
+  logo: { fontSize: 22, fontWeight: "700", color: "#111111" },
   sc: { flex: 1 },
-  title: { fontSize: 17, fontWeight: "500", color: "#111111", marginBottom: 3 },
-  subtitle: { fontSize: 12, color: "#888888" },
+  title: { fontSize: 20, fontWeight: "700", color: "#111111", marginBottom: 4 },
+  subtitle: { fontSize: 14, color: "#888888" },
   sb: {
     flexDirection: "row",
     alignItems: "center",
     backgroundColor: "#FFFFFF",
-    borderWidth: 1,
-    borderColor: "#E0E0E0",
-    borderRadius: 11,
-    paddingHorizontal: 12,
-    paddingVertical: 9,
+    borderWidth: 1.5,
+    borderColor: "#CCCCCC",
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
     marginHorizontal: 16,
     marginTop: 14,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
+    elevation: 2,
   },
-  sbInput: { flex: 1, fontSize: 13, color: "#111111" },
+  sbInput: { flex: 1, fontSize: 15, color: "#111111" },
   dd: {
     marginHorizontal: 16,
     backgroundColor: "#FFFFFF",
+    borderRadius: 12,
     borderWidth: 1,
     borderColor: "#E0E0E0",
-    borderRadius: 11,
     marginTop: 4,
+    overflow: "hidden",
   },
-  loadingText: { fontSize: 11, color: "#AAAAAA", padding: 10 },
+  loadingText: { fontSize: 12, color: "#AAAAAA", padding: 10 },
   mclb: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
     marginHorizontal: 16,
-    marginTop: 10,
+    marginTop: 14,
   },
-  mct: { fontSize: 12, fontWeight: "500", color: "#111111" },
-  mcs: { fontSize: 10, color: "#AAAAAA" },
+  mct: { fontSize: 14, fontWeight: "600", color: "#111111" },
+  mcs: { fontSize: 11, color: "#AAAAAA" },
   mtab: {
     flexDirection: "row",
-    backgroundColor: "#F5F5F5",
+    backgroundColor: "#EEEEEE",
     borderRadius: 10,
     padding: 3,
     marginHorizontal: 16,
-    marginTop: 6,
+    marginTop: 8,
   },
-  mt: { flex: 1, alignItems: "center", paddingVertical: 6, borderRadius: 8 },
+  mt: { flex: 1, alignItems: "center", paddingVertical: 7, borderRadius: 8 },
   mtOn: {
-    backgroundColor: "#FFFFFF",
-    borderWidth: 0.5,
-    borderColor: "#E5E5E5",
+    backgroundColor: "#2563EB",
+    borderWidth: 0,
   },
-  mtText: { fontSize: 10, color: "#888888" },
-  mtTextOn: { color: "#111111", fontWeight: "500" },
+  mtText: { fontSize: 11, color: "#888888" },
+  mtTextOn: { color: "#FFFFFF", fontWeight: "600" },
   mapPlaceholder: {
     marginHorizontal: 16,
     marginTop: 6,
@@ -312,8 +311,8 @@ const styles = StyleSheet.create({
     borderWidth: 0.5,
     borderColor: "#E5E5E5",
   },
-  sec: { marginTop: 10, paddingHorizontal: 16 },
-  st: { fontSize: 13, fontWeight: "500", color: "#111111", marginBottom: 7 },
+  sec: { marginTop: 14, paddingHorizontal: 16 },
+  st: { fontSize: 16, fontWeight: "700", color: "#111111", marginBottom: 10 },
 });
 
 export default HomeScreen;

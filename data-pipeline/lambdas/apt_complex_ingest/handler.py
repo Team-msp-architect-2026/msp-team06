@@ -70,6 +70,32 @@ def fetch_apt_complex_list(sigungu_cd: str, api_key: str) -> list:
         return []
 
 
+
+def get_kakao_api_key() -> str:
+    env = os.environ.get("ENV", "dev")
+    try:
+        response = secretsmanager.get_secret_value(SecretId=f"homelens/{env}/kakao/map-api")
+        return json.loads(response["SecretString"])["rest_api_key"]
+    except Exception as e:
+        print(f"카카오 API 키 조회 실패: {e}")
+        return ""
+
+def search_kakao_place_id(address: str, name: str, api_key: str) -> str:
+    query = f"{address} {name}".strip()
+    encoded = urllib.parse.quote(query)
+    url = f"https://dapi.kakao.com/v2/local/search/keyword.json?query={encoded}&size=1"
+    try:
+        req = urllib.request.Request(url, headers={"Authorization": f"KakaoAK {api_key}"})
+        with urllib.request.urlopen(req, timeout=5) as response:
+            data = json.loads(response.read().decode("utf-8"))
+            docs = data.get("documents", [])
+            for doc in docs:
+                if "아파트" in doc.get("category_name", ""):
+                    return doc.get("id", "")
+    except Exception as e:
+        print(f"카카오 검색 실패: {e}")
+    return ""
+
 def get_region_id(conn, lawd_cd: str) -> str:
     with conn.cursor() as cur:
         cur.execute("""
@@ -81,7 +107,7 @@ def get_region_id(conn, lawd_cd: str) -> str:
         return row[0] if row else f"REGION_{lawd_cd}"
 
 
-def save_location(conn, item: dict, region_id: str):
+def save_location(conn, item: dict, region_id: str, kakao_api_key: str = ""):
     address = " ".join(filter(None, [
         item.get("as1", ""), item.get("as2", ""),
         item.get("as3", ""), item.get("as4", ""),
@@ -91,28 +117,29 @@ def save_location(conn, item: dict, region_id: str):
 
     # kaptCode를 apt_seq로 직접 사용 (단지 상세 API 500 오류로 우회)
     apt_seq = kapt_code
+    kakao_place_id = search_kakao_place_id(address, item.get("kaptName", ""), kakao_api_key) if kakao_api_key else ""
 
     with conn.cursor() as cur:
         cur.execute("SELECT id FROM locations WHERE id = %s", (loc_id,))
         exists = cur.fetchone()
         if exists:
             cur.execute("""
-                UPDATE locations SET name = %s, address = %s, apt_seq = %s
+                UPDATE locations SET name = %s, address = %s, apt_seq = %s, kakao_place_id = %s
                 WHERE id = %s
-            """, (item.get("kaptName", ""), address, apt_seq, loc_id))
+            """, (item.get("kaptName", ""), address, apt_seq, kakao_place_id or None, loc_id))
         else:
             cur.execute("""
                 INSERT INTO locations (
                     id, region_id, name, address,
                     property_type, lat, lng,
-                    floors, build_year, apt_seq, created_at
-                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())
+                    floors, build_year, apt_seq, kakao_place_id, created_at
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())
             """, (
                 loc_id, region_id,
                 item.get("kaptName", ""),
                 address, "apartment",
                 0.0, 0.0, None, None,
-                apt_seq,
+                apt_seq, kakao_place_id or None,
             ))
 
 
@@ -133,6 +160,7 @@ def lambda_handler(event, context):
     total_failed = 0
 
     try:
+        kakao_api_key = get_kakao_api_key()
         conn = get_db_connection()
         for gu_name in target_gu:
             sigungu_cd = SEOUL_SIGUNGU_CODES.get(gu_name)
@@ -148,7 +176,7 @@ def lambda_handler(event, context):
             region_id = get_region_id(conn, sigungu_cd)
             for item in items:
                 try:
-                    save_location(conn, item, region_id)
+                    save_location(conn, item, region_id, kakao_api_key)
                     total_saved += 1
                 except Exception as e:
                     print(f"단지 저장 실패 ({item.get('kaptName')}): {e}")

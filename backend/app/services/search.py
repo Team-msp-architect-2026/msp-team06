@@ -30,6 +30,7 @@ async def search_address(keyword: str) -> dict:
 async def search_kakao_keyword(keyword: str, lat: float = None, lng: float = None) -> dict:
     # 카카오맵 키워드 검색
     headers = {"Authorization": f"KakaoAK {settings.kakao_api_key}"}
+    # 서울 중심 좌표 고정 (MVP 서울 전용)
     params = {"query": keyword}
     if lat and lng:
         params["y"] = lat

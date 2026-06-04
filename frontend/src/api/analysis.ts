@@ -18,6 +18,7 @@ export interface PriceTrendItem {
   avgPrice: number;
   dealType: string;
   tradeCount: number;
+  avgDeposit?: number | null;
 }
 
 export interface PriceTrendResponse {

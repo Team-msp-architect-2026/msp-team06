@@ -16,3 +16,4 @@ anthropic==0.34.2
 xmltodict==1.0.4
 boto3==1.35.0
 psycopg2-binary==2.9.9
+prometheus-client>=0.20.0

@@ -33,7 +33,8 @@ const BarChart: React.FC<BarChartProps> = ({ data, color, unit, divisor }) => {
       <View style={styles.chtBars}>
         {recent.map((item, i) => {
           const price = item.avgPrice / divisor;
-          const h = Math.round((price / mx) * 68);
+          const barWidth = recent.length === 1 ? "30%" : recent.length === 2 ? "40%" : recent.length === 3 ? "50%" : "60%";
+        const h = Math.round((price / mx) * 68);
           const lbl =
             divisor === 10000
               ? (price).toFixed(1) + "억"
@@ -41,7 +42,7 @@ const BarChart: React.FC<BarChartProps> = ({ data, color, unit, divisor }) => {
           return (
             <View key={i} style={styles.cc}>
               <Text style={styles.cv}>{lbl}</Text>
-              <View style={styles.cbw}>
+              <View style={[styles.cbw, { width: barWidth }]}>
                 <View style={[styles.cb, { height: h, backgroundColor: color }]} />
               </View>
             </View>
@@ -66,7 +67,7 @@ const styles = StyleSheet.create({
   cc: { flex: 1, alignItems: "center" },
   cv: { fontSize: 10, color: "#111111", marginBottom: 2, fontWeight: "500" },
   cbw: {
-    width: "60%",
+    width: "60%" as any,
     alignItems: "center",
     justifyContent: "flex-end",
     height: 68,
