@@ -203,7 +203,7 @@ const AreaScreen: React.FC<AreaScreenProps> = ({
             markers={[]}
             geoJson={seoulDong}
             polygons={selectedRegion?.name ? [{
-              code: selectedRegion.name,
+              code: selectedRegion.fullAddress || selectedRegion.name,
               grade: 3,
               name: selectedRegion.name,
               value: 0,

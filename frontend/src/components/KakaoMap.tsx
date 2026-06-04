@@ -65,14 +65,36 @@ const KakaoMap: React.FC<KakaoMapProps> = ({
   const dongCoordsArr = (() => {
     if (!geoJson || !highlightOnly || polygons.length === 0) return [];
     const targetName = polygons[0]?.name || '';
-    // 1순위: 정확 매칭
-    const exact = geoJson.features.filter((f: any) => f.properties.name === targetName);
-    if (exact.length > 0) return exact.map((f: any) => f.geometry.coordinates[0]);
-    // 2순위: 동 제거 후 퍼지 매칭 (숫자는 유지)
-    // 성수동1가 → 성수1가, 성수1가1동/성수1가2동 매칭
+    const fullAddress = polygons[0]?.code || '';
+    const guMatch = fullAddress.match(/([가-힣]+구)/);
+    const targetGu = guMatch ? guMatch[1] : null;
+    console.log('targetGu:', targetGu, '/ fullAddress:', fullAddress);
+    // 1순위: 구 정보 있으면 구까지 매칭
+    if (targetGu) {
+      const guExact = geoJson.features.filter((f: any) =>
+        f.properties.name === targetName && f.properties.adm_nm?.includes(targetGu)
+      );
+      if (guExact.length > 0) return guExact.map((f: any) => f.geometry.coordinates[0]);
+      // 구 정보 있는데 정확매칭 실패 시 바로 퍼지로 (다른 구 삼성동에 걸리는 것 방지)
+      const cleaned2 = targetName.replace(/동([0-9가])/g, '$1').replace(/동$/, '');
+      if (cleaned2.length >= 2) {
+        const guFuzzy = geoJson.features.filter((f: any) => {
+          if (!f.properties.adm_nm?.includes(targetGu)) return false;
+          const fname = f.properties.name.replace(/동$/, '');
+          return fname.includes(cleaned2) || cleaned2.includes(fname);
+        });
+        if (guFuzzy.length > 0) return guFuzzy.map((f: any) => f.geometry.coordinates[0]);
+      }
+    }
+    // 2순위: 정확 매칭 (구 정보 없을 때만)
+    if (!targetGu) {
+      const exact = geoJson.features.filter((f: any) => f.properties.name === targetName);
+      if (exact.length > 0) return exact.map((f: any) => f.geometry.coordinates[0]);
+    }
     const cleaned = targetName.replace(/동([0-9가])/g, '$1').replace(/동$/, '');
     if (cleaned.length < 2) return [];
     const fuzzy = geoJson.features.filter((f: any) => {
+      if (targetGu && f.properties.adm_nm && !f.properties.adm_nm.includes(targetGu)) return false;
       const fname = f.properties.name.replace(/동$/, '');
       return fname.includes(cleaned) || cleaned.includes(fname);
     });
