@@ -91,7 +91,7 @@ const AreaScreen: React.FC<AreaScreenProps> = ({
     selectedRegion?.lat || 0,
     selectedRegion?.lng || 0,
     "infra",
-    2000,
+    800,
   );
 
   // 지하철 노선명 추출 (중복 제거)
@@ -181,23 +181,7 @@ const AreaScreen: React.FC<AreaScreenProps> = ({
               </Text>
             </View>
           </View>
-          <View style={styles.sdv} />
 
-          {/* 지하철 노선 */}
-          <Text style={styles.sl}>지하철 노선</Text>
-          <View style={styles.subwayRow}>
-            {markerLoading ? (
-              <Text style={styles.loadingText}>불러오는 중...</Text>
-            ) : subwayLines.length > 0 ? (
-              subwayLines.map((line, i) => (
-                <View key={i} style={styles.subwayTag}>
-                  <Text style={styles.subwayTagText}>{line} 통과</Text>
-                </View>
-              ))
-            ) : (
-              <Text style={styles.loadingText}>반경 내 지하철 없음</Text>
-            )}
-          </View>
         </View>
 
         {/* 지도 영역 - 터치 시 스크롤 고정 */}
@@ -216,15 +200,7 @@ const AreaScreen: React.FC<AreaScreenProps> = ({
             lat={selectedRegion?.lat || 37.5665}
             lng={selectedRegion?.lng || 126.978}
             level={5}
-            markers={markerData?.markers
-              .filter((m) => m.markerType === "subway")
-              .map((m) => ({
-                lat: m.lat,
-                lng: m.lng,
-                type: m.markerType,
-                name: m.name,
-                markerId: m.markerId,
-              }))}
+            markers={[]}
             geoJson={seoulDong}
             polygons={selectedRegion?.name ? [{
               code: selectedRegion.name,
