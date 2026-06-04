@@ -67,7 +67,11 @@ async def search_regions(
         # 1순위: 동 단위 검색 (카카오 주소 검색 API)
         DONG_SUFFIXES = ["동", "읍", "면", "리", "가"]
         # 부분 일치: "압구정" → "압구정동" 도 검색
-        q_dong = q if any(q.endswith(s) for s in DONG_SUFFIXES) else None
+        BUILDING_KEYWORDS = ["아파트", "빌라", "오피스텔", "주상복합"]
+        if any(kw in q for kw in BUILDING_KEYWORDS):
+            q_dong = None
+        else:
+            q_dong = q if any(q.endswith(s) for s in DONG_SUFFIXES) else None
         # "관악구 신사동" 처럼 구+동 형태면 마지막 토큰을 동 이름으로
         tokens = q.split()
         if len(tokens) >= 2 and any(tokens[-1].endswith(s) for s in DONG_SUFFIXES):
