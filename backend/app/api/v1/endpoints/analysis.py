@@ -27,6 +27,7 @@ from app.services.price import (
     get_price_trend_by_apt_seq,         
     get_price_stats_by_apt_seq,
     get_price_by_dong_name,
+    get_price_trend_by_dong_name,
 )
 from app.services.news import get_region_issues
 
@@ -162,6 +163,18 @@ async def get_price_trend_endpoint(
     aptSeq: Optional[str] = Query(None),  
     db: AsyncSession = Depends(get_db),
 ):
+
+    # 0순위: 동 단위
+    if regionId.startswith("KAKAO_DONG_") and regionName:
+        trend = await get_price_trend_by_dong_name(regionName, dealType, period, db)
+        if trend:
+            return {
+                "trend": trend,
+                "changeRate1m": 0.0,
+                "changeRate3m": 0.0,
+                "changeRate1y": 0.0,
+                "dataBaseDate": date.today(),
+            }
 
     # 1순위: apt_seq 기반 DB 조회
     if aptSeq:
