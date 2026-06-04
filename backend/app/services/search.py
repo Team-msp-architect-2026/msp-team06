@@ -30,10 +30,15 @@ async def search_address(keyword: str) -> dict:
 async def search_kakao_keyword(keyword: str, lat: float = None, lng: float = None) -> dict:
     # 카카오맵 키워드 검색
     headers = {"Authorization": f"KakaoAK {settings.kakao_api_key}"}
-    params = {"query": keyword}
-    if lat and lng:
-        params["y"] = lat
-        params["x"] = lng
+    # 서울 중심 좌표 고정 (MVP 서울 전용)
+    SEOUL_LAT, SEOUL_LNG = 37.5665, 126.978
+    params = {
+        "query": keyword,
+        "y": lat or SEOUL_LAT,
+        "x": lng or SEOUL_LNG,
+        "radius": 30000,  # 서울 반경 약 30km
+        "sort": "distance",
+    }
     async with httpx.AsyncClient() as client:
         response = await client.get(KAKAO_SEARCH_URL, headers=headers, params=params)
         response.raise_for_status()

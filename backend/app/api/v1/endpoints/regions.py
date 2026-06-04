@@ -84,7 +84,7 @@ async def search_regions(
                     address = doc.get("address", {})
                     name = address.get("region_3depth_name", "")
                     full_address = f"서울특별시 {address.get('region_1depth_name', '')} {address.get('region_2depth_name', '')} {name}"
-                    if name and name not in seen_names and name.endswith(tuple(DONG_SUFFIXES)):
+                    if name and name not in seen_names and name.endswith(tuple(DONG_SUFFIXES)) and "서울" in full_address:
                         seen_names.add(name)
                         results.append({
                             "regionId": f"KAKAO_DONG_{doc.get('x', '')}_{doc.get('y', '')}",
@@ -102,6 +102,9 @@ async def search_regions(
                     name = doc.get("place_name", "")
                     kakao_place_id = doc.get("id", "")
                     if not name or name in seen_names or not is_apartment(doc):
+                        continue
+                    address = doc.get("road_address_name") or doc.get("address_name", "")
+                    if "서울" not in address:
                         continue
                     seen_names.add(name)
                     apt_seq = await get_apt_seq_by_kakao_id(kakao_place_id, db)
