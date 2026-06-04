@@ -36,8 +36,8 @@ async def search_kakao_keyword(keyword: str, lat: float = None, lng: float = Non
         "query": keyword,
         "y": lat or SEOUL_LAT,
         "x": lng or SEOUL_LNG,
-        "radius": 30000,  # 서울 반경 약 30km
-        "sort": "distance",
+        # 서울 bounding box (서울만 검색)
+        "rect": "126.734086,37.413294,127.269311,37.715133",
     }
     async with httpx.AsyncClient() as client:
         response = await client.get(KAKAO_SEARCH_URL, headers=headers, params=params)
