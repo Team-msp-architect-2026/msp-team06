@@ -29,6 +29,7 @@ interface KakaoMapProps {
   onMarkerClick?: (marker: MarkerInfo) => void;
   polygons?: PolygonInfo[];
   geoJson?: any;
+  highlightOnly?: boolean;
 }
 
 const KAKAO_APP_KEY = "644f705c07c7107a5ab76925f451797a";
@@ -41,6 +42,7 @@ const KakaoMap: React.FC<KakaoMapProps> = ({
   onMarkerClick,
   polygons = [],
   geoJson,
+  highlightOnly = false,
 }) => {
   const markerColors: Record<string, string> = {
     subway: "#3CB44B",
@@ -72,6 +74,9 @@ const KakaoMap: React.FC<KakaoMapProps> = ({
         valueMap[p.code] = p.value;
       });
       var features = ${JSON.stringify(geoJson.features)};
+      if (${JSON.stringify(highlightOnly)}) {
+        features = features.filter(function(f) { return gradeMap[f.properties.name] !== undefined; });
+      }
       features.forEach(function(feature) {
         var code = feature.properties.name;
         var grade = gradeMap[code] || 3;
@@ -275,4 +280,4 @@ const styles = StyleSheet.create({
   map: { flex: 1 },
 });
 
-export default React.memo(KakaoMap);
+export default React.memo<KakaoMapProps>(KakaoMap);

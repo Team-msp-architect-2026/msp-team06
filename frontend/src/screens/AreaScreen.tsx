@@ -11,6 +11,7 @@ import {
 import AIReport from "../components/AIReport";
 import IssueCard from "../components/IssueCard";
 import KakaoMap from "../components/KakaoMap";
+import seoulDong from "../constants/seoul_dong.json";
 import { useIssues, usePrice, usePriceTrend } from "../hooks/useAnalysis";
 import { useMapMarkers } from "../hooks/useMap";
 import { useAppStore } from "../store/useAppStore";
@@ -62,7 +63,7 @@ const AreaScreen: React.FC<AreaScreenProps> = ({
     selectedRegion?.name || "",
   );
 
-  const { data: trendData } = usePriceTrend(
+  const { data: trendData, isLoading: trendLoading } = usePriceTrend(
     selectedRegion?.regionId || "",
     selectedRegion?.lat || 0,
     selectedRegion?.lng || 0,
@@ -72,6 +73,15 @@ const AreaScreen: React.FC<AreaScreenProps> = ({
 
   // 전월 대비 변동률 계산
   const saleTrend = trendData?.trend.filter((t) => t.dealType === "sale") || [];
+  const latestSale = trendData?.trend
+    ?.filter(t => t.dealType === "sale")
+    .sort((a, b) => b.month.localeCompare(a.month))[0];
+  const latestJeonse = trendData?.trend
+    ?.filter(t => t.dealType === "jeonse")
+    .sort((a, b) => b.month.localeCompare(a.month))[0];
+  const latestMonthly = trendData?.trend
+    ?.filter(t => t.dealType === "monthly")
+    .sort((a, b) => b.month.localeCompare(a.month))[0];
   const changeRate = saleTrend.length >= 2
     ? ((saleTrend[0].avgPrice - saleTrend[1].avgPrice) / saleTrend[1].avgPrice * 100).toFixed(1)
     : null;
@@ -128,8 +138,8 @@ const AreaScreen: React.FC<AreaScreenProps> = ({
             <View style={styles.si}>
               <Text style={styles.sl}>매매 평균가</Text>
               <Text style={styles.sv}>
-                {priceLoading ? "조회 중..." : priceData?.avgSalePrice
-                  ? `${Math.floor(priceData.avgSalePrice / 10000)}억 ${Math.round((priceData.avgSalePrice % 10000) / 1000)}천`
+                {priceLoading || trendLoading ? "조회 중..." : latestSale?.avgPrice
+                  ? `${Math.floor(latestSale.avgPrice / 10000)}억 ${Math.round((latestSale.avgPrice % 10000) / 1000)}천`
                   : "데이터 없음"}
               </Text>
               {changeRate && (
@@ -142,8 +152,8 @@ const AreaScreen: React.FC<AreaScreenProps> = ({
             <View style={styles.si}>
               <Text style={styles.sl}>전세 평균가</Text>
               <Text style={styles.sv}>
-                {priceLoading ? "조회 중..." : priceData?.avgJeonsePrice
-                  ? `${Math.floor(priceData.avgJeonsePrice / 10000)}억 ${Math.round((priceData.avgJeonsePrice % 10000) / 1000)}천`
+                {priceLoading || trendLoading ? "조회 중..." : latestJeonse?.avgPrice
+                  ? `${Math.floor(latestJeonse.avgPrice / 10000)}억 ${Math.round((latestJeonse.avgPrice % 10000) / 1000)}천`
                   : "데이터 없음"}
               </Text>
             </View>
@@ -153,8 +163,10 @@ const AreaScreen: React.FC<AreaScreenProps> = ({
             <View style={styles.si}>
               <Text style={styles.sl}>월세 평균</Text>
               <Text style={styles.svsm}>
-                {priceLoading ? "조회 중..." : priceData?.avgMonthlyRent
-                  ? `보증금 ${Math.round((priceData.avgMonthlyDeposit || 0) / 1000)}천/월 ${priceData.avgMonthlyRent}만`
+                {priceLoading || trendLoading ? "조회 중..." : latestMonthly?.avgPrice
+                  ? latestMonthly?.avgDeposit
+                    ? `보증금 ${Math.floor(latestMonthly.avgDeposit / 1000)}천/월 ${latestMonthly.avgPrice}만`
+                    : `월 ${latestMonthly.avgPrice}만`
                   : "데이터 없음"}
               </Text>
             </View>
@@ -162,7 +174,10 @@ const AreaScreen: React.FC<AreaScreenProps> = ({
             <View style={styles.si}>
               <Text style={styles.sl}>이번달 거래량</Text>
               <Text style={styles.sv}>
-                {priceLoading ? "조회 중..." : `${priceData?.recentTradeCount ?? 0}건`}
+                {priceLoading || trendLoading ? "조회 중..." : `${latestSale?.tradeCount ?? 0}건`}
+              </Text>
+              <Text style={styles.tertiary}>
+                {latestSale?.month ? `${latestSale.month.slice(0,4)}년 ${parseInt(latestSale.month.slice(5))}월 기준` : ""}
               </Text>
             </View>
           </View>
@@ -210,6 +225,14 @@ const AreaScreen: React.FC<AreaScreenProps> = ({
                 name: m.name,
                 markerId: m.markerId,
               }))}
+            geoJson={seoulDong}
+            polygons={selectedRegion?.name ? [{
+              code: selectedRegion.name,
+              grade: 3,
+              name: selectedRegion.name,
+              value: 0,
+            }] : []}
+            highlightOnly={true}
           />
         </View>
 
@@ -344,6 +367,7 @@ const styles = StyleSheet.create({
   tiText: { fontSize: 13, color: "#888888" },
   tiTextOn: { color: "#FFFFFF", fontWeight: "600" },
   tc: { padding: 12 },
+  tertiary: { fontSize: 11, color: "#AAAAAA", marginTop: 2 },
   emptyText: {
     fontSize: 13,
     color: "#AAAAAA",
