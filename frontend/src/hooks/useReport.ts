@@ -22,11 +22,13 @@ export function useReportStatus(reportId: string | null) {
     queryKey: ['report', 'status', reportId],
     queryFn: () => getReportStatus(reportId!),
     enabled: !!reportId,
+    retry: false,
     // 2초마다 상태 조회 (Polling)
     refetchInterval: (query) => {
       const status = query.state.data?.status;
-      // completed 또는 failed 상태면 Polling 중단
+      // completed, failed, 에러(404 등)면 Polling 중단
       if (status === 'completed' || status === 'failed') return false;
+      if (query.state.error) return false;
       return 2000;
     },
   });
