@@ -30,8 +30,8 @@ async def create_report(
     existing_result = await db.execute(
         select(Report).where(
             Report.region_id == request.regionId,
-            Report.data_base_date == date.today()
-        )
+            Report.status.in_(["pending", "processing", "completed"])
+        ).order_by(Report.created_at.desc())
     )
     existing_report = existing_result.scalar_one_or_none()
     if existing_report:
