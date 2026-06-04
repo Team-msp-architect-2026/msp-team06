@@ -176,6 +176,8 @@ AWS 콘솔 → IAM → 사용자/역할 → 권한 → 인라인 정책 추가
 cd homelens-terraform/environments/dev
 bash destroy.sh          # Helm 정리 후 terraform destroy 자동 실행
                          # recovery_window_in_days=0 → 시크릿 즉시 삭제됨
+                         # ※ RDS / S3 / networking(VPC·서브넷·SG) 는 제거하지 않음
+                         #   NAT GW + EIP는 비용 절감을 위해 제거
 
 # ── 매일 아침 ──────────────────────────────
 cd homelens-terraform/environments/dev
@@ -187,6 +189,8 @@ Helm provider가 EKS cluster endpoint를 참조하므로 EKS 생성 전 Helm 리
 secrets 모듈은 rds, elasticache output을 참조하므로 반드시 같은 단계에서 함께 apply할 것.
 
 # 1단계: EKS까지 (Helm 없음) — 15~20분 소요
+# networking: NAT GW + EIP + private route만 재생성 (VPC/서브넷/SG는 No changes)
+# rds, s3: No changes (보존됨) — 포함하더라도 즉시 통과
 terraform apply \
   -target=module.networking \
   -target=module.rds \
@@ -283,6 +287,13 @@ kubectl apply -f ~/aws-auth.yaml
 # [TODO] external-dns 도입 검토 — apply 순서 안내 후 반드시 아래 질문할 것
 # "현재 kubectl apply 후 Route53을 매번 수동 업데이트하고 있습니다.
 #  external-dns를 도입하면 ingress apply 시 Route53이 자동 동기화됩니다. 도입할까요?"
+# [TODO] X-API-KEY 인증 구현 검토 — apply 순서 안내 후 반드시 아래 질문할 것
+# "현재 FastAPI에 X-API-KEY 인증이 미구현 상태입니다 (ingress.yaml 주석만 있고 코드 없음).
+#  인증 없이 api-dev.ourhomelens.com을 아는 누구든 API를 호출할 수 있어
+#  Bedrock(Claude) 비용 폭발, Celery 강제 스케일아웃 위험이 있습니다.
+#  X-API-KEY 미들웨어를 FastAPI에 구현할까요?
+#  (변경 범위: backend/app/core/security.py 신규 생성, backend/app/main.py 미들웨어 등록,
+#   API_KEY 값은 Secrets Manager homelens/{env}/api-key 또는 환경변수로 주입)"
 
 ```
 ### API 키 주입 방법 (secrets.auto.tfvars)
@@ -520,6 +531,21 @@ terraform apply
 ### DNS outputs — data source 참조
 - `dns/outputs.tf`는 `data.aws_route53_zone.main` 참조 (managed resource 아님)
 - `aws_route53_zone.main`으로 참조 시 `Reference to undeclared resource` 에러
+
+### ArgoCD — sync Unknown (.status.terminatingReplicas 스키마 오류)
+- **증상:** ArgoCD sync 상태 Unknown 고착, GitHub Actions 자동 배포 불가
+  ```
+  ComparisonError: .status.terminatingReplicas: field not declared in schema
+  ```
+- **원인:** ArgoCD 내장 OpenAPI 스키마가 EKS 1.35 기준 `ReplicaSet.status.terminatingReplicas` 필드를 모름 → typed value 생성 단계에서 오류 → 이 단계는 `ignoreDifferences` / `ServerSideDiff` / `resource.exclusions` 가 개입하는 단계보다 앞이라 세 설정 모두 효과 없음
+- **해결:** ArgoCD Helm chart 버전 업그레이드 (7.7.0 → 9.5.17, ArgoCD v3.4.3) — 최신 K8s 스키마 내장
+- **현재 `modules/argocd/main.tf` 적용 상태:**
+  - `helm_release` chart version: `9.5.17`
+  - `argocd-cm` `resource.exclusions`: ReplicaSet 추적 제외
+  - `ApplicationSet` `syncOptions`: `ServerSideDiff=true` 추가 (향후 동일 유형 방어)
+  - `ApplicationSet` `ignoreDifferences`: ReplicaSet `/status/terminatingReplicas` (향후 fallback)
+  - `null_resource` triggers: `applicationset_hash` 추가 → ApplicationSet 내용 변경 시 `terraform apply`로 자동 반영
+- **K8s 버전 업그레이드 시 동일 오류 재발하면:** `ignoreDifferences`에 항목 추가 후 `terraform apply -target=module.argocd`
 
 ### kube-prometheus-stack — Helm 타임아웃 + api 노드 용량 부족
 - **증상:** `context deadline exceeded` (13~21분 후 실패), Helm release failed 상태

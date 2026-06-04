@@ -1,5 +1,20 @@
 locals {
   name_prefix = "${var.project_name}-${var.environment}"
+
+  applicationset_hash = sha256(jsonencode({
+    ignoreDifferences = [
+      {
+        group        = "apps"
+        kind         = "ReplicaSet"
+        jsonPointers = ["/status/terminatingReplicas"]
+      }
+    ]
+    syncPolicy = {
+      prune       = true
+      selfHeal    = true
+      syncOptions = ["CreateNamespace=true", "ServerSideApply=true", "ServerSideDiff=true"]
+    }
+  }))
 }
 
 # ---------------------------------------------------------------------------
@@ -11,7 +26,7 @@ resource "helm_release" "argocd" {
   name             = "argocd"
   repository       = "https://argoproj.github.io/argo-helm"
   chart            = "argo-cd"
-  version          = "7.7.0"
+  version          = "9.5.17"
   namespace        = "argocd"
   create_namespace = true
   timeout          = 600
@@ -20,6 +35,14 @@ resource "helm_release" "argocd" {
     name  = "configs.params.server\\.insecure"
     value = "true"
   }
+
+  values = [yamlencode({
+    configs = {
+      cm = {
+        "resource.exclusions" = "- apiGroups:\n  - apps\n  kinds:\n  - ReplicaSet\n  clusters:\n  - '*'\n"
+      }
+    }
+  })]
 }
 
 # ---------------------------------------------------------------------------
@@ -74,11 +97,12 @@ YAML
 # ---------------------------------------------------------------------------
 resource "null_resource" "argocd_applicationset" {
   triggers = {
-    chart_version = helm_release.argocd.version
-    environment   = var.environment
-    git_revision  = var.git_revision
-    repo_url      = var.repo_url
-    k8s_path      = var.k8s_manifests_path
+    chart_version       = helm_release.argocd.version
+    environment         = var.environment
+    git_revision        = var.git_revision
+    repo_url            = var.repo_url
+    k8s_path            = var.k8s_manifests_path
+    applicationset_hash = local.applicationset_hash
   }
 
   provisioner "local-exec" {
@@ -121,6 +145,12 @@ spec:
         syncOptions:
           - CreateNamespace=true
           - ServerSideApply=true
+          - ServerSideDiff=true
+      ignoreDifferences:
+        - group: apps
+          kind: ReplicaSet
+          jsonPointers:
+            - /status/terminatingReplicas
 YAML
     EOT
   }
