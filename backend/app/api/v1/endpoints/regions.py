@@ -66,23 +66,14 @@ async def search_regions(
 
         # 1순위: 동 단위 검색 (카카오 주소 검색 API)
         DONG_SUFFIXES = ["동", "읍", "면", "리", "가"]
-        # 부분 일치: "압구정" → "압구정동" 도 검색
-        q_dong = q if any(q.endswith(s) for s in DONG_SUFFIXES) else None
-        # "관악구 신사동" 처럼 구+동 형태면 마지막 토큰을 동 이름으로
-        tokens = q.split()
-        if len(tokens) >= 2 and any(tokens[-1].endswith(s) for s in DONG_SUFFIXES):
-            q_dong = tokens[-1]
-        elif not q_dong:
-            # 부분 입력: "압구정" → "압구정동" 시도
-            q_dong = q + "동"
-
-        if q_dong:
+        if any(q.endswith(suffix) for suffix in DONG_SUFFIXES):
             try:
                 kakao_addr_result = await search_kakao_address(q)
                 addr_docs = kakao_addr_result.get("documents", [])
                 for doc in addr_docs[:3]:
                     address = doc.get("address", {})
-                    name = address.get("region_3depth_name", "")
+                    road_address = doc.get("road_address", {})
+                    name = address.get("region_3depth_name", "")  # 동 이름
                     full_address = f"서울특별시 {address.get('region_1depth_name', '')} {address.get('region_2depth_name', '')} {name}"
                     if name and name not in seen_names and name.endswith(tuple(DONG_SUFFIXES)):
                         seen_names.add(name)
@@ -95,27 +86,6 @@ async def search_regions(
                             "lng": float(doc.get("x", 0)),
                             "aptSeq": None,
                         })
-
-                apt_result = await search_kakao_keyword(f"{q_dong} 아파트")
-                apt_docs = apt_result.get("documents", [])
-                for doc in apt_docs[:9]:
-                    name = doc.get("place_name", "")
-                    kakao_place_id = doc.get("id", "")
-                    if not name or name in seen_names or not is_apartment(doc):
-                        continue
-                    seen_names.add(name)
-                    apt_seq = await get_apt_seq_by_kakao_id(kakao_place_id, db)
-                    if not apt_seq:
-                        apt_seq = await get_apt_seq_by_name(name, db)
-                    results.append({
-                        "regionId": f"KAKAO_{kakao_place_id}",
-                        "name": name,
-                        "fullAddress": doc.get("road_address_name") or doc.get("address_name", ""),
-                        "propertyType": "complex",
-                        "lat": float(doc.get("y", 0)),
-                        "lng": float(doc.get("x", 0)),
-                        "aptSeq": apt_seq,
-                    })
             except Exception:
                 pass
 
