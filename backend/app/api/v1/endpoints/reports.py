@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, text
 from sqlalchemy.dialects.postgresql import insert as pg_insert
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 from app.core.database import get_db
 from app.models.report import Report, ReportSection
 from app.models.region import Region
@@ -40,6 +40,14 @@ async def create_report(
     )
     await db.commit()
     existing_report = existing_result.scalar_one_or_none()
+
+    # processing 상태가 10분 이상 지났으면 failed로 처리
+    if existing_report and existing_report.status == "processing":
+        if datetime.now() - existing_report.created_at > timedelta(minutes=10):
+            existing_report.status = "failed"
+            await db.commit()
+            existing_report = None
+
     if existing_report:
         return {
             "reportId": existing_report.id,
