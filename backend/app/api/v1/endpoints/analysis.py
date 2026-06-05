@@ -26,7 +26,6 @@ from app.services.price import (
     get_price_snapshot_by_apt_seq,      
     get_price_trend_by_apt_seq,         
     get_price_stats_by_apt_seq,
-    get_price_by_dong_name,
     get_price_trend_by_dong_name,
 )
 from app.services.news import get_region_issues
@@ -45,11 +44,6 @@ async def get_price(
     aptSeq: Optional[str] = Query(None),  
     db: AsyncSession = Depends(get_db),
 ):  
-    # 0순위: 동 단위 가격 조회 ← 여기에 추가
-    if regionId.startswith("KAKAO_DONG_") and regionName:
-        data = await get_price_by_dong_name(regionName, db)
-        if data:
-            return data
 
     # 1순위: apt_seq 기반 DB 조회
     if aptSeq:
