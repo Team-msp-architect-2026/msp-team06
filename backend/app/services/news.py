@@ -31,7 +31,7 @@ async def search_real_estate_news(region_name: str = None, display: int = 50) ->
     if region_name:
         keyword = f"{region_name} 아파트 부동산 매매 전세"
     else:
-        keyword = "아파트 매매 전세 실거래 부동산시장"
+        keyword = "서울 아파트 매매 전세 실거래 부동산시장"
     return await search_news(keyword, display)
 
 async def get_news_highlights(region: str = "", limit: int = 10, category: str = "all", db: AsyncSession = None) -> dict:
@@ -41,7 +41,7 @@ async def get_news_highlights(region: str = "", limit: int = 10, category: str =
         return cached
 
     try:
-        keyword = f"{region} 아파트 부동산" if region else "아파트 매매 전세 부동산시장"
+        keyword = f"{region} 아파트 부동산" if region else "서울 아파트 매매 전세 부동산시장"
         data = await search_news(keyword, limit)
         items = data.get("items", [])
         result = {

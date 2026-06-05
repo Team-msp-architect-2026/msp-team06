@@ -88,7 +88,33 @@ async def search_regions(
                         })
             except Exception:
                 pass
-
+            # 동 검색 시 해당 동의 아파트도 검색
+            try:
+                apt_result = await search_kakao_keyword(f"{q} 아파트")
+                apt_docs = apt_result.get("documents", [])
+                for doc in apt_docs[:9]:
+                    name = doc.get("place_name", "")
+                    kakao_place_id = doc.get("id", "")
+                    if not name or name in seen_names or not is_apartment(doc):
+                        continue
+                    address = doc.get("road_address_name") or doc.get("address_name", "")
+                    if "서울" not in address:
+                        continue
+                    seen_names.add(name)
+                    apt_seq = await get_apt_seq_by_kakao_id(kakao_place_id, db)
+                    if not apt_seq:
+                        apt_seq = await get_apt_seq_by_name(name, db)
+                    results.append({
+                        "regionId": f"KAKAO_{kakao_place_id}",
+                        "name": name,
+                        "fullAddress": address,
+                        "propertyType": "complex",
+                        "lat": float(doc.get("y", 0)),
+                        "lng": float(doc.get("x", 0)),
+                        "aptSeq": apt_seq,
+                    })
+            except Exception:
+                pass
         # 2순위: 아파트 단지 검색 (카카오 API - 아파트만 필터링)
         kakao_result = await search_kakao_keyword(q)
         documents = kakao_result.get("documents", [])
