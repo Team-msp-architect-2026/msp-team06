@@ -3,7 +3,7 @@
 import uuid
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from datetime import datetime, date
 from app.core.database import get_db
@@ -33,6 +33,12 @@ async def create_report(
             Report.status.in_(["pending", "processing", "completed"])
         ).order_by(Report.created_at.desc())
     )
+    # failed 상태 리포트 삭제 (재생성을 위해)
+    await db.execute(
+        text("DELETE FROM reports WHERE region_id = :region_id AND status = 'failed'"),
+        {"region_id": request.regionId}
+    )
+    await db.commit()
     existing_report = existing_result.scalar_one_or_none()
     if existing_report:
         return {
@@ -54,10 +60,19 @@ async def create_report(
     await db.execute(region_stmt)
 
     # price_trends 최신 month 기준으로 data_base_date 결정
-    from sqlalchemy import text as sa_text
-    latest_month_result = await db.execute(
-        sa_text("SELECT MAX(month) FROM price_trends WHERE apt_seq IS NOT NULL")
-    )
+    if region_name:
+        latest_month_result = await db.execute(
+            text("""
+                SELECT MAX(pt.month) FROM price_trends pt
+                JOIN locations l ON pt.apt_seq = l.apt_seq
+                WHERE l.address LIKE :region_name
+            """),
+            {"region_name": f"%{region_name}%"}
+        )
+    else:
+        latest_month_result = await db.execute(
+            text("SELECT MAX(month) FROM price_trends WHERE apt_seq IS NOT NULL")
+        )
     latest_month = latest_month_result.scalar()
     data_base_date = date(int(latest_month[:4]), int(latest_month[5:7]), 1) if latest_month else date.today()
 
