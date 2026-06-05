@@ -44,10 +44,12 @@ async def get_news_highlights(region: str = "", limit: int = 10, category: str =
         keyword = f"{region} 아파트 부동산" if region else "서울 아파트 매매 전세 부동산"
         data = await search_news(keyword, limit)
         items = data.get("items", [])
-        SEOUL_KEYWORDS = ["서울", "강남", "강북", "송파", "마포", "용산", "성동", "노원", "은평", "관악", "동작", "영등포", "양천", "구로", "금천", "강서", "중랑", "성북", "도봉", "강동", "광진", "동대문", "중구", "종로", "서대문", "아파트", "전세", "매매", "부동산"]
+        SEOUL_REGIONS = ["서울", "강남", "강북", "송파", "마포", "용산", "성동", "노원", "은평", "관악", "동작", "영등포", "양천", "구로", "금천", "강서", "중랑", "성북", "도봉", "강동", "광진", "동대문", "중구", "종로", "서대문"]
+        REALESTATE_KEYWORDS = ["아파트", "전세", "매매", "부동산", "분양", "재건축", "재개발", "집값", "실거래"]
         filtered_items = [
             item for item in items
-            if any(kw in item.get("title", "") or kw in item.get("description", "") for kw in SEOUL_KEYWORDS)
+            if any(kw in item.get("title", "") or kw in item.get("description", "") for kw in SEOUL_REGIONS)
+            and any(kw in item.get("title", "") or kw in item.get("description", "") for kw in REALESTATE_KEYWORDS)
         ]
         result = {
             "items": [
