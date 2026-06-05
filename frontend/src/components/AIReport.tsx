@@ -71,7 +71,7 @@ const AIReport: React.FC<AIReportProps> = ({ report, onGenerate, status }) => {
       ))}
       <Text style={styles.disc}>{report?.disclaimer}</Text>
       <Text style={styles.rdate}>
-        데이터 출처: 국토교통부 실거래가 공개시스템 ({formatDate((report as any)?.dataBaseDate)} 기준)
+        데이터 출처: 국토교통부 실거래가 공개시스템
       </Text>
     </View>
   );

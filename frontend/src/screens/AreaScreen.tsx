@@ -141,13 +141,8 @@ const AreaScreen: React.FC<AreaScreenProps> = ({
                 {priceLoading || trendLoading ? "조회 중..." : latestSale?.avgPrice
                   ? `${Math.floor(latestSale.avgPrice / 10000)}억 ${Math.round((latestSale.avgPrice % 10000) / 1000)}천`
                   : "데이터 없음"}
-              </Text>
-              {changeRate && (
-                <Text style={[styles.sd, { color: Number(changeRate) >= 0 ? "#27AE60" : "#E74C3C" }]}>
-                  {Number(changeRate) >= 0 ? `▲ 전월 +${changeRate}%` : `▼ 전월 ${changeRate}%`}
-                </Text>
-              )}
-            </View>
+              </Text>              
+            </View> 
             <View style={styles.sp} />
             <View style={styles.si}>
               <Text style={styles.sl}>전세 평균가</Text>
