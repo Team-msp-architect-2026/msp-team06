@@ -26,9 +26,12 @@ export function useReportStatus(reportId: string | null) {
     // 2초마다 상태 조회 (Polling)
     refetchInterval: (query) => {
       const status = query.state.data?.status;
-      // completed, failed, 에러(404 등)면 Polling 중단
       if (status === 'completed' || status === 'failed') return false;
       if (query.state.error) return false;
+      // 3분(180초) 이상 polling 중이면 중단
+      const fetchCount = query.state.fetchStatus === 'fetching' ? 1 : 0;
+      const dataUpdatedAt = query.state.dataUpdatedAt;
+      if (dataUpdatedAt && Date.now() - dataUpdatedAt > 180000) return false;
       return 2000;
     },
   });

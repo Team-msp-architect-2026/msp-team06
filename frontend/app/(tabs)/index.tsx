@@ -40,6 +40,27 @@ function AppContent(): React.ReactElement {
     if (rcStatusData?.status === "failed") setRcStatus("idle");
   }, [rcStatusData]);
 
+  /* 리포트 3분 타임아웃 */
+  React.useEffect(() => {
+    if (raStatus === "loading" && raReportId) {
+      const timeout = setTimeout(() => {
+        setRaStatus("idle");
+        setRaReportId(null);
+      }, 180000);
+      return () => clearTimeout(timeout);
+    }
+  }, [raStatus, raReportId]);
+
+  React.useEffect(() => {
+    if (rcStatus === "loading" && rcReportId) {
+      const timeout = setTimeout(() => {
+        setRcStatus("idle");
+        setRcReportId(null);
+      }, 180000);
+      return () => clearTimeout(timeout);
+    }
+  }, [rcStatus, rcReportId]);
+
   /* 화면 전환 */
   const go = (s: Screen): void => {
     setPrevScreen(screen);
