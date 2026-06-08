@@ -1,24 +1,28 @@
 # HomeLens AI - AI 리포트 생성 서비스 로직
-# Amazon Bedrock Claude 연동
+# LangChain + Amazon Bedrock Claude 연동
 
 import json
-import boto3
+from langchain_aws import ChatBedrock
+from langchain_core.messages import HumanMessage
 from app.core.config import settings
-import asyncio
-
-# Bedrock 클라이언트
-bedrock = boto3.client(
-    "bedrock-runtime",
-    region_name="eu-west-3",
-)
 
 MODEL_ID = "eu.anthropic.claude-sonnet-4-6"
+
+llm = ChatBedrock(
+    model_id=MODEL_ID,
+    region_name="eu-west-3",
+    model_kwargs={
+        "max_tokens": 4096,
+        "temperature": 0.3,
+    },
+)
 
 DISCLAIMER = (
     "본 리포트는 국토교통부 실거래가·카카오맵·네이버 뉴스 데이터를 기반으로 "
     "AI가 생성한 참고 자료이며, 부동산 중개나 투자자문이 아닙니다. "
     "AI 생성 내용은 부정확할 수 있으므로 실제 거래 시에는 공인중개사 등 "
-    "전문가 상담을 권장하며, 거래 결정과 결과에 대한 책임은 이용자에게 있습니다."
+    "전문가 상담을 권장하며, 거래 결정과 결과에 대한 책임은 이용자에게 있습니다. "
+    "데이터 출처: 국토교통부 실거래가 공개시스템"
 )
 
 
@@ -84,28 +88,13 @@ async def generate_report(
 ):
     try:
         prompt = build_prompt(region_name, price_data, news_data, infra_data)
-        body = json.dumps({
-            "anthropic_version": "bedrock-2023-05-31",
-            "max_tokens": 4096,
-            "messages": [{"role": "user", "content": prompt}]
-        })
-
-        loop = asyncio.get_event_loop()
-        response = await loop.run_in_executor(
-            None,
-            lambda: bedrock.invoke_model(
-                modelId=MODEL_ID,
-                body=body,
-                contentType="application/json",
-                accept="application/json",
-            )
+        
+        response = await llm.ainvoke(
+            [HumanMessage(content=prompt)],
+            config={"timeout": 60}
         )
-
-        response_body = json.loads(response["body"].read())
-        text = response_body["content"][0]["text"]
-
-        # JSON 파싱
-        text = text.strip()
+        
+        text = response.content.strip()
         if text.startswith("```"):
             text = text.split("```")[1]
             if text.startswith("json"):
@@ -119,8 +108,7 @@ async def generate_report(
         }
 
     except Exception as e:
-        print(f"Bedrock 오류: {e}")
-        # 오류 시 mock 반환
+        print(f"LangChain/Bedrock 오류: {e}")
         return {
             "summary": f"{region_name} 부동산 분석 리포트 (데이터 준비 중)",
             "sections": [
