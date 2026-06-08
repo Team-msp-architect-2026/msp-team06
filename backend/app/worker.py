@@ -10,6 +10,7 @@ from app.services.report import generate_report
 from app.services.news import get_region_issues
 from app.services.map import search_all_nearby_infra
 from app.metrics import (
+    SQS_CONSUME_LATENCY,
     BEDROCK_INVOKE_LATENCY,
     DB_SAVE_LATENCY,
     PIPELINE_TOTAL_LATENCY,
@@ -72,6 +73,14 @@ def generate_report_task(report_id: str, region_id: str, region_name: str, lat: 
         if not report:
             print(f"[Celery] 리포트 없음: {report_id}")
             return
+
+        # SQS 대기 지연 측정
+        try:
+            sqs_sent_ts = float(report.created_at.timestamp())
+            SQS_CONSUME_LATENCY.observe(time.time() - sqs_sent_ts)
+        except Exception:
+            pass
+
         report.status = "processing"
         report.progress_pct = 10
         db.commit()
