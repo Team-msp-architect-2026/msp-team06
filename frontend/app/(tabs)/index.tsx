@@ -1,5 +1,5 @@
 // 앱 메인 진입점 - 화면 상태 관리 및 화면 전환 처리
-import { QueryClientProvider } from "@tanstack/react-query";
+import { QueryClientProvider, useQueryClient } from "@tanstack/react-query";
 import React, { useState } from "react";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { queryClient } from "../../src/api/queryClient";
@@ -12,6 +12,7 @@ import { useAppStore } from "../../src/store/useAppStore";
 import { ReportStatus, ReportTarget, Screen } from "../../src/types";
 
 function AppContent(): React.ReactElement {
+  const queryClient = useQueryClient();
   const { setPrevScreen, selectedRegion } = useAppStore();
   const createReportMutation = useCreateReport();
 
@@ -72,11 +73,13 @@ function AppContent(): React.ReactElement {
       setCxTab(0);
       setPriceTab(0);
       setRentTab(0);
+      queryClient.removeQueries({ queryKey: ['report'] });
     }
     if (s === "area") {
       setRaReportId(null);
       setRaStatus("idle");
       setAreaTab(0);
+      queryClient.removeQueries({ queryKey: ['report'] });
     }
   };
 
