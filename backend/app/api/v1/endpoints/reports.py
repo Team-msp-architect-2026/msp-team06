@@ -84,16 +84,34 @@ async def create_report(
     latest_month = latest_month_result.scalar()
     data_base_date = date(int(latest_month[:4]), int(latest_month[5:7]), 1) if latest_month else date.today()
 
-    report = Report(
-        id=report_id,
-        region_id=request.regionId,
-        status="pending",
-        progress_pct=0,
-        data_base_date=data_base_date,
-        created_at=datetime.now(),
-    )
-    db.add(report)
-    await db.commit()
+    try:
+        report = Report(
+            id=report_id,
+            region_id=request.regionId,
+            status="pending",
+            progress_pct=0,
+            data_base_date=data_base_date,
+            created_at=datetime.now(),
+        )
+        db.add(report)
+        await db.commit()
+    except Exception as e:
+        await db.rollback()
+        # unique constraint 충돌 시 기존 리포트 반환
+        existing = await db.execute(
+            select(Report).where(
+                Report.region_id == request.regionId,
+                Report.status.in_(["pending", "processing", "completed"])
+            ).order_by(Report.created_at.desc())
+        )
+        existing_report = existing.scalar_one_or_none()
+        if existing_report:
+            return {
+                "reportId": existing_report.id,
+                "status": existing_report.status,
+                "estimatedSeconds": 30,
+            }
+        raise e
 
     try:
         from app.worker import generate_report_task
