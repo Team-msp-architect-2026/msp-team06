@@ -96,11 +96,24 @@ async def create_report(
     await db.commit()
 
     try:
-        from app.worker import generate_report_task
-        generate_report_task.delay(report_id, request.regionId, region_name, lat, lng)
-        print(f"[Report] SQS 태스크 전송 성공: {report_id}")
+        import boto3 as _boto3, json as _json
+        _sqs = _boto3.client('sqs', region_name='eu-west-3')
+        _sqs.send_message(
+            QueueUrl="https://sqs.eu-west-3.amazonaws.com/611058323802/homelens-dev-report-generation",
+            MessageBody=_json.dumps({
+                "task": "generate_report_task",
+                "id": report_id,
+                "args": [report_id, request.regionId, region_name, lat, lng],
+                "kwargs": {},
+                "retries": 0,
+            })
+        )
+        print(f"[Report] SQS 전송 성공: {report_id}")
     except Exception as e:
-        print(f"[Report] SQS 태스크 전송 실패: {e}")
+        print(f"[Report] SQS 전송 실패: {e}")
+        report.status = "failed"
+        report.fail_reason = str(e)
+        await db.commit()
 
     return {
         "reportId": report_id,
