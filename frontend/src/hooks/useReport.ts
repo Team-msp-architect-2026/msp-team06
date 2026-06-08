@@ -28,10 +28,6 @@ export function useReportStatus(reportId: string | null) {
       const status = query.state.data?.status;
       if (status === 'completed' || status === 'failed') return false;
       if (query.state.error) return false;
-      // 3분(180초) 이상 polling 중이면 중단
-      const fetchCount = query.state.fetchStatus === 'fetching' ? 1 : 0;
-      const dataUpdatedAt = query.state.dataUpdatedAt;
-      if (dataUpdatedAt && Date.now() - dataUpdatedAt > 180000) return false;
       return 2000;
     },
   });
