@@ -98,6 +98,33 @@ resource "helm_release" "kube_prometheus_stack" {
   ]
 }
 
+# ---------------------------------------------------------------------------
+# CloudWatch Log Group — EKS 컨테이너 로그 (Fluent Bit → CloudWatch)
+# ---------------------------------------------------------------------------
+resource "aws_cloudwatch_log_group" "eks_application" {
+  name              = "/aws/containerinsights/${var.eks_cluster_name}/application"
+  retention_in_days = var.env == "prod" ? 90 : 30
+
+  tags = { Env = var.env }
+}
+
+# ---------------------------------------------------------------------------
+# EKS Addon — amazon-cloudwatch-observability
+# Fluent Bit(로그 수집) + CloudWatch Agent(메트릭) 자동 설치
+# 노드 IAM 역할에 CloudWatchAgentServerPolicy 이미 부착 → 추가 IAM 불필요
+# ---------------------------------------------------------------------------
+resource "aws_eks_addon" "cloudwatch_observability" {
+  cluster_name = var.eks_cluster_name
+  addon_name   = "amazon-cloudwatch-observability"
+
+  resolve_conflicts_on_create = "OVERWRITE"
+  resolve_conflicts_on_update = "OVERWRITE"
+
+  tags = { Env = var.env }
+
+  depends_on = [aws_cloudwatch_log_group.eks_application]
+}
+
 resource "aws_xray_group" "main" {
     group_name      = "${var.project_name}-${var.env}"
     filter_expression = "service(\"${var.project_name}-${var.env}\")"

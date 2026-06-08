@@ -39,7 +39,7 @@ spec:
           image: 611058323802.dkr.ecr.eu-west-3.amazonaws.com/homelens-celeryworker:3677dd0fb92ef009dad3549849020d7e8c1c9555
           imagePullPolicy: Always
 
-          command: ["celery", "-A", "app.worker", "worker", "--loglevel=info", "--concurrency=4"]
+          command: ["celery", "-A", "app.worker", "worker", "--loglevel=info", "--concurrency=4", "--pool=threads"]
 
           envFrom:
             - configMapRef:

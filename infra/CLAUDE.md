@@ -294,6 +294,15 @@ kubectl apply -f ~/aws-auth.yaml
 #  X-API-KEY 미들웨어를 FastAPI에 구현할까요?
 #  (변경 범위: backend/app/core/security.py 신규 생성, backend/app/main.py 미들웨어 등록,
 #   API_KEY 값은 Secrets Manager homelens/{env}/api-key 또는 환경변수로 주입)"
+# [TODO] FastAPI 무중단 배포 설정 검토 — prod 전환 전 반드시 아래 질문할 것
+# "현재 FastAPI가 replicas: 1이고 RollingUpdate strategy가 명시되지 않아
+#  새 파드가 Ready 판정 직후 실제 에러를 반환하면 사용자가 순단을 경험할 수 있습니다.
+#  prod 전환 전 아래 설정을 적용할까요?
+#  (변경 범위: infra/k8s/fastapi-deployment.yaml
+#   - replicas: 1 → 2
+#   - strategy.type: RollingUpdate
+#   - strategy.rollingUpdate.maxUnavailable: 0
+#   - strategy.rollingUpdate.maxSurge: 1)"
 
 ```
 ### API 키 주입 방법 (secrets.auto.tfvars)
@@ -518,6 +527,60 @@ terraform apply
 - `placeholder:latest` 이미지 부재로 Deployment progress deadline 초과
 - `modules/celery/variables.tf`의 `replicas` default = 0
 - 실제 이미지는 CI/CD에서 배포
+
+### KEDA ScaledObject — minReplicaCount·cooldownPeriod 튜닝 (2026-06-08 반영)
+- **minReplicaCount**: dev/prod 모두 `1` (기존 dev=0 → 변경)
+  - 이유: pod=0이면 로그 확인 불가, 재배포 없이 디버깅 불가
+  - worker 노드는 Celery 전용 taint로 이미 켜져 있으므로 pod 1개 추가 비용 없음
+- **cooldownPeriod**: `60` → `300`초
+  - 이유: Bedrock 호출(Claude)이 최대 30초 이상 소요 → SQS 메시지 소비 직후 큐 depth=0 → 60초 cooldown으로는 KEDA가 Bedrock 호출 중인 pod를 강제 종료 → `status=failed`, `failReason=null` 버그 발생
+  - 300초 cooldown = Bedrock 완료 후 충분한 여유
+- **null_resource triggers 주의**: `cooldownPeriod`, `minReplicaCount` 값을 triggers에 포함시켜야 변경 시 ScaledObject가 재apply됨
+  ```bash
+  # ScaledObject만 재apply
+  terraform taint module.celery.null_resource.keda_scaled_object
+  terraform apply -target=module.celery
+  ```
+
+### CloudWatch Logs 연동 — EKS 컨테이너 로그 (2026-06-08 추가)
+- **목적**: pod 종료 후에도 Celery/FastAPI 로그를 CloudWatch에서 조회 가능
+- **구현**: `modules/monitoring/main.tf`에 `amazon-cloudwatch-observability` EKS 애드온 추가
+  - Fluent Bit(로그 수집) + CloudWatch Agent 자동 설치
+  - 노드 IAM 역할에 `CloudWatchAgentServerPolicy` 이미 부착 → 추가 IAM 불필요
+- **로그 그룹**: `/aws/containerinsights/homelens-dev-eks/application` (retention: dev=30일, prod=90일)
+- **apply 방법**:
+  ```bash
+  terraform apply -target=module.monitoring
+  # 설치 확인
+  kubectl get pods -n amazon-cloudwatch
+  ```
+- **Celery 로그 조회** (CloudWatch Logs Insights):
+  ```
+  fields @timestamp, log, kubernetes.pod_name
+  | filter kubernetes.namespace_name = "homelens"
+  | filter kubernetes.container_name = "celery-worker"
+  | sort @timestamp desc
+  | limit 100
+  ```
+- **주의**: student07 계정은 `Admin-MFA-Enforce` 정책으로 CLI에서 `logs:FilterLogEvents` 차단됨 → AWS 콘솔에서 조회할 것
+
+### Celery 태스크 테스트 방법
+- FastAPI prefix: `/api/v1` (main.py에 `prefix="/api/v1"` 등록됨 — `/v1`으로 호출 시 404)
+- **포트포워딩** (svc 방식 권장 — pod 재시작 시에도 연결 유지):
+  ```bash
+  # 터미널 1: 포트포워딩 유지
+  kubectl port-forward svc/fastapi 8000:80 -n homelens
+
+  # 터미널 2: 테스트 메시지 전송
+  curl -X POST http://localhost:8000/api/v1/reports \
+    -H "Content-Type: application/json" \
+    -d '{"regionId":"REGION_11680_DONG_001","regionName":"강남구 역삼동","lat":37.5012,"lng":127.0396}'
+
+  # 상태 조회 (reportId는 위 응답에서 확인)
+  curl http://localhost:8000/api/v1/reports/<reportId>/status
+  ```
+- 같은 `regionId`+오늘 날짜 조합이 DB에 이미 있으면 캐시 반환 (`REPORT_ALREADY_EXISTS`) — 재테스트 시 다른 regionId 사용
+- Celery 로그 실시간 확인: `kubectl logs -f -n homelens -l app=celery-worker`
 
 ### CloudWatch Dashboard — region 필드 필수
 - 모든 metric 위젯에 `region` 필드 없으면 `InvalidParameterInput` 에러

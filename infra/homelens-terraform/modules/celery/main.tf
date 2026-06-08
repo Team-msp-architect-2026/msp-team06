@@ -61,10 +61,12 @@ resource "helm_release" "keda" {
 # ---------------------------------------------------------------------------
 resource "null_resource" "keda_scaled_object" {
   triggers = {
-    queue_url    = var.sqs_queue_url
-    aws_region   = var.aws_region
-    environment  = var.environment
-    max_replicas = var.environment == "prod" ? 10 : 4
+    queue_url      = var.sqs_queue_url
+    aws_region     = var.aws_region
+    environment    = var.environment
+    max_replicas   = var.environment == "prod" ? 10 : 4
+    min_replicas   = 1
+    cooldown_period = 300
   }
 
   provisioner "local-exec" {
@@ -79,9 +81,9 @@ resource "null_resource" "keda_scaled_object" {
       spec:
         scaleTargetRef:
           name: celery-worker
-        minReplicaCount: ${var.environment == "prod" ? 1 : 0}
+        minReplicaCount: 1
         maxReplicaCount: ${var.environment == "prod" ? 10 : 4}
-        cooldownPeriod: 60
+        cooldownPeriod: 300
         triggers:
         - type: aws-sqs-queue
           metadata:

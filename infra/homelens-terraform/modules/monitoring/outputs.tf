@@ -32,3 +32,13 @@ output "kube_prometheus_stack_namespace" {
   description = "kube-prometheus-stack 설치 네임스페이스"
   value       = "monitoring"
 }
+
+output "cloudwatch_log_group" {
+  description = "Celery/FastAPI 로그가 쌓이는 CloudWatch 로그 그룹"
+  value       = aws_cloudwatch_log_group.eks_application.name
+}
+
+output "celery_log_insights_query" {
+  description = "Celery 로그 조회용 CloudWatch Logs Insights 쿼리"
+  value       = "fields @timestamp, log, kubernetes.pod_name | filter kubernetes.namespace_name = \"homelens\" | filter kubernetes.container_name = \"celery-worker\" | sort @timestamp desc | limit 100"
+}

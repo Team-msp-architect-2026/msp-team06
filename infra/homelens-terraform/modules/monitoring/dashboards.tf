@@ -27,17 +27,17 @@ resource "kubernetes_config_map" "pipeline_dashboard" {
           gridPos = { h = 8, w = 12, x = 0, y = 0 }
           targets = [
             {
-              expr         = "histogram_quantile(0.50, sum(rate(homelens_sqs_consume_duration_seconds_bucket[5m])) by (le))"
+              expr         = "histogram_quantile(0.50, sum(increase(homelens_sqs_consume_duration_seconds_bucket[1h])) by (le))"
               legendFormat = "p50"
               refId        = "A"
             },
             {
-              expr         = "histogram_quantile(0.95, sum(rate(homelens_sqs_consume_duration_seconds_bucket[5m])) by (le))"
+              expr         = "histogram_quantile(0.95, sum(increase(homelens_sqs_consume_duration_seconds_bucket[1h])) by (le))"
               legendFormat = "p95"
               refId        = "B"
             },
             {
-              expr         = "histogram_quantile(0.99, sum(rate(homelens_sqs_consume_duration_seconds_bucket[5m])) by (le))"
+              expr         = "histogram_quantile(0.99, sum(increase(homelens_sqs_consume_duration_seconds_bucket[1h])) by (le))"
               legendFormat = "p99"
               refId        = "C"
             }
@@ -66,17 +66,17 @@ resource "kubernetes_config_map" "pipeline_dashboard" {
           gridPos = { h = 8, w = 12, x = 12, y = 0 }
           targets = [
             {
-              expr         = "histogram_quantile(0.50, sum(rate(homelens_bedrock_invoke_duration_seconds_bucket[5m])) by (le))"
+              expr         = "histogram_quantile(0.50, sum(increase(homelens_bedrock_invoke_duration_seconds_bucket[1h])) by (le))"
               legendFormat = "p50"
               refId        = "A"
             },
             {
-              expr         = "histogram_quantile(0.95, sum(rate(homelens_bedrock_invoke_duration_seconds_bucket[5m])) by (le))"
+              expr         = "histogram_quantile(0.95, sum(increase(homelens_bedrock_invoke_duration_seconds_bucket[1h])) by (le))"
               legendFormat = "p95"
               refId        = "B"
             },
             {
-              expr         = "histogram_quantile(0.99, sum(rate(homelens_bedrock_invoke_duration_seconds_bucket[5m])) by (le))"
+              expr         = "histogram_quantile(0.99, sum(increase(homelens_bedrock_invoke_duration_seconds_bucket[1h])) by (le))"
               legendFormat = "p99"
               refId        = "C"
             }
@@ -104,17 +104,17 @@ resource "kubernetes_config_map" "pipeline_dashboard" {
           gridPos = { h = 8, w = 12, x = 0, y = 8 }
           targets = [
             {
-              expr         = "histogram_quantile(0.50, sum(rate(homelens_db_save_duration_seconds_bucket[5m])) by (le))"
+              expr         = "histogram_quantile(0.50, sum(increase(homelens_db_save_duration_seconds_bucket[1h])) by (le))"
               legendFormat = "p50"
               refId        = "A"
             },
             {
-              expr         = "histogram_quantile(0.95, sum(rate(homelens_db_save_duration_seconds_bucket[5m])) by (le))"
+              expr         = "histogram_quantile(0.95, sum(increase(homelens_db_save_duration_seconds_bucket[1h])) by (le))"
               legendFormat = "p95"
               refId        = "B"
             },
             {
-              expr         = "histogram_quantile(0.99, sum(rate(homelens_db_save_duration_seconds_bucket[5m])) by (le))"
+              expr         = "histogram_quantile(0.99, sum(increase(homelens_db_save_duration_seconds_bucket[1h])) by (le))"
               legendFormat = "p99"
               refId        = "C"
             }
@@ -142,17 +142,17 @@ resource "kubernetes_config_map" "pipeline_dashboard" {
           gridPos = { h = 8, w = 12, x = 12, y = 8 }
           targets = [
             {
-              expr         = "histogram_quantile(0.50, sum(rate(homelens_pipeline_total_duration_seconds_bucket[5m])) by (le))"
+              expr         = "histogram_quantile(0.50, sum(increase(homelens_pipeline_total_duration_seconds_bucket[1h])) by (le))"
               legendFormat = "p50"
               refId        = "A"
             },
             {
-              expr         = "histogram_quantile(0.90, sum(rate(homelens_pipeline_total_duration_seconds_bucket[5m])) by (le))"
+              expr         = "histogram_quantile(0.90, sum(increase(homelens_pipeline_total_duration_seconds_bucket[1h])) by (le))"
               legendFormat = "p90"
               refId        = "B"
             },
             {
-              expr         = "histogram_quantile(0.99, sum(rate(homelens_pipeline_total_duration_seconds_bucket[5m])) by (le))"
+              expr         = "histogram_quantile(0.99, sum(increase(homelens_pipeline_total_duration_seconds_bucket[1h])) by (le))"
               legendFormat = "p99"
               refId        = "C"
             }
@@ -180,12 +180,12 @@ resource "kubernetes_config_map" "pipeline_dashboard" {
           gridPos = { h = 8, w = 24, x = 0, y = 16 }
           targets = [
             {
-              expr         = "sum(rate(homelens_pipeline_total_duration_seconds_count[5m]))"
+              expr         = "sum(increase(homelens_pipeline_total_duration_seconds_count[1h]))"
               legendFormat = "처리량 (건/s)"
               refId        = "A"
             },
             {
-              expr         = "sum(rate(homelens_pipeline_errors_total[5m]))"
+              expr         = "sum(increase(homelens_pipeline_errors_total[1h]))"
               legendFormat = "에러 (건/s)"
               refId        = "B"
             }
