@@ -536,44 +536,46 @@ async def get_price_stats_by_apt_seq(apt_seq: str, deal_type: str, period: str, 
         print(f"apt_seq 기반 통계 조회 실패: {e}")
         return None
 
-async def get_price_by_dong_name(dong_name: str, db: AsyncSession) -> dict | None:
-    """동 이름으로 해당 동 내 단지들 가격 평균 조회"""
-    cache_key = f"price:dong:{dong_name}"
-    cached = await cache_get(cache_key)
-    if cached:
-        return cached
+async def get_price_trend_by_dong_name(dong_name: str, deal_type: str, period: str, db: AsyncSession) -> list | None:
+    """동 이름으로 해당 동 내 단지들 가격 추이 조회"""
     try:
+        period_months = {"1m": 1, "3m": 3, "1y": 12}.get(period, 12)
+        if deal_type == "all":
+            deal_filter = "IN ('sale', 'jeonse', 'monthly')"
+        else:
+            deal_filter = f"= '{deal_type}'"
+
         result = await db.execute(
-            text("""
+            text(f"""
                 SELECT 
-                    AVG(CASE WHEN pt.deal_type = 'sale' THEN pt.avg_price END) as avg_sale,
-                    AVG(CASE WHEN pt.deal_type = 'jeonse' THEN pt.avg_price END) as avg_jeonse,
-                    AVG(CASE WHEN pt.deal_type = 'monthly' THEN pt.avg_price END) as avg_monthly,
-                    SUM(CASE WHEN pt.deal_type = 'sale' THEN pt.trade_count ELSE 0 END) as trade_count
+                    pt.month,
+                    pt.deal_type,
+                    AVG(pt.avg_price) as avg_price,
+                    SUM(pt.trade_count) as trade_count,
+                    AVG(pt.deposit) as avg_deposit
                 FROM price_trends pt
                 JOIN locations l ON pt.apt_seq = l.apt_seq
                 WHERE l.address LIKE :dong_name
-                AND pt.month = TO_CHAR(CURRENT_DATE - INTERVAL '1 month', 'YYYY-MM')
+                AND pt.deal_type {deal_filter}
+                AND pt.month >= TO_CHAR(CURRENT_DATE - INTERVAL '{period_months} months', 'YYYY-MM')
+                GROUP BY pt.month, pt.deal_type
+                ORDER BY pt.month DESC, pt.deal_type
             """),
             {"dong_name": f"%{dong_name}%"}
         )
-        row = result.fetchone()
-        if not row or (row[0] is None and row[1] is None and row[2] is None):
+        rows = result.fetchall()
+        if not rows:
             return None
-
-        data = {
-            "avgSalePrice": int(row[0]) if row[0] else None,
-            "avgJeonsePrice": int(row[1]) if row[1] else None,
-            "avgMonthlyRent": int(row[2]) if row[2] else None,
-            "avgMonthlyDeposit": None,
-            "jeonseRatio": round(row[1] / row[0] * 100, 2) if row[0] and row[1] else None,
-            "recentTradeCount": int(row[3]) if row[3] else 0,
-            "priceStabilityGrade": "normal",
-            "priceLevel": "avg",
-            "dataBaseDate": str(date.today()),
-        }
-        await cache_set(cache_key, data, TTL_PRICE)
-        return data
+        return [
+            {
+                "month": row[0],
+                "dealType": row[1],
+                "avgPrice": int(row[2]) if row[2] else 0,
+                "tradeCount": int(row[3]) if row[3] else 0,
+                "avgDeposit": int(row[4]) if row[4] else None,
+            }
+            for row in rows
+        ]
     except Exception as e:
-        print(f"동 단위 가격 조회 실패: {e}")
+        print(f"동 단위 가격 추이 조회 실패: {e}")
         return None

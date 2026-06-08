@@ -56,7 +56,7 @@ class Settings(BaseSettings):
     kakao_api_key: str = _kakao.get("rest_api_key", os.getenv("KAKAO_API_KEY", ""))
     naver_client_id: str = _naver.get("client_id", os.getenv("NAVER_CLIENT_ID", ""))
     naver_client_secret: str = _naver.get("client_secret", os.getenv("NAVER_CLIENT_SECRET", ""))
-    molit_api_key: str = _molit.get("api_key", _molit.get("service_key", os.getenv("MOLIT_API_KEY", "")))
+    molit_api_key: str = _molit.get("confm_key", _molit.get("api_key", _molit.get("service_key", os.getenv("MOLIT_API_KEY", ""))))
     anthropic_api_key: str = ""
     juso_api_key: str = _mois.get("service_key", os.getenv("JUSO_API_KEY", ""))
 

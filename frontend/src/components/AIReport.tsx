@@ -15,7 +15,7 @@ const AIReport: React.FC<AIReportProps> = ({ report, onGenerate, status }) => {
     return (
       <View style={styles.rstart}>
         <Text style={styles.emoji}>🤖</Text>
-        <Text style={styles.rst}>AI 실거주 분석 리포트</Text>
+        <Text style={styles.rst}>AI 리포트</Text>
         <Text style={styles.rss}>
           가격 흐름과 지역 이슈를{"\n"}AI가 종합 분석해드려요
         </Text>
@@ -46,13 +46,7 @@ const AIReport: React.FC<AIReportProps> = ({ report, onGenerate, status }) => {
       </View>
     );
   }
-
-  const formatDate = (dateStr?: string) => {
-    if (!dateStr) return "2026년 4월";
-    const [year, month] = dateStr.split("-");
-    return `${year}년 ${parseInt(month)}월`;
-  };
-
+  
   return (
     <View>
       <View style={styles.rsum}>
@@ -71,7 +65,7 @@ const AIReport: React.FC<AIReportProps> = ({ report, onGenerate, status }) => {
       ))}
       <Text style={styles.disc}>{report?.disclaimer}</Text>
       <Text style={styles.rdate}>
-        데이터 출처: 국토교통부 실거래가 공개시스템 ({formatDate((report as any)?.dataBaseDate)} 기준)
+        데이터 출처: 국토교통부 실거래가 공개시스템
       </Text>
     </View>
   );

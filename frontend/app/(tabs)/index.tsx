@@ -1,5 +1,5 @@
 // 앱 메인 진입점 - 화면 상태 관리 및 화면 전환 처리
-import { QueryClientProvider } from "@tanstack/react-query";
+import { QueryClientProvider, useQueryClient } from "@tanstack/react-query";
 import React, { useState } from "react";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { queryClient } from "../../src/api/queryClient";
@@ -12,6 +12,7 @@ import { useAppStore } from "../../src/store/useAppStore";
 import { ReportStatus, ReportTarget, Screen } from "../../src/types";
 
 function AppContent(): React.ReactElement {
+  const queryClient = useQueryClient();
   const { setPrevScreen, selectedRegion } = useAppStore();
   const createReportMutation = useCreateReport();
 
@@ -40,6 +41,27 @@ function AppContent(): React.ReactElement {
     if (rcStatusData?.status === "failed") setRcStatus("idle");
   }, [rcStatusData]);
 
+  /* 리포트 3분 타임아웃 */
+  React.useEffect(() => {
+    if (raStatus === "loading" && raReportId) {
+      const timeout = setTimeout(() => {
+        setRaStatus("idle");
+        setRaReportId(null);
+      }, 180000);
+      return () => clearTimeout(timeout);
+    }
+  }, [raStatus, raReportId]);
+
+  React.useEffect(() => {
+    if (rcStatus === "loading" && rcReportId) {
+      const timeout = setTimeout(() => {
+        setRcStatus("idle");
+        setRcReportId(null);
+      }, 180000);
+      return () => clearTimeout(timeout);
+    }
+  }, [rcStatus, rcReportId]);
+
   /* 화면 전환 */
   const go = (s: Screen): void => {
     setPrevScreen(screen);
@@ -51,11 +73,13 @@ function AppContent(): React.ReactElement {
       setCxTab(0);
       setPriceTab(0);
       setRentTab(0);
+      queryClient.removeQueries({ queryKey: ['report'] });
     }
     if (s === "area") {
       setRaReportId(null);
       setRaStatus("idle");
       setAreaTab(0);
+      queryClient.removeQueries({ queryKey: ['report'] });
     }
   };
 
@@ -63,6 +87,7 @@ function AppContent(): React.ReactElement {
   const generate = async (which: ReportTarget): Promise<void> => {
     if (!selectedRegion) return;
     if (which === "ra") {
+      setRaReportId(null);
       setRaStatus("loading");
       try {
         const res = await createReportMutation.mutateAsync({
@@ -77,6 +102,7 @@ function AppContent(): React.ReactElement {
         setRaStatus("idle");
       }
     } else {
+      setRcReportId(null);
       setRcStatus("loading");
       try {
         const res = await createReportMutation.mutateAsync({

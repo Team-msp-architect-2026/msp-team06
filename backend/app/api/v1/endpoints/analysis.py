@@ -26,7 +26,7 @@ from app.services.price import (
     get_price_snapshot_by_apt_seq,      
     get_price_trend_by_apt_seq,         
     get_price_stats_by_apt_seq,
-    get_price_by_dong_name,
+    get_price_trend_by_dong_name,
 )
 from app.services.news import get_region_issues
 
@@ -44,11 +44,6 @@ async def get_price(
     aptSeq: Optional[str] = Query(None),  
     db: AsyncSession = Depends(get_db),
 ):  
-    # 0순위: 동 단위 가격 조회 ← 여기에 추가
-    if regionId.startswith("KAKAO_DONG_") and regionName:
-        data = await get_price_by_dong_name(regionName, db)
-        if data:
-            return data
 
     # 1순위: apt_seq 기반 DB 조회
     if aptSeq:
@@ -162,16 +157,18 @@ async def get_price_trend_endpoint(
     aptSeq: Optional[str] = Query(None),  
     db: AsyncSession = Depends(get_db),
 ):
+
     # 0순위: 동 단위
     if regionId.startswith("KAKAO_DONG_") and regionName:
-        # 동 단위 trend는 일단 빈 배열 반환 (데이터 구조상 복잡)
-        return {
-            "trend": [],
-            "changeRate1m": 0.0,
-            "changeRate3m": 0.0,
-            "changeRate1y": 0.0,
-            "dataBaseDate": date.today(),
-        }
+        trend = await get_price_trend_by_dong_name(regionName, dealType, period, db)
+        if trend:
+            return {
+                "trend": trend,
+                "changeRate1m": 0.0,
+                "changeRate3m": 0.0,
+                "changeRate1y": 0.0,
+                "dataBaseDate": date.today(),
+            }
 
     # 1순위: apt_seq 기반 DB 조회
     if aptSeq:
@@ -236,17 +233,6 @@ async def get_price_stats_endpoint(
     aptSeq: Optional[str] = Query(None),  
     db: AsyncSession = Depends(get_db),
 ):
-    # 0순위: 동 단위
-    if regionId.startswith("KAKAO_DONG_") and regionName:
-        return {
-            "minPrice": None,
-            "avgPrice": None,
-            "maxPrice": None,
-            "totalTradeCount": 0,
-            "recentTradeCount": 0,
-            "tradeSignal": "normal",
-            "dataBaseDate": str(date.today()),
-        }
 
     # 1순위: apt_seq 기반 DB 조회
     if aptSeq:

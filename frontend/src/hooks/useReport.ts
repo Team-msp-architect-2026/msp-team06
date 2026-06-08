@@ -26,7 +26,6 @@ export function useReportStatus(reportId: string | null) {
     // 2초마다 상태 조회 (Polling)
     refetchInterval: (query) => {
       const status = query.state.data?.status;
-      // completed, failed, 에러(404 등)면 Polling 중단
       if (status === 'completed' || status === 'failed') return false;
       if (query.state.error) return false;
       return 2000;

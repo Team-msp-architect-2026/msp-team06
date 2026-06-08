@@ -31,7 +31,7 @@ async def search_real_estate_news(region_name: str = None, display: int = 50) ->
     if region_name:
         keyword = f"{region_name} 아파트 부동산 매매 전세"
     else:
-        keyword = "아파트 매매 전세 실거래 부동산시장"
+        keyword = "서울 아파트 매매 전세 실거래 부동산"
     return await search_news(keyword, display)
 
 async def get_news_highlights(region: str = "", limit: int = 10, category: str = "all", db: AsyncSession = None) -> dict:
@@ -41,9 +41,16 @@ async def get_news_highlights(region: str = "", limit: int = 10, category: str =
         return cached
 
     try:
-        keyword = f"{region} 아파트 부동산" if region else "아파트 매매 전세 부동산시장"
+        keyword = f"{region} 아파트 부동산" if region else "서울 아파트 매매 전세 부동산"
         data = await search_news(keyword, limit)
         items = data.get("items", [])
+        SEOUL_REGIONS = ["서울", "강남", "강북", "송파", "마포", "용산", "성동", "노원", "은평", "관악", "동작", "영등포", "양천", "구로", "금천", "강서", "중랑", "성북", "도봉", "강동", "광진", "동대문", "중구", "종로", "서대문"]
+        REALESTATE_KEYWORDS = ["아파트", "전세", "매매", "부동산", "분양", "재건축", "재개발", "집값", "실거래"]
+        filtered_items = [
+            item for item in items
+            if any(kw in item.get("title", "") or kw in item.get("description", "") for kw in SEOUL_REGIONS)
+            and any(kw in item.get("title", "") or kw in item.get("description", "") for kw in REALESTATE_KEYWORDS)
+        ]
         result = {
             "items": [
                 {
@@ -56,7 +63,7 @@ async def get_news_highlights(region: str = "", limit: int = 10, category: str =
                     "category": "market",
                     "keywords": [],
                 }
-                for i, item in enumerate(items)
+                for i, item in enumerate(filtered_items)
             ]
         }
         await cache_set(cache_key, result, TTL_NEWS)

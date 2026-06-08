@@ -10,6 +10,7 @@ from app.services.report import generate_report
 from app.services.news import get_region_issues
 from app.services.map import search_all_nearby_infra
 from app.metrics import (
+    SQS_CONSUME_LATENCY,
     BEDROCK_INVOKE_LATENCY,
     DB_SAVE_LATENCY,
     PIPELINE_TOTAL_LATENCY,
@@ -72,6 +73,14 @@ def generate_report_task(report_id: str, region_id: str, region_name: str, lat: 
         if not report:
             print(f"[Celery] 리포트 없음: {report_id}")
             return
+
+        # SQS 대기 지연 측정
+        try:
+            sqs_sent_ts = float(report.created_at.timestamp())
+            SQS_CONSUME_LATENCY.observe(time.time() - sqs_sent_ts)
+        except Exception:
+            pass
+
         report.status = "processing"
         report.progress_pct = 10
         db.commit()
@@ -101,10 +110,32 @@ def generate_report_task(report_id: str, region_id: str, region_name: str, lat: 
         report.progress_pct = 80
         db.commit()
 
+        # 가격 데이터 수집
+        price_data = {}
+        try:
+            from app.services.price import get_price_trend_by_dong_name
+            from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
+            from app.core.config import settings
+
+            async def fetch_price():
+                engine = create_async_engine(settings.database_url)
+                async with AsyncSession(engine) as async_db:
+                    data = await get_price_trend_by_dong_name(region_name, "all", "3m", async_db)
+                    return data
+
+            price_result = loop.run_until_complete(fetch_price())
+            if price_result:
+                price_data = price_result
+        except Exception as e:
+            print(f"가격 데이터 수집 실패: {e}")
+
+        report.progress_pct = 90
+        db.commit()
+
         # Bedrock 호출
         pipeline_start = time.time()
         with BEDROCK_INVOKE_LATENCY.time():
-            result = loop.run_until_complete(generate_report(region_name, {}, news_data, infra_data))
+            result = loop.run_until_complete(generate_report(region_name, price_data, news_data, infra_data))
 
         # 리포트 완료 저장
         with DB_SAVE_LATENCY.time():

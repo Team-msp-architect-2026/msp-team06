@@ -2,7 +2,7 @@
 
 import React from "react";
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
-import InAppBrowser from "react-native-inappbrowser-reborn";
+import { Linking } from "react-native";
 import { formatRelativeDate } from "../utils/formatDate";
 
 interface IssueRowProps {
@@ -27,16 +27,7 @@ const IssueRow: React.FC<IssueRowProps> = ({
   const handlePress = async () => {
     if (!url) return;
     try {
-      if (await InAppBrowser.isAvailable()) {
-        await InAppBrowser.open(url, {
-          toolbarColor: "#FFFFFF",
-          secondaryToolbarColor: "#111111",
-          navigationBarColor: "#FFFFFF",
-          showTitle: true,
-          enableUrlBarHiding: true,
-          enableDefaultShare: true,
-        });
-      }
+      await Linking.openURL(url);
     } catch (e) {
       console.log("브라우저 오류:", e);
     }

@@ -3,9 +3,9 @@
 import uuid
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.dialects.postgresql import insert as pg_insert
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 from app.core.database import get_db
 from app.models.report import Report, ReportSection
 from app.models.region import Region
@@ -30,10 +30,24 @@ async def create_report(
     existing_result = await db.execute(
         select(Report).where(
             Report.region_id == request.regionId,
-            Report.data_base_date == date.today()
-        )
+            Report.status.in_(["pending", "processing", "completed"])
+        ).order_by(Report.created_at.desc())
     )
+    # failed 상태 리포트 삭제 (재생성을 위해)
+    await db.execute(
+        text("DELETE FROM reports WHERE region_id = :region_id AND status = 'failed'"),
+        {"region_id": request.regionId}
+    )
+    await db.commit()
     existing_report = existing_result.scalar_one_or_none()
+
+    # processing 상태가 10분 이상 지났으면 failed로 처리
+    if existing_report and existing_report.status == "processing":
+        if datetime.now() - existing_report.created_at > timedelta(minutes=10):
+            existing_report.status = "failed"
+            await db.commit()
+            existing_report = None
+
     if existing_report:
         return {
             "reportId": existing_report.id,
@@ -54,30 +68,63 @@ async def create_report(
     await db.execute(region_stmt)
 
     # price_trends 최신 month 기준으로 data_base_date 결정
-    from sqlalchemy import text as sa_text
-    latest_month_result = await db.execute(
-        sa_text("SELECT MAX(month) FROM price_trends WHERE apt_seq IS NOT NULL")
-    )
+    if region_name:
+        latest_month_result = await db.execute(
+            text("""
+                SELECT MAX(pt.month) FROM price_trends pt
+                JOIN locations l ON pt.apt_seq = l.apt_seq
+                WHERE l.address LIKE :region_name
+            """),
+            {"region_name": f"%{region_name}%"}
+        )
+    else:
+        latest_month_result = await db.execute(
+            text("SELECT MAX(month) FROM price_trends WHERE apt_seq IS NOT NULL")
+        )
     latest_month = latest_month_result.scalar()
     data_base_date = date(int(latest_month[:4]), int(latest_month[5:7]), 1) if latest_month else date.today()
 
-    report = Report(
-        id=report_id,
-        region_id=request.regionId,
-        status="pending",
-        progress_pct=0,
-        data_base_date=data_base_date,
-        created_at=datetime.now(),
-    )
-    db.add(report)
-    await db.commit()
+    try:
+        report = Report(
+            id=report_id,
+            region_id=request.regionId,
+            status="pending",
+            progress_pct=0,
+            data_base_date=data_base_date,
+            created_at=datetime.now(),
+        )
+        db.add(report)
+        await db.commit()
+    except Exception as e:
+        await db.rollback()
+        # unique constraint 충돌 시 기존 리포트 반환
+        existing = await db.execute(
+            select(Report).where(
+                Report.region_id == request.regionId,
+                Report.status.in_(["pending", "processing", "completed"])
+            ).order_by(Report.created_at.desc())
+        )
+        existing_report = existing.scalar_one_or_none()
+        if existing_report:
+            return {
+                "reportId": existing_report.id,
+                "status": existing_report.status,
+                "estimatedSeconds": 30,
+            }
+        raise e
 
     try:
         from app.worker import generate_report_task
-        generate_report_task.delay(report_id, request.regionId, region_name, lat, lng)
-        print(f"[Report] SQS 태스크 전송 성공: {report_id}")
+        generate_report_task.apply_async(
+            args=[report_id, request.regionId, region_name, lat, lng],
+            task_id=report_id,
+        )
+        print(f"[Report] SQS 전송 성공: {report_id}")
     except Exception as e:
-        print(f"[Report] SQS 태스크 전송 실패: {e}")
+        print(f"[Report] SQS 전송 실패: {e}")
+        report.status = "failed"
+        report.fail_reason = str(e)
+        await db.commit()
 
     return {
         "reportId": report_id,
