@@ -87,6 +87,7 @@ function AppContent(): React.ReactElement {
   const generate = async (which: ReportTarget): Promise<void> => {
     if (!selectedRegion) return;
     if (which === "ra") {
+      setRaReportId(null);
       setRaStatus("loading");
       try {
         const res = await createReportMutation.mutateAsync({
@@ -101,6 +102,7 @@ function AppContent(): React.ReactElement {
         setRaStatus("idle");
       }
     } else {
+      setRcReportId(null);
       setRcStatus("loading");
       try {
         const res = await createReportMutation.mutateAsync({
