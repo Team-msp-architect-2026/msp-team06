@@ -6,6 +6,7 @@ from typing import Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 from datetime import date
 from app.core.database import get_db
+from app.metrics import DB_QUERY_LATENCY
 from app.schemas.analysis import (
     PriceResponse,
     PriceTrendResponse,
@@ -47,7 +48,8 @@ async def get_price(
 
     # 1순위: apt_seq 기반 DB 조회
     if aptSeq:
-        data = await get_price_snapshot_by_apt_seq(aptSeq, db)
+        with DB_QUERY_LATENCY.labels(query_type="price_snapshot").time():
+            data = await get_price_snapshot_by_apt_seq(aptSeq, db)
         if data:
             return {
                 "avgSalePrice": data.get("avgSalePrice"),
@@ -172,7 +174,8 @@ async def get_price_trend_endpoint(
 
     # 1순위: apt_seq 기반 DB 조회
     if aptSeq:
-        trend = await get_price_trend_by_apt_seq(aptSeq, dealType, period, db)
+        with DB_QUERY_LATENCY.labels(query_type="price_trend").time():
+            trend = await get_price_trend_by_apt_seq(aptSeq, dealType, period, db)
         if trend:
             return {
                 "trend": trend,
@@ -236,7 +239,8 @@ async def get_price_stats_endpoint(
 
     # 1순위: apt_seq 기반 DB 조회
     if aptSeq:
-        stats = await get_price_stats_by_apt_seq(aptSeq, dealType, period, db)
+        with DB_QUERY_LATENCY.labels(query_type="price_stats").time():
+            stats = await get_price_stats_by_apt_seq(aptSeq, dealType, period, db)
         if stats:
             return {
                 "minPrice": stats.get("minPrice"),

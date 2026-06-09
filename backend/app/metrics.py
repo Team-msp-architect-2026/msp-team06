@@ -1,5 +1,6 @@
 from prometheus_client import Histogram, Counter, start_http_server
 
+# ── 시나리오 1: SQS → Celery → Bedrock → DB 파이프라인 ─────────────────────
 SQS_CONSUME_LATENCY = Histogram(
     "homelens_sqs_consume_duration_seconds",
     "SQS 메시지 전송 ~ Celery task 시작 지연",
@@ -23,6 +24,30 @@ PIPELINE_TOTAL_LATENCY = Histogram(
 PIPELINE_ERRORS = Counter(
     "homelens_pipeline_errors_total",
     "파이프라인 에러 총 횟수"
+)
+
+# ── 시나리오 2: 사용자 접속 (HTTP + DB 쿼리) ───────────────────────────────
+HTTP_REQUEST_DURATION = Histogram(
+    "homelens_http_request_duration_seconds",
+    "HTTP 요청 응답시간",
+    labelnames=["method", "endpoint", "status_code"],
+    buckets=[0.01, 0.05, 0.1, 0.25, 0.5, 1, 2, 5],
+)
+HTTP_REQUESTS_TOTAL = Counter(
+    "homelens_http_requests_total",
+    "HTTP 요청 총 횟수",
+    labelnames=["method", "endpoint", "status_code"],
+)
+HTTP_ERRORS_TOTAL = Counter(
+    "homelens_http_errors_total",
+    "HTTP 4xx/5xx 에러 총 횟수",
+    labelnames=["method", "endpoint", "status_code"],
+)
+DB_QUERY_LATENCY = Histogram(
+    "homelens_db_query_duration_seconds",
+    "apt_seq 기반 DB 쿼리 응답시간",
+    labelnames=["query_type"],
+    buckets=[0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1],
 )
 
 def start_metrics_server():

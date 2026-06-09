@@ -295,3 +295,183 @@ resource "aws_cloudwatch_dashboard" "main" {
     ]
   })
 }
+
+# ---------------------------------------------------------------------------
+# Grafana 사용자 접속 시나리오 대시보드 (HTTP 응답시간 · 에러율 · DB 쿼리 지연)
+# ---------------------------------------------------------------------------
+resource "kubernetes_config_map" "user_access_dashboard" {
+  metadata {
+    name      = "${var.project_name}-${var.env}-user-access-dashboard"
+    namespace = "monitoring"
+    labels = {
+      grafana_dashboard = "1"
+    }
+  }
+
+  data = {
+    "user-access.json" = jsonencode({
+      title         = "HomeLens User Access — ${var.env}"
+      uid           = "homelens-user-access-${var.env}"
+      schemaVersion = 30
+      refresh       = "30s"
+      time          = { from = "now-1h", to = "now" }
+
+      panels = [
+        # ── 패널 1: 엔드포인트별 요청 처리량 ────────────────────────────────
+        {
+          id      = 1
+          title   = "요청 처리량 (req/min) — 엔드포인트별"
+          type    = "timeseries"
+          gridPos = { h = 8, w = 12, x = 0, y = 0 }
+          targets = [
+            {
+              expr         = "sum by (endpoint) (increase(homelens_http_requests_total[1m]))"
+              legendFormat = "{{endpoint}}"
+              refId        = "A"
+            }
+          ]
+          fieldConfig = {
+            defaults = {
+              unit  = "reqpm"
+              color = { mode = "palette-classic" }
+            }
+          }
+          options = { tooltip = { mode = "multi" } }
+        },
+
+        # ── 패널 2: 에러율 (4xx + 5xx) ───────────────────────────────────
+        {
+          id      = 2
+          title   = "에러율 (%) | 알림 기준: 5% 초과 5분 지속"
+          type    = "timeseries"
+          gridPos = { h = 8, w = 12, x = 12, y = 0 }
+          targets = [
+            {
+              expr         = "100 * sum(increase(homelens_http_errors_total[1m])) / (sum(increase(homelens_http_requests_total[1m])) > 0)"
+              legendFormat = "에러율 %"
+              refId        = "A"
+            }
+          ]
+          fieldConfig = {
+            defaults = {
+              unit = "percent"
+              thresholds = {
+                steps = [
+                  { color = "green", value = null },
+                  { color = "yellow", value = 1 },
+                  { color = "red", value = 5 }
+                ]
+              }
+            }
+          }
+          options = { tooltip = { mode = "single" } }
+        },
+
+        # ── 패널 3: HTTP 응답시간 분위수 ─────────────────────────────────
+        {
+          id      = 3
+          title   = "HTTP 응답시간 분위수 | 목표: p95 2s 이내"
+          type    = "timeseries"
+          gridPos = { h = 8, w = 12, x = 0, y = 8 }
+          targets = [
+            {
+              expr         = "histogram_quantile(0.50, sum(increase(homelens_http_request_duration_seconds_bucket[5m])) by (le))"
+              legendFormat = "p50"
+              refId        = "A"
+            },
+            {
+              expr         = "histogram_quantile(0.95, sum(increase(homelens_http_request_duration_seconds_bucket[5m])) by (le))"
+              legendFormat = "p95"
+              refId        = "B"
+            },
+            {
+              expr         = "histogram_quantile(0.99, sum(increase(homelens_http_request_duration_seconds_bucket[5m])) by (le))"
+              legendFormat = "p99"
+              refId        = "C"
+            }
+          ]
+          fieldConfig = {
+            defaults = {
+              unit = "s"
+              thresholds = {
+                steps = [
+                  { color = "green", value = null },
+                  { color = "yellow", value = 1 },
+                  { color = "red", value = 2 }
+                ]
+              }
+            }
+          }
+          options = { tooltip = { mode = "multi" } }
+        },
+
+        # ── 패널 4: apt_seq DB 쿼리 지연 ─────────────────────────────────
+        {
+          id      = 4
+          title   = "apt_seq DB 쿼리 지연 | 목표: p95 500ms 이내"
+          type    = "timeseries"
+          gridPos = { h = 8, w = 12, x = 12, y = 8 }
+          targets = [
+            {
+              expr         = "histogram_quantile(0.50, sum by (le, query_type) (increase(homelens_db_query_duration_seconds_bucket[5m])))"
+              legendFormat = "p50 {{query_type}}"
+              refId        = "A"
+            },
+            {
+              expr         = "histogram_quantile(0.95, sum by (le, query_type) (increase(homelens_db_query_duration_seconds_bucket[5m])))"
+              legendFormat = "p95 {{query_type}}"
+              refId        = "B"
+            }
+          ]
+          fieldConfig = {
+            defaults = {
+              unit = "s"
+              thresholds = {
+                steps = [
+                  { color = "green", value = null },
+                  { color = "yellow", value = 0.25 },
+                  { color = "red", value = 0.5 }
+                ]
+              }
+            }
+          }
+          options = { tooltip = { mode = "multi" } }
+        },
+
+        # ── 패널 5: 엔드포인트별 응답시간 히트맵 (현재 p95) ──────────────
+        {
+          id      = 5
+          title   = "엔드포인트별 p95 응답시간 — 현재값"
+          type    = "bargauge"
+          gridPos = { h = 8, w = 24, x = 0, y = 16 }
+          targets = [
+            {
+              expr         = "histogram_quantile(0.95, sum by (le, endpoint) (increase(homelens_http_request_duration_seconds_bucket[5m])))"
+              legendFormat = "{{endpoint}}"
+              refId        = "A"
+              instant      = true
+            }
+          ]
+          fieldConfig = {
+            defaults = {
+              unit = "s"
+              thresholds = {
+                steps = [
+                  { color = "green", value = null },
+                  { color = "yellow", value = 1 },
+                  { color = "red", value = 2 }
+                ]
+              }
+            }
+          }
+          options = {
+            orientation  = "horizontal"
+            reduceOptions = { calcs = ["lastNotNull"] }
+          }
+        }
+      ]
+    })
+  }
+
+  depends_on = [helm_release.kube_prometheus_stack]
+}
