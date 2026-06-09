@@ -60,15 +60,8 @@ spec:
 
           livenessProbe:
             exec:
-              command:
-                - celery
-                - -A
-                - app.worker
-                - inspect
-                - ping
-                - -d
-                - celery@$HOSTNAME
-            initialDelaySeconds: 30
-            periodSeconds: 60
+              command: ["python", "-c", "import os; os.kill(1, 0)"]
+            initialDelaySeconds: 60
+            periodSeconds: 120
             timeoutSeconds: 10
             failureThreshold: 3

@@ -564,6 +564,98 @@ terraform apply
   ```
 - **주의**: student07 계정은 `Admin-MFA-Enforce` 정책으로 CLI에서 `logs:FilterLogEvents` 차단됨 → AWS 콘솔에서 조회할 것
 
+### Prometheus + Grafana 커스텀 메트릭 — 트러블슈팅 및 현황 (2026-06-08 해결)
+
+#### 해결된 문제들
+
+**문제 1 — PromQL `rate()` → NaN**
+- **원인**: `rate()`는 초당 변화량. 태스크가 드문드문 실행되면 완료 후 카운터 고정(변화량=0) → NaN
+- **해결**: 모든 대시보드 쿼리를 `rate([5m])` → `increase([1h])`로 변경
+  - `rate()`: 초당 수백 건 이상 고빈도 환경에 적합
+  - `increase()`: 드문드문 실행되는 태스크에 적합, 시간 범위 내 총 증가량 반환
+
+**문제 2 — Celery ForkPool 멀티프로세스 메트릭 분리 (핵심)**
+- **원인**: Celery 기본 pool인 `prefork`는 자식 프로세스를 fork. `prometheus_client`의 메트릭은 단일 프로세스 메모리 기반이므로 ForkPoolWorker(자식)에서 기록한 값이 MainProcess HTTP 서버(port 8000)에 반영 안 됨 → Prometheus scrape 시 항상 0 → NaN
+  ```
+  MainProcess: start_http_server(8000) ← Prometheus scrape (항상 0)
+  ForkPoolWorker-2: BEDROCK_INVOKE_LATENCY.time() ← 실제 기록 (부모에 전파 안 됨)
+  ```
+- **해결**: `infra/k8s/celery-deployment.yaml` Celery 명령어에 `--pool=threads` 추가
+  - 스레드 풀은 메모리 공유 → 모든 워커 스레드 메트릭이 동일 프로세스에 기록
+  - IO 바운드 태스크(Bedrock, DB, 외부 API)에는 스레드 풀이 성능상 적합
+  ```yaml
+  command: ["celery", "-A", "app.worker", "worker", "--loglevel=info", "--concurrency=4", "--pool=threads"]
+  ```
+
+#### 현재 메트릭 동작 현황
+
+| 메트릭 | 상태 | 비고 |
+|--------|------|------|
+| Bedrock InvokeModel 지연 | ✅ 동작 | p50 ~25s (목표 30s 이내) |
+| DB 저장 지연 | ✅ 동작 | ms 수준 (목표 2s 이내) |
+| 전체 파이프라인 지연 | ✅ 동작 | p50 ~27.5s (목표 30s 이내) |
+| 파이프라인 처리량 | ✅ 동작 | increase([1h]) 기준 |
+| SQS 큐 대기 지연 | ❌ 미구현 | worker.py에서 기록 코드 없음 |
+
+#### [TODO] SQS 큐 대기 지연 메트릭 구현 — 다음 날 apply 전 가장 먼저 진행
+
+`metrics.py`에 `SQS_CONSUME_LATENCY`는 정의됐지만 실제 기록 코드 없음. 아래 순서로 구현:
+
+1. **`backend/app/api/v1/endpoints/reports.py`** — SQS 전송 시각 파라미터 추가
+   ```python
+   import time
+   generate_report_task.delay(report_id, request.regionId, region_name, lat, lng, time.time())
+   ```
+
+2. **`backend/app/worker.py`** — 태스크 시그니처에 `sent_at` 추가 + 측정
+   ```python
+   @celery_app.task(name="generate_report_task")
+   def generate_report_task(report_id, region_id, region_name, lat, lng, sent_at=None):
+       if sent_at:
+           SQS_CONSUME_LATENCY.observe(time.time() - sent_at)
+   ```
+
+3. 이미지 빌드 & ECR 푸시 후 ArgoCD 자동 sync 또는 `kubectl set image`로 배포
+
+4. 검증:
+   ```promql
+   histogram_quantile(0.50, sum(increase(homelens_sqs_consume_duration_seconds_bucket[1h])) by (le))
+   ```
+   목표: p95 10초 이내 (minReplicaCount=1이면 cold start 없으므로 수 초 이내 예상)
+
+#### Grafana 접근 및 대시보드 확인 방법
+```bash
+kubectl port-forward svc/kube-prometheus-stack-grafana 3000:80 -n monitoring
+# http://localhost:3000 → admin / Homelens@2026!
+# Dashboards → HomeLens Pipeline Latency — dev
+# 시간 범위: Last 1 hour (고정 시간 범위로 바뀌면 데이터 안 보임 주의)
+```
+
+---
+
+### ✅ Prometheus + Grafana 모니터링 완료 → 다음 단계: 시나리오 검증
+
+모니터링이 완전히 동작하는 것이 확인되면 아래 시나리오 진행 단계로 넘어간다.
+
+#### 시나리오 진행 전 최종 체크리스트
+
+| 항목 | 확인 방법 | 상태 |
+|------|-----------|------|
+| FastAPI pod Running | `kubectl get pods -n homelens` | ✅ |
+| Celery worker pod Running (minReplica=1) | `kubectl get pods -n homelens` | ✅ |
+| Prometheus scrape 정상 | `http://localhost:9090/targets` → homelens-celery-metrics UP | ✅ |
+| Grafana 대시보드 데이터 출력 | Bedrock/DB/파이프라인 패널 값 확인 | ✅ |
+| SQS 큐 대기 지연 메트릭 | `homelens_sqs_consume_duration_seconds_count > 0` | ❌ 구현 필요 |
+| CloudWatch Logs 수집 | `kubectl get pods -n amazon-cloudwatch` Running 확인 후 `terraform apply -target=module.monitoring` | 미적용 |
+
+#### 시나리오 순서
+1. SQS 대기 지연 메트릭 구현 (위 TODO 참고)
+2. CloudWatch Logs 연동 적용 (`terraform apply -target=module.monitoring`)
+3. 실제 사용자 시나리오 테스트 (FastAPI → SQS → Celery → Bedrock → DB 전체 흐름)
+4. Grafana 대시보드에서 모든 패널 목표치 이내 확인
+
+---
+
 ### Celery 태스크 테스트 방법
 - FastAPI prefix: `/api/v1` (main.py에 `prefix="/api/v1"` 등록됨 — `/v1`으로 호출 시 404)
 - **포트포워딩** (svc 방식 권장 — pod 재시작 시에도 연결 유지):
