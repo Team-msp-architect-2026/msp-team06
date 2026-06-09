@@ -160,7 +160,7 @@ const AreaScreen: React.FC<AreaScreenProps> = ({
               <Text style={styles.svsm}>
                 {priceLoading || trendLoading ? "조회 중..." : latestMonthly?.avgPrice
                   ? latestMonthly?.avgDeposit
-                    ? `보증금 ${Math.floor(latestMonthly.avgDeposit / 1000)}천/월 ${latestMonthly.avgPrice}만`
+                    ? `보증금 ${(latestMonthly.avgDeposit / 100).toFixed(0)}만/월 ${latestMonthly.avgPrice}만`
                     : `월 ${latestMonthly.avgPrice}만`
                   : "데이터 없음"}
               </Text>
@@ -229,12 +229,20 @@ const AreaScreen: React.FC<AreaScreenProps> = ({
               {issuesLoading && (
                 <Text style={styles.loadingText}>불러오는 중...</Text>
               )}
-              {issuesData?.items.map((issue, i) => (
+              {issuesData?.items.map((issue, i) => {
+                const badgeStyle: Record<string, { bg: string; color: string }> = {
+                  market: { bg: "#FFF3E0", color: "#E65100" },
+                  policy: { bg: "#E8F5E9", color: "#2E7D32" },
+                  development: { bg: "#E3F2FD", color: "#1565C0" },
+                  law: { bg: "#F3E5F5", color: "#6A1B9A" },
+                };
+                const bs = badgeStyle[issue.type] || { bg: "#E6F1FB", color: "#0C447C" };
+                return (
                 <IssueCard
                   key={i}
                   badge={ISSUE_TYPE_LABELS[issue.type] || issue.type}
-                  badgeBg="#E6F1FB"
-                  badgeColor="#0C447C"
+                  badgeBg={bs.bg}
+                  badgeColor={bs.color}
                   text={issue.title
                     .replace(/&quot;/g, '"')
                     .replace(/&amp;/g, "&")}
@@ -244,7 +252,8 @@ const AreaScreen: React.FC<AreaScreenProps> = ({
                   publishedAt={issue.publishedAt}
                   url={issue.url || ""}
                 />
-              ))}
+                );
+              })}
               {!issuesLoading &&
                 (!issuesData?.items || issuesData.items.length === 0) && (
                   <Text style={styles.emptyText}>관련 이슈가 없습니다</Text>
@@ -325,18 +334,20 @@ const styles = StyleSheet.create({
   cps: { fontSize: 12, color: "#AAAAAA", marginTop: 4 },
   tabbar: {
     flexDirection: "row",
-    margin: 12,
-    marginBottom: 0,
-    backgroundColor: "#EEEEEE",
-    borderRadius: 10,
-    padding: 3,
+    marginHorizontal: 12,
+    marginTop: 12,
+    backgroundColor: "#FFFFFF",
+    borderBottomWidth: 1,
+    borderBottomColor: "#E5E5E5",
   },
-  ti: { flex: 1, alignItems: "center", paddingVertical: 8, borderRadius: 8 },
+  ti: { flex: 1, alignItems: "center", paddingVertical: 10, borderRadius: 0 },
   tiOn: {
-    backgroundColor: "#2563EB",
+    borderBottomWidth: 2,
+    borderBottomColor: "#2563EB",
+    backgroundColor: "#FFFFFF",
   },
   tiText: { fontSize: 13, color: "#888888" },
-  tiTextOn: { color: "#FFFFFF", fontWeight: "600" },
+  tiTextOn: { color: "#2563EB", fontWeight: "600" },
   tc: { padding: 12 },
   tertiary: { fontSize: 11, color: "#AAAAAA", marginTop: 2 },
   emptyText: {

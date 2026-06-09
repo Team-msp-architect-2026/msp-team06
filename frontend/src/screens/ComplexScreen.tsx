@@ -384,12 +384,20 @@ const ComplexScreen: React.FC<ComplexScreenProps> = ({
               {issuesLoading && (
                 <Text style={styles.loadingText}>불러오는 중...</Text>
               )}
-              {issuesData?.items.map((issue, i) => (
+              {issuesData?.items.map((issue, i) => {
+                const badgeStyle: Record<string, { bg: string; color: string }> = {
+                  market: { bg: "#FFF3E0", color: "#E65100" },
+                  policy: { bg: "#E8F5E9", color: "#2E7D32" },
+                  development: { bg: "#E3F2FD", color: "#1565C0" },
+                  law: { bg: "#F3E5F5", color: "#6A1B9A" },
+                };
+                const bs = badgeStyle[issue.type] || { bg: "#E6F1FB", color: "#0C447C" };
+                return (
                 <IssueCard
                   key={i}
                   badge={ISSUE_TYPE_LABELS[issue.type] || issue.type}
-                  badgeBg="#E6F1FB"
-                  badgeColor="#0C447C"
+                  badgeBg={bs.bg}
+                  badgeColor={bs.color}
                   text={issue.title
                     .replace(/&quot;/g, '"')
                     .replace(/&amp;/g, "&")}
@@ -399,7 +407,8 @@ const ComplexScreen: React.FC<ComplexScreenProps> = ({
                   publishedAt={issue.publishedAt}
                   url={issue.url || ""}
                 />
-              ))}
+                );
+              })}
               {!issuesLoading &&
                 (!issuesData?.items || issuesData.items.length === 0) && (
                   <Text style={styles.emptyText}>관련 이슈가 없습니다</Text>
@@ -482,41 +491,41 @@ const styles = StyleSheet.create({
   },
   tabbar: {
     flexDirection: "row",
-    margin: 12,
-    marginBottom: 0,
-    backgroundColor: "#EEEEEE",
-    borderRadius: 10,
-    padding: 3,
+    marginHorizontal: 12,
+    marginTop: 12,
+    backgroundColor: "#FFFFFF",
+    borderBottomWidth: 1,
+    borderBottomColor: "#E5E5E5",
   },
-  ti: { flex: 1, alignItems: "center", paddingVertical: 8, borderRadius: 8 },
+  ti: { flex: 1, alignItems: "center", paddingVertical: 10, borderRadius: 0 },
   tiOn: {
-    backgroundColor: "#2563EB",
+    borderBottomWidth: 2,
+    borderBottomColor: "#2563EB",
+    backgroundColor: "#FFFFFF",
   },
   tiText: { fontSize: 13, color: "#888888" },
-  tiTextOn: { color: "#FFFFFF", fontWeight: "600" },
+  tiTextOn: { color: "#2563EB", fontWeight: "600" },
   tc: { padding: 12 },
-  ptog: { flexDirection: "row", marginBottom: 12 },
+  ptog: { flexDirection: "row", marginBottom: 12, backgroundColor: "#F5F5F5", borderRadius: 8, padding: 3 },
   ptb: {
     flex: 1,
     alignItems: "center",
-    paddingVertical: 8,
-    borderRadius: 8,
-    backgroundColor: "#EEEEEE",
+    paddingVertical: 6,
+    borderRadius: 6,
   },
-  ptbOn: { backgroundColor: "#2563EB" },
-  ptbText: { fontSize: 13, color: "#888888" },
-  ptbTextOn: { color: "#FFFFFF", fontWeight: "600" },
-  rtog: { flexDirection: "row", marginBottom: 12 },
+  ptbOn: { backgroundColor: "#FFFFFF", shadowColor: "#000", shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.08, shadowRadius: 2, elevation: 1 },
+  ptbText: { fontSize: 12, color: "#AAAAAA" },
+  ptbTextOn: { color: "#111111", fontWeight: "600" },
+  rtog: { flexDirection: "row", marginBottom: 12, backgroundColor: "#F5F5F5", borderRadius: 8, padding: 3 },
   rtb: {
     flex: 1,
     alignItems: "center",
-    paddingVertical: 8,
-    borderRadius: 8,
-    backgroundColor: "#EEEEEE",
+    paddingVertical: 6,
+    borderRadius: 6,
   },
-  rtbOn: { backgroundColor: "#2563EB" },
-  rtbText: { fontSize: 13, color: "#888888" },
-  rtbTextOn: { color: "#FFFFFF", fontWeight: "600" },
+  rtbOn: { backgroundColor: "#FFFFFF", shadowColor: "#000", shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.08, shadowRadius: 2, elevation: 1 },
+  rtbText: { fontSize: 12, color: "#AAAAAA" },
+  rtbTextOn: { color: "#111111", fontWeight: "600" },
   chartTitle: { fontSize: 13, color: "#888888", marginBottom: 8 },
   emptyText: {
     fontSize: 13,

@@ -94,7 +94,12 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ mapTab, setMapTab, go }) => {
     <View style={styles.scr}>
       {/* 상단 헤더 */}
       <View style={styles.bar}>
-        <Text style={styles.logo}>HomeLens</Text>
+        <View style={styles.barLeft}>
+          <View style={styles.logoIcon}>
+            <Text style={styles.logoIconText}>🏠</Text>
+          </View>
+          <Text style={styles.logo}>HomeLens</Text>
+        </View>
       </View>
 
       <ScrollView
@@ -106,6 +111,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ mapTab, setMapTab, go }) => {
 
         {/* 검색창 */}
         <View style={styles.sb}>
+          <Text style={styles.searchIcon}>🔍</Text>
           <TextInput
             style={styles.sbInput}
             placeholder="동 이름이나 아파트명으로 검색"
@@ -216,12 +222,20 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ mapTab, setMapTab, go }) => {
           {newsLoading && (
             <Text style={styles.loadingText}>뉴스 불러오는 중...</Text>
           )}
-          {newsData?.items.map((item, i) => (
+          {newsData?.items.map((item, i) => {
+            const badgeStyle: Record<string, { bg: string; color: string }> = {
+              market: { bg: "#FFF3E0", color: "#E65100" },
+              policy: { bg: "#E8F5E9", color: "#2E7D32" },
+              development: { bg: "#E3F2FD", color: "#1565C0" },
+              law: { bg: "#F3E5F5", color: "#6A1B9A" },
+            };
+            const bs = badgeStyle[item.category] || { bg: "#E6F1FB", color: "#0C447C" };
+            return (
             <IssueRow
               key={i}
               badge={NEWS_CATEGORY_LABELS[item.category] || item.category}
-              badgeBg="#E6F1FB"
-              badgeColor="#0C447C"
+              badgeBg={bs.bg}
+              badgeColor={bs.color}
               text={item.title.replace(/&quot;/g, '"').replace(/&amp;/g, "&")}
               summary={item.summary
                 ?.replace(/&quot;/g, '"')
@@ -229,7 +243,8 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ mapTab, setMapTab, go }) => {
               publishedAt={item.publishedAt}
               url={item.url || ""}
             />
-          ))}
+            );
+          })}
         </View>
         <View style={{ height: 16 }} />
       </ScrollView>
@@ -241,32 +256,40 @@ const styles = StyleSheet.create({
   scr: { flex: 1, backgroundColor: "#F5F5F5" },
   bar: {
     paddingHorizontal: 16,
-    paddingVertical: 14,
+    paddingVertical: 12,
     borderBottomWidth: 1,
     borderBottomColor: "#E5E5E5",
     backgroundColor: "#FFFFFF",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
   },
-  logo: { fontSize: 22, fontWeight: "700", color: "#111111" },
+  barLeft: { flexDirection: "row", alignItems: "center", gap: 8 },
+  logoIcon: {
+    width: 32,
+    height: 32,
+    backgroundColor: "#2563EB",
+    borderRadius: 8,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  logoIconText: { fontSize: 16 },
+  logo: { fontSize: 20, fontWeight: "700", color: "#111111" },
   sc: { flex: 1 },
   title: { fontSize: 20, fontWeight: "700", color: "#111111", marginBottom: 4 },
   subtitle: { fontSize: 14, color: "#888888" },
   sb: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#FFFFFF",
-    borderWidth: 1.5,
-    borderColor: "#CCCCCC",
-    borderRadius: 12,
+    backgroundColor: "#F0F0F0",
+    borderRadius: 24,
     paddingHorizontal: 14,
-    paddingVertical: 12,
+    paddingVertical: 10,
     marginHorizontal: 16,
     marginTop: 14,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.08,
-    shadowRadius: 4,
-    elevation: 2,
+    gap: 8,
   },
+  searchIcon: { fontSize: 16 },
   sbInput: { flex: 1, fontSize: 15, color: "#111111" },
   dd: {
     marginHorizontal: 16,
@@ -289,18 +312,17 @@ const styles = StyleSheet.create({
   mcs: { fontSize: 11, color: "#AAAAAA" },
   mtab: {
     flexDirection: "row",
-    backgroundColor: "#EEEEEE",
-    borderRadius: 10,
-    padding: 3,
+    gap: 8,
     marginHorizontal: 16,
     marginTop: 8,
   },
-  mt: { flex: 1, alignItems: "center", paddingVertical: 7, borderRadius: 8 },
-  mtOn: {
-    backgroundColor: "#2563EB",
-    borderWidth: 0,
+  mt: {
+    paddingHorizontal: 20,
+    paddingVertical: 8,
+    borderRadius: 20,
   },
-  mtText: { fontSize: 11, color: "#888888" },
+  mtOn: { backgroundColor: "#2563EB" },
+  mtText: { fontSize: 13, color: "#888888", fontWeight: "500" },
   mtTextOn: { color: "#FFFFFF", fontWeight: "600" },
   mapPlaceholder: {
     marginHorizontal: 16,
@@ -311,7 +333,7 @@ const styles = StyleSheet.create({
     borderWidth: 0.5,
     borderColor: "#E5E5E5",
   },
-  sec: { marginTop: 14, paddingHorizontal: 16 },
+  sec: { marginTop: 20, paddingHorizontal: 16 },
   st: { fontSize: 16, fontWeight: "700", color: "#111111", marginBottom: 10 },
 });
 
