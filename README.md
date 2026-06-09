@@ -5,6 +5,8 @@
 <!-- 언어 & 프레임워크 -->
 ![Python](https://img.shields.io/badge/Python-3.11-3776AB?style=flat-square&logo=python&logoColor=white)
 ![FastAPI](https://img.shields.io/badge/FastAPI-0.115-009688?style=flat-square&logo=fastapi&logoColor=white)
+![SQLAlchemy](https://img.shields.io/badge/SQLAlchemy-2.0-D71F00?style=flat-square&logo=sqlalchemy&logoColor=white)
+![Pydantic](https://img.shields.io/badge/Pydantic-2.x-E92063?style=flat-square&logo=pydantic&logoColor=white)
 ![React Native](https://img.shields.io/badge/React_Native-Expo-20232A?style=flat-square&logo=react&logoColor=61DAFB)
 
 <!-- 데이터베이스 & 캐시 -->
@@ -14,14 +16,21 @@
 
 <!-- AWS 인프라 -->
 ![AWS Lambda](https://img.shields.io/badge/AWS-Lambda%20×9-FF9900?style=flat-square&logo=awslambda&logoColor=white)
+![AWS EKS](https://img.shields.io/badge/AWS-EKS-FF9900?style=flat-square&logo=amazoneks&logoColor=white)
 ![AWS Bedrock](https://img.shields.io/badge/AWS-Bedrock%20Claude-FF9900?style=flat-square&logo=amazonaws&logoColor=white)
 ![AWS SQS](https://img.shields.io/badge/AWS-SQS%20+%20Step%20Functions-FF9900?style=flat-square&logo=amazonsqs&logoColor=white)
 ![AWS S3](https://img.shields.io/badge/AWS-S3%20+%20ElastiCache-FF9900?style=flat-square&logo=amazons3&logoColor=white)
+![AWS EventBridge](https://img.shields.io/badge/AWS-EventBridge-FF9900?style=flat-square&logo=amazonaws&logoColor=white)
+
+<!-- AI -->
+![LangChain](https://img.shields.io/badge/LangChain-AWS-1C3C3C?style=flat-square&logo=langchain&logoColor=white)
 
 <!-- 기타 -->
 ![Celery](https://img.shields.io/badge/Celery-5.4-37814A?style=flat-square&logo=celery&logoColor=white)
 ![Alembic](https://img.shields.io/badge/Alembic-Migration-6BA539?style=flat-square&logo=sqlalchemy&logoColor=white)
 ![Prometheus](https://img.shields.io/badge/Prometheus-Metrics-E6522C?style=flat-square&logo=prometheus&logoColor=white)
+![Grafana](https://img.shields.io/badge/Grafana-Dashboard-F46800?style=flat-square&logo=grafana&logoColor=white)
+![KEDA](https://img.shields.io/badge/KEDA-Autoscaling-326CE5?style=flat-square&logo=kubernetes&logoColor=white)
 
 ---
 
