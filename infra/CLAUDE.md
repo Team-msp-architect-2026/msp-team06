@@ -230,6 +230,7 @@ kubectl apply -f k8s/fastapi-serviceaccount.yaml
 kubectl apply -f k8s/fastapi-deployment.yaml
 kubectl apply -f k8s/fastapi-service.yaml
 kubectl apply -f k8s/ingress.yaml
+kubectl apply -f k8s/celery-deployment.yaml
 
 # 2. ArgoCD sync 확인 (~3분 이내 자동 완료)
 kubectl get pods -n argocd          # argocd-server, argocd-repo-server 등 Running 확인
