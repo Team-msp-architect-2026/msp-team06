@@ -6,7 +6,7 @@ from typing import Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 from datetime import date
 from app.core.database import get_db
-from app.metrics import DB_QUERY_LATENCY
+from app.metrics import DB_QUERY_LATENCY, EXTERNAL_API_CALLS_TOTAL
 from app.schemas.analysis import (
     PriceResponse,
     PriceTrendResponse,
@@ -79,6 +79,7 @@ async def get_price(
         }
 
     # 3순위: 외부 API fallback
+    EXTERNAL_API_CALLS_TOTAL.labels(api_type="molit_price").inc()
     try:
         lawd_cd_5, lawd_cd_10 = await get_lawd_cd(lat, lng)
         matched_name = None

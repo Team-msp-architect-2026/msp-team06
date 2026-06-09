@@ -49,6 +49,11 @@ DB_QUERY_LATENCY = Histogram(
     labelnames=["query_type"],
     buckets=[0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1],
 )
+EXTERNAL_API_CALLS_TOTAL = Counter(
+    "homelens_external_api_calls_total",
+    "DB 조회 실패 후 외부 API fallback 호출 횟수",
+    labelnames=["api_type"],
+)
 
 def start_metrics_server():
     start_http_server(8000)

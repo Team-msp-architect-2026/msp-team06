@@ -347,7 +347,7 @@ resource "kubernetes_config_map" "user_access_dashboard" {
           gridPos = { h = 8, w = 12, x = 12, y = 0 }
           targets = [
             {
-              expr         = "100 * (sum(increase(homelens_http_errors_total[1m])) or vector(0)) / (sum(increase(homelens_http_requests_total[1m])) > 0)"
+              expr         = "100 * (sum(increase(homelens_http_errors_total[5m])) or vector(0)) / (sum(increase(homelens_http_requests_total[5m])) + 1)"
               legendFormat = "에러율 %"
               refId        = "A"
             }
@@ -468,6 +468,35 @@ resource "kubernetes_config_map" "user_access_dashboard" {
             orientation  = "horizontal"
             reduceOptions = { calcs = ["lastNotNull"] }
           }
+        },
+
+        # ── 패널 6: 외부 API fallback 호출 횟수 ──────────────────────────
+        {
+          id      = 6
+          title   = "외부 API fallback 호출 횟수 (5분) — 높으면 DB 데이터 부족 의미"
+          type    = "timeseries"
+          gridPos = { h = 8, w = 24, x = 0, y = 24 }
+          targets = [
+            {
+              expr         = "increase(homelens_external_api_calls_total[5m])"
+              legendFormat = "{{api_type}}"
+              refId        = "A"
+            }
+          ]
+          fieldConfig = {
+            defaults = {
+              unit = "short"
+              color = { fixedColor = "orange", mode = "fixed" }
+              thresholds = {
+                steps = [
+                  { color = "green", value = null },
+                  { color = "orange", value = 1 },
+                  { color = "red", value = 5 }
+                ]
+              }
+            }
+          }
+          options = { tooltip = { mode = "multi" } }
         }
       ]
     })
