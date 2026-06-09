@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, text
 from sqlalchemy.dialects.postgresql import insert as pg_insert
+import time
 from datetime import datetime, date, timedelta
 from app.core.database import get_db
 from app.models.report import Report, ReportSection
@@ -116,7 +117,7 @@ async def create_report(
     try:
         from app.worker import generate_report_task
         generate_report_task.apply_async(
-            args=[report_id, request.regionId, region_name, lat, lng],
+            args=[report_id, request.regionId, region_name, lat, lng, time.time()],
             task_id=report_id,
         )
         print(f"[Report] SQS 전송 성공: {report_id}")

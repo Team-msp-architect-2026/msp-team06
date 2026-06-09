@@ -60,7 +60,7 @@ def get_db_session():
 
 
 @celery_app.task(name="generate_report_task")
-def generate_report_task(report_id: str, region_id: str, region_name: str, lat: float, lng: float):
+def generate_report_task(report_id: str, region_id: str, region_name: str, lat: float, lng: float, sent_at: float = None):
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
     db = get_db_session()
@@ -76,8 +76,8 @@ def generate_report_task(report_id: str, region_id: str, region_name: str, lat: 
 
         # SQS 대기 지연 측정
         try:
-            sqs_sent_ts = float(report.created_at.timestamp())
-            SQS_CONSUME_LATENCY.observe(time.time() - sqs_sent_ts)
+            if sent_at:
+                SQS_CONSUME_LATENCY.observe(time.time() - sent_at)
         except Exception:
             pass
 
