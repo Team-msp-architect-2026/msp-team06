@@ -1,5 +1,6 @@
 # HomeLens AI - FastAPI 앱 진입점
 
+import re
 import time
 from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
@@ -26,8 +27,14 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# /metrics, /health 등 인프라 경로는 수집 제외
 _SKIP_PATHS = {"/metrics", "/health", "/"}
+# UUID 패턴을 {id}로 치환 — 라벨 카디널리티 폭발 방지
+_UUID_RE = re.compile(
+    r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}", re.IGNORECASE
+)
+
+def _normalize_path(path: str) -> str:
+    return _UUID_RE.sub("{id}", path)
 
 @app.middleware("http")
 async def prometheus_metrics_middleware(request: Request, call_next):
@@ -41,7 +48,7 @@ async def prometheus_metrics_middleware(request: Request, call_next):
 
     labels = {
         "method": request.method,
-        "endpoint": path,
+        "endpoint": _normalize_path(path),
         "status_code": str(response.status_code),
     }
     HTTP_REQUEST_DURATION.labels(**labels).observe(duration)

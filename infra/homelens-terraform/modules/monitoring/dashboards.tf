@@ -347,7 +347,7 @@ resource "kubernetes_config_map" "user_access_dashboard" {
           gridPos = { h = 8, w = 12, x = 12, y = 0 }
           targets = [
             {
-              expr         = "100 * sum(increase(homelens_http_errors_total[1m])) / (sum(increase(homelens_http_requests_total[1m])) > 0)"
+              expr         = "100 * (sum(increase(homelens_http_errors_total[1m])) or vector(0)) / (sum(increase(homelens_http_requests_total[1m])) > 0)"
               legendFormat = "에러율 %"
               refId        = "A"
             }
