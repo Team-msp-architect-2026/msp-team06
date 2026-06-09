@@ -184,8 +184,14 @@ const ComplexScreen: React.FC<ComplexScreenProps> = ({
                 {priceLoading || trendLoading
                   ? "조회 중..."
                   : latestMonthly?.avgPrice
-                    ? latestMonthly?.avgDeposit
-                      ? `보증금 ${Math.floor(latestMonthly.avgDeposit / 1000)}천/월 ${latestMonthly.avgPrice}만`
+                    ? (latestMonthly as any)?.avgDeposit
+                      ? (() => {
+                          const dep = (latestMonthly as any).avgDeposit;
+                          const depStr = dep >= 10000
+                            ? `${Math.floor(dep / 10000)}억 ${dep % 10000 > 0 ? `${dep % 10000}만` : ""}`
+                            : `${dep}만`;
+                          return `보증금 ${depStr}\n월 ${latestMonthly.avgPrice}만`;
+                        })()
                       : `월 ${latestMonthly.avgPrice}만`
                     : "데이터 없음"}
               </Text>

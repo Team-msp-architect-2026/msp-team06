@@ -159,8 +159,14 @@ const AreaScreen: React.FC<AreaScreenProps> = ({
               <Text style={styles.sl}>월세 평균</Text>
               <Text style={styles.svsm}>
                 {priceLoading || trendLoading ? "조회 중..." : latestMonthly?.avgPrice
-                  ? latestMonthly?.avgDeposit
-                    ? `보증금 ${(latestMonthly.avgDeposit / 100).toFixed(0)}만/월 ${latestMonthly.avgPrice}만`
+                  ? (latestMonthly as any)?.avgDeposit
+                    ? (() => {
+                        const dep = (latestMonthly as any).avgDeposit;
+                        const depStr = dep >= 10000
+                          ? `${Math.floor(dep / 10000)}억 ${dep % 10000 > 0 ? `${dep % 10000}만` : ""}`
+                          : `${dep}만`;
+                        return `보증금 ${depStr}\n월 ${latestMonthly.avgPrice}만`;
+                      })()
                     : `월 ${latestMonthly.avgPrice}만`
                   : "데이터 없음"}
               </Text>
