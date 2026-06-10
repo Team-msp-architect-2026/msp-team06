@@ -65,6 +65,12 @@ def generate_report_task(report_id: str, region_id: str, region_name: str, lat: 
     asyncio.set_event_loop(loop)
     db = get_db_session()
 
+    # 전체 파이프라인 측정 기준점:
+    # - sent_at 있으면 SQS 전송 시각부터 (큐 대기 포함)
+    # - 없으면 Celery 태스크 진입 시각부터 (news/infra/price/Bedrock/DB 전부 포함)
+    task_start = time.time()
+    pipeline_origin = sent_at if sent_at else task_start
+
     try:
         from app.models.report import Report, ReportSection
 
@@ -74,10 +80,10 @@ def generate_report_task(report_id: str, region_id: str, region_name: str, lat: 
             print(f"[Celery] 리포트 없음: {report_id}")
             return
 
-        # SQS 대기 지연 측정
+        # SQS 대기 지연 측정 (SQS 전송 ~ Celery 태스크 시작)
         try:
             if sent_at:
-                SQS_CONSUME_LATENCY.observe(time.time() - sent_at)
+                SQS_CONSUME_LATENCY.observe(task_start - sent_at)
         except Exception:
             pass
 
@@ -133,7 +139,6 @@ def generate_report_task(report_id: str, region_id: str, region_name: str, lat: 
         db.commit()
 
         # Bedrock 호출
-        pipeline_start = time.time()
         with BEDROCK_INVOKE_LATENCY.time():
             result = loop.run_until_complete(generate_report(region_name, price_data, news_data, infra_data))
 
@@ -159,7 +164,8 @@ def generate_report_task(report_id: str, region_id: str, region_name: str, lat: 
                 ))
             db.commit()
 
-        PIPELINE_TOTAL_LATENCY.observe(time.time() - pipeline_start)
+        # 전체 파이프라인 지연: SQS 전송(또는 태스크 시작) ~ DB 완료
+        PIPELINE_TOTAL_LATENCY.observe(time.time() - pipeline_origin)
         print(f"[Celery] 리포트 완료: {report_id}")
 
     except Exception as e:
