@@ -3,6 +3,7 @@ from typing import Any
 import redis.asyncio as aioredis
 from app.core.config import settings
 import redis as sync_redis
+from app.metrics import CACHE_HITS_TOTAL, CACHE_MISSES_TOTAL
 
 TTL_PRICE = 60 * 60 * 24
 TTL_NEWS = 60 * 60 * 2
@@ -23,14 +24,23 @@ async def get_redis():
             return None
     return _redis
 
+def _cache_type(key: str) -> str:
+    """키 프리픽스로 캐시 유형을 추출한다 (price / news / report / other)."""
+    prefix = key.split(":")[0] if ":" in key else key
+    return prefix if prefix in ("price", "news", "report", "kapt") else "other"
+
+
 async def cache_get(key: str) -> Any:
     try:
         redis = await get_redis()
         if not redis:
             return None
         value = await redis.get(key)
+        cache_type = _cache_type(key)
         if value:
+            CACHE_HITS_TOTAL.labels(cache_type=cache_type).inc()
             return json.loads(value)
+        CACHE_MISSES_TOTAL.labels(cache_type=cache_type).inc()
         return None
     except Exception:
         return None

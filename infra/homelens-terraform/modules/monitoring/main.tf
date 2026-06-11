@@ -65,6 +65,22 @@ resource "helm_release" "kube_prometheus_stack" {
                   source_labels = ["__meta_kubernetes_pod_name"]
                   action        = "replace"
                   target_label  = "kubernetes_pod_name"
+                },
+                # process 라벨: app=celery-worker → process=celery, app=fastapi → process=fastapi
+                # PromQL에서 {process="celery"}/{process="fastapi"} 로 두 프로세스를 명확히 구분
+                {
+                  source_labels = ["__meta_kubernetes_pod_label_app"]
+                  action        = "replace"
+                  target_label  = "process"
+                  regex         = "celery-.*"
+                  replacement   = "celery"
+                },
+                {
+                  source_labels = ["__meta_kubernetes_pod_label_app"]
+                  action        = "replace"
+                  target_label  = "process"
+                  regex         = "(fastapi)"
+                  replacement   = "$1"
                 }
               ]
             }

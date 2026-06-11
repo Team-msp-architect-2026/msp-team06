@@ -19,6 +19,7 @@ from app.metrics import (
     PIPELINE_ERRORS,
     WORKER_CPU_PERCENT,
     WORKER_MEMORY_RSS_BYTES,
+    SQS_QUEUE_DEPTH,
     start_metrics_server,
 )
 start_metrics_server()
@@ -37,7 +38,30 @@ def _sample_process_resources():
             time.sleep(15)
 
 
+def _poll_sqs_queue_depth():
+    """30초마다 SQS 큐의 대기 메시지 수를 Gauge에 기록한다."""
+    import boto3
+    region = os.getenv("AWS_REGION", "eu-west-3")
+    queue_url = (
+        f"https://sqs.{region}.amazonaws.com"
+        f"/611058323802/homelens-dev-report-generation"
+    )
+    sqs = boto3.client("sqs", region_name=region)
+    while True:
+        try:
+            resp = sqs.get_queue_attributes(
+                QueueUrl=queue_url,
+                AttributeNames=["ApproximateNumberOfMessages"],
+            )
+            depth = int(resp["Attributes"].get("ApproximateNumberOfMessages", 0))
+            SQS_QUEUE_DEPTH.set(depth)
+        except Exception:
+            pass
+        time.sleep(30)
+
+
 threading.Thread(target=_sample_process_resources, daemon=True, name="resource-sampler").start()
+threading.Thread(target=_poll_sqs_queue_depth, daemon=True, name="sqs-depth-poller").start()
 
 AWS_REGION = os.getenv("AWS_REGION", "eu-west-3")
 

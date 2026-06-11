@@ -631,9 +631,9 @@ resource "kubernetes_config_map" "user_access_dashboard" {
 }
 
 # ---------------------------------------------------------------------------
-# Grafana 워커 프로세스 리소스 변동률 대시보드
-# homelens_worker_cpu_percent / homelens_worker_memory_rss_bytes (psutil Gauge)
-# → deriv()로 분당 변동량을 시각화해 태스크 실행 중 급등 구간을 파악
+# Grafana 병목 격리 대시보드
+# 행 1: 비동기 AI 처리 구간 (Celery & Bedrock) — process="celery" 라벨로 격리
+# 행 2: 동기 데이터 조회 구간 (FastAPI & Redis & RDS) — process="fastapi" 라벨로 격리
 # ---------------------------------------------------------------------------
 resource "kubernetes_config_map" "worker_resource_dashboard" {
   metadata {
@@ -646,30 +646,44 @@ resource "kubernetes_config_map" "worker_resource_dashboard" {
 
   data = {
     "worker-resource.json" = jsonencode({
-      title         = "HomeLens Worker Resource — ${var.env}"
+      title         = "HomeLens 병목 격리 — ${var.env}"
       uid           = "homelens-worker-resource-${var.env}"
       schemaVersion = 30
       refresh       = "15s"
       time          = { from = "now-30m", to = "now" }
 
       panels = [
-        # ── 패널 1: CPU 사용률 현재값 ────────────────────────────────────────
+
+        # ════════════════════════════════════════════════════════════════════
+        # 행 1 — 비동기 AI 처리 구간 (Celery & Bedrock)
+        # 이 구간이 느리면: SQS 대기열 증가 + Bedrock 지연 동시 확인
+        # 스케일링 대응: KEDA가 SQS 큐 기준으로 Celery 워커 자동 증설
+        # ════════════════════════════════════════════════════════════════════
         {
-          id    = 1
-          title = "Worker CPU 사용률 (%) | 15초 샘플"
+          id         = 1
+          type       = "row"
+          title      = "비동기 AI 처리 구간 — Celery & Bedrock  (병목 시: SQS 대기 ↑ + Bedrock 지연 ↑)"
+          collapsed  = false
+          gridPos    = { h = 1, w = 24, x = 0, y = 0 }
+        },
+
+        # ── 패널 1-1: Celery Worker CPU % (psutil 15초 샘플) ─────────────
+        {
+          id    = 2
+          title = "Celery Worker CPU % | process=celery | 15초 샘플"
           type  = "timeseries"
-          gridPos = { h = 8, w = 12, x = 0, y = 0 }
+          gridPos = { h = 8, w = 12, x = 0, y = 1 }
           targets = [
             {
-              expr         = "homelens_worker_cpu_percent"
-              legendFormat = "{{pod}} CPU %"
+              expr         = "homelens_worker_cpu_percent{process=\"celery\"}"
+              legendFormat = "{{kubernetes_pod_name}} CPU %"
               refId        = "A"
             }
           ]
           fieldConfig = {
             defaults = {
-              unit = "percent"
-              min  = 0
+              unit  = "percent"
+              min   = 0
               color = { mode = "palette-classic" }
               thresholds = {
                 steps = [
@@ -683,24 +697,24 @@ resource "kubernetes_config_map" "worker_resource_dashboard" {
           options = { tooltip = { mode = "multi" } }
         },
 
-        # ── 패널 2: 메모리 RSS 현재값 ────────────────────────────────────────
+        # ── 패널 1-2: Celery Worker 메모리 RSS ───────────────────────────
         {
-          id    = 2
-          title = "Worker 메모리 RSS (MB) | 15초 샘플"
+          id    = 3
+          title = "Celery Worker 메모리 RSS (MB) | process=celery | 15초 샘플"
           type  = "timeseries"
-          gridPos = { h = 8, w = 12, x = 12, y = 0 }
+          gridPos = { h = 8, w = 12, x = 12, y = 1 }
           targets = [
             {
-              expr         = "homelens_worker_memory_rss_bytes / 1048576"
-              legendFormat = "{{pod}} RSS MB"
+              expr         = "homelens_worker_memory_rss_bytes{process=\"celery\"} / 1048576"
+              legendFormat = "{{kubernetes_pod_name}} RSS MB"
               refId        = "A"
             }
           ]
           fieldConfig = {
             defaults = {
-              unit = "short"
+              unit   = "short"
               custom = { axisLabel = "MB" }
-              color = { mode = "palette-classic" }
+              color  = { mode = "palette-classic" }
               thresholds = {
                 steps = [
                   { color = "green",  value = null },
@@ -713,31 +727,34 @@ resource "kubernetes_config_map" "worker_resource_dashboard" {
           options = { tooltip = { mode = "multi" } }
         },
 
-        # ── 패널 3: CPU 변동률 (%/분) ─────────────────────────────────────────
-        # deriv()는 초당 변화량 → × 60 으로 분당 변화량으로 환산
-        # 양수: CPU 급증 구간(Bedrock 호출), 음수: 태스크 종료 후 하강 구간
+        # ── 패널 1-3: Bedrock 호출 대기시간 ─────────────────────────────
+        # p95 > 30s 이면 Bedrock 자체 병목 — Celery 증설보다 요청 조절 필요
         {
           id    = 4
-          title = "CPU 변동률 (%/분) — Bedrock 호출 구간에서 급등 예상"
+          title = "Bedrock 호출 대기시간 (p50 / p95) | 목표: p95 30s 이내"
           type  = "timeseries"
-          gridPos = { h = 8, w = 12, x = 0, y = 8 }
+          gridPos = { h = 8, w = 12, x = 0, y = 9 }
           targets = [
             {
-              expr         = "deriv(homelens_worker_cpu_percent[5m]) * 60"
-              legendFormat = "{{pod}} Δ CPU %/min"
+              expr         = "histogram_quantile(0.50, sum(increase(homelens_bedrock_invoke_duration_seconds_bucket[1h])) by (le))"
+              legendFormat = "p50"
               refId        = "A"
+            },
+            {
+              expr         = "histogram_quantile(0.95, sum(increase(homelens_bedrock_invoke_duration_seconds_bucket[1h])) by (le))"
+              legendFormat = "p95 (알림 기준)"
+              refId        = "B"
             }
           ]
           fieldConfig = {
             defaults = {
-              unit  = "short"
-              custom = { axisLabel = "%/min" }
+              unit  = "s"
               color = { mode = "palette-classic" }
               thresholds = {
                 steps = [
                   { color = "green",  value = null },
                   { color = "yellow", value = 20 },
-                  { color = "red",    value = 40 }
+                  { color = "red",    value = 30 }
                 ]
               }
             }
@@ -745,30 +762,176 @@ resource "kubernetes_config_map" "worker_resource_dashboard" {
           options = { tooltip = { mode = "multi" } }
         },
 
-        # ── 패널 4: 메모리 변동률 (MB/분) ────────────────────────────────────
-        # 양수 지속: 메모리 누수 의심, 음수: GC 해제 구간
+        # ── 패널 1-4: SQS 큐 대기열 ─────────────────────────────────────
+        # 큐가 쌓이면 KEDA가 Celery 워커를 자동 스케일아웃 (최대 4개)
+        # 큐 > 5 이상 지속 → 워커 증설 또는 Bedrock 지연 확인
         {
           id    = 5
-          title = "메모리 변동률 (MB/분) — 양수 지속 시 누수 의심"
+          title = "SQS 큐 대기 메시지 수 | KEDA 스케일아웃 기준: 5건/워커"
           type  = "timeseries"
-          gridPos = { h = 8, w = 12, x = 12, y = 8 }
+          gridPos = { h = 8, w = 12, x = 12, y = 9 }
           targets = [
             {
-              expr         = "deriv(homelens_worker_memory_rss_bytes[5m]) / 1048576 * 60"
-              legendFormat = "{{pod}} Δ MB/min"
+              expr         = "homelens_sqs_queue_depth"
+              legendFormat = "대기 메시지"
               refId        = "A"
             }
           ]
           fieldConfig = {
             defaults = {
               unit  = "short"
-              custom = { axisLabel = "MB/min" }
+              color = { fixedColor = "orange", mode = "fixed" }
+              thresholds = {
+                steps = [
+                  { color = "green",  value = null },
+                  { color = "yellow", value = 5 },
+                  { color = "red",    value = 20 }
+                ]
+              }
+            }
+          }
+          options = { tooltip = { mode = "single" } }
+        },
+
+        # ════════════════════════════════════════════════════════════════════
+        # 행 2 — 동기 데이터 조회 구간 (FastAPI & Redis & RDS)
+        # 이 구간이 느리면: Redis 미스 급증 → RDS 쿼리 지연 동시 확인
+        # 스케일링 대응: FastAPI 레플리카 증설 또는 Redis TTL/캐싱 전략 조정
+        # ════════════════════════════════════════════════════════════════════
+        {
+          id         = 10
+          type       = "row"
+          title      = "동기 데이터 조회 구간 — FastAPI & Redis & RDS  (병목 시: 캐시 미스 ↑ + DB 지연 ↑)"
+          collapsed  = false
+          gridPos    = { h = 1, w = 24, x = 0, y = 17 }
+        },
+
+        # ── 패널 2-1: FastAPI CPU % (cAdvisor 컨테이너 메트릭) ──────────
+        # psutil 대신 cAdvisor 사용 — FastAPI는 싱글 프로세스 비동기 루프
+        {
+          id    = 11
+          title = "FastAPI CPU % | process=fastapi | cAdvisor"
+          type  = "timeseries"
+          gridPos = { h = 8, w = 12, x = 0, y = 18 }
+          targets = [
+            {
+              expr         = "rate(container_cpu_usage_seconds_total{namespace=\"homelens\",container=\"fastapi\"}[2m]) * 100"
+              legendFormat = "{{pod}} CPU %"
+              refId        = "A"
+            }
+          ]
+          fieldConfig = {
+            defaults = {
+              unit  = "percent"
+              min   = 0
               color = { mode = "palette-classic" }
               thresholds = {
                 steps = [
                   { color = "green",  value = null },
-                  { color = "yellow", value = 50 },
-                  { color = "red",    value = 100 }
+                  { color = "yellow", value = 60 },
+                  { color = "red",    value = 85 }
+                ]
+              }
+            }
+          }
+          options = { tooltip = { mode = "multi" } }
+        },
+
+        # ── 패널 2-2: FastAPI 메모리 (cAdvisor) ─────────────────────────
+        {
+          id    = 12
+          title = "FastAPI 메모리 (MB) | process=fastapi | cAdvisor"
+          type  = "timeseries"
+          gridPos = { h = 8, w = 12, x = 12, y = 18 }
+          targets = [
+            {
+              expr         = "container_memory_working_set_bytes{namespace=\"homelens\",container=\"fastapi\"} / 1048576"
+              legendFormat = "{{pod}} Working Set MB"
+              refId        = "A"
+            }
+          ]
+          fieldConfig = {
+            defaults = {
+              unit   = "short"
+              custom = { axisLabel = "MB" }
+              color  = { mode = "palette-classic" }
+              thresholds = {
+                steps = [
+                  { color = "green",  value = null },
+                  { color = "yellow", value = 400 },
+                  { color = "red",    value = 700 }
+                ]
+              }
+            }
+          }
+          options = { tooltip = { mode = "multi" } }
+        },
+
+        # ── 패널 2-3: Redis 캐시 히트율 (%) ─────────────────────────────
+        # 히트율 하락 = DB 부하 증가 예고 신호
+        # cache_type 별(price/news/kapt) 분리 → 어떤 데이터가 캐시 효율 낮은지 파악
+        {
+          id    = 13
+          title = "Redis 캐시 히트율 (%) — 하락 시 RDS 부하 증가 예고"
+          type  = "timeseries"
+          gridPos = { h = 8, w = 12, x = 0, y = 26 }
+          targets = [
+            {
+              expr         = "sum(rate(homelens_cache_hits_total[5m])) by (cache_type) / (sum(rate(homelens_cache_hits_total[5m])) by (cache_type) + sum(rate(homelens_cache_misses_total[5m])) by (cache_type) + 0.001) * 100"
+              legendFormat = "{{cache_type}} 히트율 %"
+              refId        = "A"
+            },
+            {
+              expr         = "sum(rate(homelens_cache_misses_total[5m])) by (cache_type) * 60"
+              legendFormat = "{{cache_type}} 미스 건/분"
+              refId        = "B"
+            }
+          ]
+          fieldConfig = {
+            defaults = {
+              unit  = "short"
+              color = { mode = "palette-classic" }
+              thresholds = {
+                steps = [
+                  { color = "red",    value = null },
+                  { color = "yellow", value = 70 },
+                  { color = "green",  value = 90 }
+                ]
+              }
+            }
+          }
+          options = { tooltip = { mode = "multi" } }
+        },
+
+        # ── 패널 2-4: RDS 쿼리 응답시간 p95 ─────────────────────────────
+        # Redis 캐시 미스 → RDS 쿼리 → 이 지연이 올라오면 DB 스케일 필요
+        {
+          id    = 14
+          title = "RDS 쿼리 응답시간 p95 (ms) | query_type별 | 목표: 500ms 이내"
+          type  = "timeseries"
+          gridPos = { h = 8, w = 12, x = 12, y = 26 }
+          targets = [
+            {
+              expr         = "histogram_quantile(0.95, sum(rate(homelens_db_query_duration_seconds_bucket[5m])) by (le, query_type)) * 1000"
+              legendFormat = "{{query_type}} p95 ms"
+              refId        = "A"
+            },
+            {
+              expr         = "histogram_quantile(0.50, sum(rate(homelens_db_query_duration_seconds_bucket[5m])) by (le, query_type)) * 1000"
+              legendFormat = "{{query_type}} p50 ms"
+              refId        = "B"
+            }
+          ]
+          fieldConfig = {
+            defaults = {
+              unit  = "short"
+              custom = { axisLabel = "ms" }
+              color = { mode = "palette-classic" }
+              thresholds = {
+                steps = [
+                  { color = "green",  value = null },
+                  { color = "yellow", value = 200 },
+                  { color = "red",    value = 500 }
                 ]
               }
             }

@@ -55,8 +55,8 @@ EXTERNAL_API_CALLS_TOTAL = Counter(
     labelnames=["api_type"],
 )
 
-# ── 시나리오 3: 워커 프로세스 리소스 변동률 ────────────────────────────────────
-# psutil로 15초마다 샘플링 → Grafana deriv()로 변동률 시각화
+# ── 시나리오 3: Celery 워커 프로세스 리소스 ──────────────────────────────────
+# psutil 15초 샘플링 → {process="celery"} 라벨로 FastAPI와 구분
 WORKER_CPU_PERCENT = Gauge(
     "homelens_worker_cpu_percent",
     "Celery 워커 프로세스 CPU 사용률 (%)"
@@ -64,6 +64,26 @@ WORKER_CPU_PERCENT = Gauge(
 WORKER_MEMORY_RSS_BYTES = Gauge(
     "homelens_worker_memory_rss_bytes",
     "Celery 워커 프로세스 메모리 RSS (bytes)"
+)
+
+# ── 시나리오 4: SQS 큐 깊이 ──────────────────────────────────────────────────
+# Celery worker가 30초마다 SQS API 폴링 → 대기열 적체 감지
+SQS_QUEUE_DEPTH = Gauge(
+    "homelens_sqs_queue_depth",
+    "SQS 큐 대기 중인 메시지 수 (ApproximateNumberOfMessages)"
+)
+
+# ── 시나리오 5: Redis 캐시 히트/미스 ─────────────────────────────────────────
+# cache_get() 호출 시 키 프리픽스별(price/news/report) 히트·미스 계수
+CACHE_HITS_TOTAL = Counter(
+    "homelens_cache_hits_total",
+    "Redis 캐시 히트 횟수",
+    labelnames=["cache_type"],
+)
+CACHE_MISSES_TOTAL = Counter(
+    "homelens_cache_misses_total",
+    "Redis 캐시 미스 횟수",
+    labelnames=["cache_type"],
 )
 
 def start_metrics_server():
