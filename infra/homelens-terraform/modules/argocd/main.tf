@@ -29,7 +29,9 @@ resource "helm_release" "argocd" {
   version          = "9.5.17"
   namespace        = "argocd"
   create_namespace = true
-  timeout          = 600
+  timeout          = 900
+  cleanup_on_fail  = true
+  wait             = false
 
   set {
     name  = "configs.params.server\\.insecure"

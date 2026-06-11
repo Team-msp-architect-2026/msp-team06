@@ -1,4 +1,4 @@
-from prometheus_client import Histogram, Counter, start_http_server
+from prometheus_client import Histogram, Counter, Gauge, start_http_server
 
 # ── 시나리오 1: SQS → Celery → Bedrock → DB 파이프라인 ─────────────────────
 SQS_CONSUME_LATENCY = Histogram(
@@ -53,6 +53,17 @@ EXTERNAL_API_CALLS_TOTAL = Counter(
     "homelens_external_api_calls_total",
     "DB 조회 실패 후 외부 API fallback 호출 횟수",
     labelnames=["api_type"],
+)
+
+# ── 시나리오 3: 워커 프로세스 리소스 변동률 ────────────────────────────────────
+# psutil로 15초마다 샘플링 → Grafana deriv()로 변동률 시각화
+WORKER_CPU_PERCENT = Gauge(
+    "homelens_worker_cpu_percent",
+    "Celery 워커 프로세스 CPU 사용률 (%)"
+)
+WORKER_MEMORY_RSS_BYTES = Gauge(
+    "homelens_worker_memory_rss_bytes",
+    "Celery 워커 프로세스 메모리 RSS (bytes)"
 )
 
 def start_metrics_server():

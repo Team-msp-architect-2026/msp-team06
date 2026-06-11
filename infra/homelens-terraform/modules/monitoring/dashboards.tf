@@ -196,6 +196,128 @@ resource "kubernetes_config_map" "pipeline_dashboard" {
             defaults = { unit = "reqps" }
           }
           options = { tooltip = { mode = "multi" } }
+        },
+
+        # ── 패널 6: Celery pod CPU 사용량 ─────────────────────────────────
+        # 실제 사용량(actual) vs request(250m) / limit(1000m) 비교
+        {
+          id    = 6
+          title = "Celery Pod CPU 사용량 | request=250m / limit=1000m"
+          type  = "timeseries"
+          gridPos = { h = 8, w = 12, x = 0, y = 24 }
+          targets = [
+            {
+              expr         = "rate(container_cpu_usage_seconds_total{namespace=\"homelens\",container=\"celery-worker\"}[2m]) * 1000"
+              legendFormat = "{{pod}}"
+              refId        = "A"
+            }
+          ]
+          fieldConfig = {
+            defaults = {
+              unit = "short"
+              custom = { axisLabel = "mCPU" }
+              thresholds = {
+                steps = [
+                  { color = "green", value = null },
+                  { color = "yellow", value = 500 },
+                  { color = "red", value = 900 }
+                ]
+              }
+            }
+          }
+          options = { tooltip = { mode = "multi" } }
+        },
+
+        # ── 패널 7: Celery pod 메모리 사용량 ──────────────────────────────
+        # working_set 기준 / request=512Mi / limit=1024Mi
+        {
+          id    = 7
+          title = "Celery Pod 메모리 사용량 (Mi) | request=512Mi / limit=1024Mi"
+          type  = "timeseries"
+          gridPos = { h = 8, w = 12, x = 12, y = 24 }
+          targets = [
+            {
+              expr         = "container_memory_working_set_bytes{namespace=\"homelens\",container=\"celery-worker\"} / 1048576"
+              legendFormat = "{{pod}}"
+              refId        = "A"
+            }
+          ]
+          fieldConfig = {
+            defaults = {
+              unit = "short"
+              custom = { axisLabel = "Mi" }
+              thresholds = {
+                steps = [
+                  { color = "green", value = null },
+                  { color = "yellow", value = 768 },
+                  { color = "red", value = 950 }
+                ]
+              }
+            }
+          }
+          options = { tooltip = { mode = "multi" } }
+        },
+
+        # ── 패널 8: Worker 노드 CPU 사용률 ────────────────────────────────
+        # Celery pod가 실행 중인 노드만 표시 (kube_pod_info join)
+        {
+          id    = 8
+          title = "Worker 노드 CPU 사용률 (%)"
+          type  = "timeseries"
+          gridPos = { h = 8, w = 12, x = 0, y = 32 }
+          targets = [
+            {
+              expr         = "(1 - avg by (nodename) (rate(node_cpu_seconds_total{mode=\"idle\",job=\"node-exporter\"}[2m]) * on(instance) group_left(nodename) node_uname_info)) * 100 * on(nodename) group_left() label_replace(max by (node) (kube_pod_info{namespace=\"homelens\",pod=~\"celery-worker.*\"}),\"nodename\",\"$1\",\"node\",\"(.*)\")"
+              legendFormat = "CPU %"
+              refId        = "A"
+            }
+          ]
+          fieldConfig = {
+            defaults = {
+              unit = "percent"
+              min  = 0
+              max  = 100
+              thresholds = {
+                steps = [
+                  { color = "green", value = null },
+                  { color = "yellow", value = 70 },
+                  { color = "red", value = 85 }
+                ]
+              }
+            }
+          }
+          options = { tooltip = { mode = "single" } }
+        },
+
+        # ── 패널 9: Worker 노드 메모리 사용률 ─────────────────────────────
+        # Celery pod가 실행 중인 노드만 표시 (kube_pod_info join)
+        {
+          id    = 9
+          title = "Worker 노드 메모리 사용률 (%)"
+          type  = "timeseries"
+          gridPos = { h = 8, w = 12, x = 12, y = 32 }
+          targets = [
+            {
+              expr         = "(1 - avg by (nodename) (node_memory_MemAvailable_bytes{job=\"node-exporter\"} * on(instance) group_left(nodename) node_uname_info) / avg by (nodename) (node_memory_MemTotal_bytes{job=\"node-exporter\"} * on(instance) group_left(nodename) node_uname_info)) * 100 * on(nodename) group_left() label_replace(max by (node) (kube_pod_info{namespace=\"homelens\",pod=~\"celery-worker.*\"}),\"nodename\",\"$1\",\"node\",\"(.*)\")"
+              legendFormat = "Memory %"
+              refId        = "A"
+            }
+          ]
+          fieldConfig = {
+            defaults = {
+              unit = "percent"
+              min  = 0
+              max  = 100
+              thresholds = {
+                steps = [
+                  { color = "green", value = null },
+                  { color = "yellow", value = 70 },
+                  { color = "red", value = 85 }
+                ]
+              }
+            }
+          }
+          options = { tooltip = { mode = "single" } }
         }
       ]
     })
@@ -207,6 +329,7 @@ resource "kubernetes_config_map" "pipeline_dashboard" {
 # ---------------------------------------------------------------------------
 # CloudWatch 성능 대시보드 (기존 — ALB/SQS/RDS/Redis/Lambda)
 # ---------------------------------------------------------------------------
+
 resource "aws_cloudwatch_dashboard" "main" {
   dashboard_name = "${var.project_name}-${var.env}-performance"
 
@@ -494,6 +617,158 @@ resource "kubernetes_config_map" "user_access_dashboard" {
                   { color = "green", value = null },
                   { color = "orange", value = 1 },
                   { color = "red", value = 5 }
+                ]
+              }
+            }
+          }
+          options = { tooltip = { mode = "multi" } }
+        }
+      ]
+    })
+  }
+
+  depends_on = [helm_release.kube_prometheus_stack]
+}
+
+# ---------------------------------------------------------------------------
+# Grafana 워커 프로세스 리소스 변동률 대시보드
+# homelens_worker_cpu_percent / homelens_worker_memory_rss_bytes (psutil Gauge)
+# → deriv()로 분당 변동량을 시각화해 태스크 실행 중 급등 구간을 파악
+# ---------------------------------------------------------------------------
+resource "kubernetes_config_map" "worker_resource_dashboard" {
+  metadata {
+    name      = "${var.project_name}-${var.env}-worker-resource-dashboard"
+    namespace = "monitoring"
+    labels = {
+      grafana_dashboard = "1"
+    }
+  }
+
+  data = {
+    "worker-resource.json" = jsonencode({
+      title         = "HomeLens Worker Resource — ${var.env}"
+      uid           = "homelens-worker-resource-${var.env}"
+      schemaVersion = 30
+      refresh       = "15s"
+      time          = { from = "now-30m", to = "now" }
+
+      panels = [
+        # ── 패널 1: CPU 사용률 현재값 ────────────────────────────────────────
+        {
+          id    = 1
+          title = "Worker CPU 사용률 (%) | 15초 샘플"
+          type  = "timeseries"
+          gridPos = { h = 8, w = 12, x = 0, y = 0 }
+          targets = [
+            {
+              expr         = "homelens_worker_cpu_percent"
+              legendFormat = "{{pod}} CPU %"
+              refId        = "A"
+            }
+          ]
+          fieldConfig = {
+            defaults = {
+              unit = "percent"
+              min  = 0
+              color = { mode = "palette-classic" }
+              thresholds = {
+                steps = [
+                  { color = "green",  value = null },
+                  { color = "yellow", value = 60 },
+                  { color = "red",    value = 85 }
+                ]
+              }
+            }
+          }
+          options = { tooltip = { mode = "multi" } }
+        },
+
+        # ── 패널 2: 메모리 RSS 현재값 ────────────────────────────────────────
+        {
+          id    = 2
+          title = "Worker 메모리 RSS (MB) | 15초 샘플"
+          type  = "timeseries"
+          gridPos = { h = 8, w = 12, x = 12, y = 0 }
+          targets = [
+            {
+              expr         = "homelens_worker_memory_rss_bytes / 1048576"
+              legendFormat = "{{pod}} RSS MB"
+              refId        = "A"
+            }
+          ]
+          fieldConfig = {
+            defaults = {
+              unit = "short"
+              custom = { axisLabel = "MB" }
+              color = { mode = "palette-classic" }
+              thresholds = {
+                steps = [
+                  { color = "green",  value = null },
+                  { color = "yellow", value = 700 },
+                  { color = "red",    value = 950 }
+                ]
+              }
+            }
+          }
+          options = { tooltip = { mode = "multi" } }
+        },
+
+        # ── 패널 3: CPU 변동률 (%/분) ─────────────────────────────────────────
+        # deriv()는 초당 변화량 → × 60 으로 분당 변화량으로 환산
+        # 양수: CPU 급증 구간(Bedrock 호출), 음수: 태스크 종료 후 하강 구간
+        {
+          id    = 4
+          title = "CPU 변동률 (%/분) — Bedrock 호출 구간에서 급등 예상"
+          type  = "timeseries"
+          gridPos = { h = 8, w = 12, x = 0, y = 8 }
+          targets = [
+            {
+              expr         = "deriv(homelens_worker_cpu_percent[5m]) * 60"
+              legendFormat = "{{pod}} Δ CPU %/min"
+              refId        = "A"
+            }
+          ]
+          fieldConfig = {
+            defaults = {
+              unit  = "short"
+              custom = { axisLabel = "%/min" }
+              color = { mode = "palette-classic" }
+              thresholds = {
+                steps = [
+                  { color = "green",  value = null },
+                  { color = "yellow", value = 20 },
+                  { color = "red",    value = 40 }
+                ]
+              }
+            }
+          }
+          options = { tooltip = { mode = "multi" } }
+        },
+
+        # ── 패널 4: 메모리 변동률 (MB/분) ────────────────────────────────────
+        # 양수 지속: 메모리 누수 의심, 음수: GC 해제 구간
+        {
+          id    = 5
+          title = "메모리 변동률 (MB/분) — 양수 지속 시 누수 의심"
+          type  = "timeseries"
+          gridPos = { h = 8, w = 12, x = 12, y = 8 }
+          targets = [
+            {
+              expr         = "deriv(homelens_worker_memory_rss_bytes[5m]) / 1048576 * 60"
+              legendFormat = "{{pod}} Δ MB/min"
+              refId        = "A"
+            }
+          ]
+          fieldConfig = {
+            defaults = {
+              unit  = "short"
+              custom = { axisLabel = "MB/min" }
+              color = { mode = "palette-classic" }
+              thresholds = {
+                steps = [
+                  { color = "green",  value = null },
+                  { color = "yellow", value = 50 },
+                  { color = "red",    value = 100 }
                 ]
               }
             }

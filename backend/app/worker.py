@@ -4,6 +4,8 @@
 import os
 import asyncio
 import time
+import threading
+import psutil
 from datetime import datetime, date
 from celery import Celery
 from app.services.report import generate_report
@@ -15,9 +17,27 @@ from app.metrics import (
     DB_SAVE_LATENCY,
     PIPELINE_TOTAL_LATENCY,
     PIPELINE_ERRORS,
+    WORKER_CPU_PERCENT,
+    WORKER_MEMORY_RSS_BYTES,
     start_metrics_server,
 )
 start_metrics_server()
+
+
+def _sample_process_resources():
+    """15초 간격으로 프로세스 CPU(%)·메모리(RSS)를 Gauge에 기록한다."""
+    proc = psutil.Process(os.getpid())
+    proc.cpu_percent()  # 첫 호출은 항상 0.0 — 기준값 초기화용
+    while True:
+        try:
+            cpu = proc.cpu_percent(interval=15)  # 15초 블록 후 평균 CPU% 반환
+            WORKER_CPU_PERCENT.set(cpu)
+            WORKER_MEMORY_RSS_BYTES.set(proc.memory_info().rss)
+        except Exception:
+            time.sleep(15)
+
+
+threading.Thread(target=_sample_process_resources, daemon=True, name="resource-sampler").start()
 
 AWS_REGION = os.getenv("AWS_REGION", "eu-west-3")
 
