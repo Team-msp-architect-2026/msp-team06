@@ -280,11 +280,30 @@ kubectl apply -f ~/aws-auth.yaml
 - "the server has asked for the client to provide credentials" 오류 → aws-auth 미등록 또는 ARN 불일치
 - "Conflict: the object has been modified" 오류 → `kubectl get configmap aws-auth -n kube-system -o yaml > ~/aws-auth.yaml` 재실행 후 편집
 
-# [TODO] Cluster Autoscaler 도입 검토 — apply 순서 안내 후 반드시 아래 질문할 것
-# "현재 KEDA로 Celery pod는 자동 증감되지만, EKS 노드는 자동 확장이 설정되어 있지 않습니다.
-#  pod가 Pending 상태가 될 경우 수동 개입이 필요합니다.
-#  Cluster Autoscaler를 도입하면 노드도 자동으로 증감됩니다. 도입할까요?
-#  (변경 범위: modules/eks/irsa.tf IRSA 추가, modules/eks/main.tf 노드그룹 태그 추가, Helm release 추가)"
+# [TODO] Karpenter 도입 (Cluster Autoscaler 대체 — CA보다 노드 프로비저닝 30~60초로 빠름)
+# 핵심: Karpenter는 EC2 노드 레이어(Layer 3)만 바꿈. FastAPI→SQS→Celery→DB 워크플로우 전혀 변경 없음.
+# 참고 다이어그램: docs/karpenter-eks-architecture.drawio
+#
+# 변경 범위:
+#   - modules/eks/main.tf: aws_eks_node_group (api/worker) 제거
+#   - modules/eks/ 또는 modules/karpenter/ 신규: Karpenter Helm release + NodePool + EC2NodeClass 추가
+#   - modules/eks/irsa.tf: Karpenter용 IRSA 추가
+#     (ec2:RunInstances, ec2:TerminateInstances, ec2:DescribeInstances, pricing:GetProducts 등)
+#   - environments/dev/versions.tf: karpenter Helm chart provider 버전 추가
+#   - lifecycle.ignore_changes 불필요 (MNG 자체를 제거하므로)
+#
+# NodePool 설정 시 반드시 지켜야 할 것 (celery-deployment.yaml 변경 없음):
+#   1. worker NodePool에 taint: dedicated=worker:NoSchedule 추가
+#      → celery-deployment.yaml의 tolerations와 매칭
+#   2. worker NodePool에 label: role=worker 추가
+#      → celery-deployment.yaml의 nodeSelector: role=worker와 매칭
+#   3. api NodePool에는 taint 없음 (FastAPI, KEDA, monitoring 등 일반 Pod 수용)
+#
+# 비용 최적화 옵션 (선택):
+#   - KEDA minReplicaCount: 1 → 0 변경 시: SQS 큐 비면 worker 노드 0대 → EC2 비용 0
+#     (단, 첫 메시지 처리 30~60초 지연 감수 필요)
+#   - worker NodePool: consolidationPolicy: WhenEmpty  (Pod 없으면 즉시 노드 종료)
+#   - api NodePool:    consolidationPolicy: WhenUnderutilized (과잉 노드 점진적 축소)
 # [TODO] external-dns 도입 검토 — apply 순서 안내 후 반드시 아래 질문할 것
 # "현재 kubectl apply 후 Route53을 매번 수동 업데이트하고 있습니다.
 #  external-dns를 도입하면 ingress apply 시 Route53이 자동 동기화됩니다. 도입할까요?"
