@@ -27,6 +27,7 @@
 - Phase 10: Bedrock + Celery — 완료
 - Phase 11: WAF + CDN + DNS — 완료
 - Phase 12: Monitoring (Prometheus + Grafana + X-Ray) — 완료 (팀원 코드 종합)
+- Phase 13: Cluster Autoscaler — **코드 완료 (2026-06-12), terraform apply 후 활성화**
 (현재 진행 단계를 매 작업 시작 시 명시)
 
 ---
@@ -228,11 +229,28 @@ cd ~/msp-team06/infra
 kubectl apply -f k8s/configmap.yaml
 kubectl apply -f k8s/fastapi-serviceaccount.yaml
 kubectl apply -f k8s/fastapi-deployment.yaml
+kubectl apply -f k8s/fastapi-hpa.yaml
 kubectl apply -f k8s/fastapi-service.yaml
 kubectl apply -f k8s/ingress.yaml
 kubectl apply -f k8s/celery-deployment.yaml
 
-# 2. ArgoCD sync 확인 (~3분 이내 자동 완료)
+# 3. Alertmanager Slack 설정 재적용 (destroy 시 초기화됨)
+kubectl create secret generic homelens-slack-webhook \
+  --from-literal=url='<webhook url>' \
+  -n monitoring --dry-run=client -o yaml | kubectl apply -f -
+kubectl apply -f k8s/alertmanager-config.yaml
+
+# 4. EKS control plane 알림 silence 재적용 (Alertmanager 재시작 시 초기화됨)
+ENDS=$(python3 -c "from datetime import datetime,timedelta; print((datetime.utcnow()+timedelta(days=365)).strftime('%Y-%m-%dT%H:%M:%SZ'))")
+NOW=$(python3 -c "from datetime import datetime; print(datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%SZ'))")
+for ALERT in "KubeSchedulerDown" "KubeControllerManagerDown"; do
+  kubectl exec -n monitoring alertmanager-kube-prometheus-stack-alertmanager-0 -c alertmanager -- \
+    wget -qO- --post-data="{\"matchers\":[{\"name\":\"alertname\",\"value\":\"$ALERT\",\"isRegex\":false}],\"startsAt\":\"$NOW\",\"endsAt\":\"$ENDS\",\"createdBy\":\"homelens-admin\",\"comment\":\"EKS managed control plane\"}" \
+    --header='Content-Type: application/json' \
+    'http://localhost:9093/api/v2/silences' > /dev/null
+done
+
+# 5. ArgoCD sync 확인 (~3분 이내 자동 완료)
 kubectl get pods -n argocd          # argocd-server, argocd-repo-server 등 Running 확인
 kubectl get applicationset -n argocd  # homelens ApplicationSet 확인
 kubectl get application -n argocd     # homelens-dev Synced/Healthy 확인
@@ -280,30 +298,41 @@ kubectl apply -f ~/aws-auth.yaml
 - "the server has asked for the client to provide credentials" 오류 → aws-auth 미등록 또는 ARN 불일치
 - "Conflict: the object has been modified" 오류 → `kubectl get configmap aws-auth -n kube-system -o yaml > ~/aws-auth.yaml` 재실행 후 편집
 
-# [TODO] Karpenter 도입 (Cluster Autoscaler 대체 — CA보다 노드 프로비저닝 30~60초로 빠름)
-# 핵심: Karpenter는 EC2 노드 레이어(Layer 3)만 바꿈. FastAPI→SQS→Celery→DB 워크플로우 전혀 변경 없음.
-# 참고 다이어그램: docs/karpenter-eks-architecture.drawio
+# ✅ Cluster Autoscaler (CA) 구현 완료 (2026-06-12)
+# 참고 문서: infra/homelens-terraform/environments/dev/CLUSTER_AUTOSCALER.md
 #
-# 변경 범위:
-#   - modules/eks/main.tf: aws_eks_node_group (api/worker) 제거
-#   - modules/eks/ 또는 modules/karpenter/ 신규: Karpenter Helm release + NodePool + EC2NodeClass 추가
-#   - modules/eks/irsa.tf: Karpenter용 IRSA 추가
-#     (ec2:RunInstances, ec2:TerminateInstances, ec2:DescribeInstances, pricing:GetProducts 등)
-#   - environments/dev/versions.tf: karpenter Helm chart provider 버전 추가
-#   - lifecycle.ignore_changes 불필요 (MNG 자체를 제거하므로)
+# 3계층 스케일링 구조:
+#   Layer 1 (스레드): --concurrency=4  → Pod 1개당 동시 태스크 4개
+#   Layer 2 (Pod):    KEDA maxReplicaCount=25 (dev) / 10 (prod)  → SQS 깊이 기준 자동 증감
+#   Layer 3 (노드):   CA min=2 / max=4  → Pending Pod 감지 시 노드 자동 추가
 #
-# NodePool 설정 시 반드시 지켜야 할 것 (celery-deployment.yaml 변경 없음):
-#   1. worker NodePool에 taint: dedicated=worker:NoSchedule 추가
-#      → celery-deployment.yaml의 tolerations와 매칭
-#   2. worker NodePool에 label: role=worker 추가
-#      → celery-deployment.yaml의 nodeSelector: role=worker와 매칭
-#   3. api NodePool에는 taint 없음 (FastAPI, KEDA, monitoring 등 일반 Pod 수용)
+# 현재 dev 설정값:
+#   worker 노드: min=2 (상시 대기), desired=2, max=4
+#   KEDA: minReplicaCount=1, maxReplicaCount=25, cooldownPeriod=300
+#   최대 동시 처리: 4노드 × 7Pod × 4threads = 112 태스크
 #
-# 비용 최적화 옵션 (선택):
-#   - KEDA minReplicaCount: 1 → 0 변경 시: SQS 큐 비면 worker 노드 0대 → EC2 비용 0
-#     (단, 첫 메시지 처리 30~60초 지연 감수 필요)
-#   - worker NodePool: consolidationPolicy: WhenEmpty  (Pod 없으면 즉시 노드 종료)
-#   - api NodePool:    consolidationPolicy: WhenUnderutilized (과잉 노드 점진적 축소)
+# CA 핵심 규칙 (변경 시 반드시 확인):
+#   1. 노드그룹 ASG 태그 2개 필수 (modules/eks/main.tf)
+#      "k8s.io/cluster-autoscaler/enabled"              = "true"
+#      "k8s.io/cluster-autoscaler/homelens-{env}-eks"   = "owned"
+#   2. lifecycle { ignore_changes = [scaling_config[0].desired_size] } 필수
+#      → 없으면 terraform apply 때마다 CA가 바꾼 desired_size가 tfvars 값으로 원복
+#   3. destroy 시 반드시 helm uninstall 먼저 (destroy.sh에 포함됨)
+#      → 순서 틀리면 ASG desired_size가 예상치 못한 값으로 잔존
+#
+# KEDA + CA 동작 흐름:
+#   SQS 메시지 증가 → KEDA Pod 추가 → 노드 용량 초과 → Pod Pending
+#   → CA 감지 → 노드 추가 (2~5분) → Pending Pod 스케줄링 완료
+#   SQS 조용 → cooldown 300초 후 KEDA Pod 축소 → 노드 유휴 5분 후 CA 노드 제거
+#   → 단, min=2 이하로는 축소 안 함
+#
+# [TODO] Karpenter 도입 검토 (CA 대체 — 프로비저닝 30~60초로 CA보다 빠름)
+#   현재 CA로 운영 중. prod 트래픽 폭증 대응 시 재검토 가능.
+#   참고 다이어그램: docs/karpenter-eks-architecture.drawio
+#   주의: Karpenter 전환 시 MNG 제거 + NodePool taint/label 재설정 필요
+#     1. worker NodePool에 taint: dedicated=worker:NoSchedule 추가
+#     2. worker NodePool에 label: role=worker 추가
+#     3. api NodePool에는 taint 없음
 # [TODO] external-dns 도입 검토 — apply 순서 안내 후 반드시 아래 질문할 것
 # "현재 kubectl apply 후 Route53을 매번 수동 업데이트하고 있습니다.
 #  external-dns를 도입하면 ingress apply 시 Route53이 자동 동기화됩니다. 도입할까요?"
@@ -347,6 +376,34 @@ terraform apply
 ```
 
 - `shared/backend.tf`에 `required_providers` 포함 → `versions.tf` 별도 불필요 (중복 시 삭제)
+
+---
+
+## 아키텍처 결정 기록
+
+### OpenVPN / Bastion Server — 도입하지 않는 이유
+
+**결론: 불필요. 현재 인프라에 더 나은 대안이 이미 내장되어 있음.**
+
+| 리소스 | 현재 접근 방식 | 대안 필요 여부 |
+|--------|----------------|----------------|
+| EKS API | `aws eks get-token` (IAM 인증) | 불필요 |
+| Grafana / ArgoCD | `kubectl port-forward` | 불필요 |
+| RDS / Redis (디버깅) | `kubectl run debug --rm -it` 임시 파드 | 불필요 |
+| ALB | HTTPS 직접 노출 | 불필요 |
+
+**도입하지 않는 근거:**
+1. EKS 접근은 IAM으로 이미 해결 — VPN 없이 자격증명만 있으면 어디서든 접근 가능
+2. private 리소스(RDS·Redis) 직접 접속 필요 시 EKS 임시 파드로 대체:
+   ```bash
+   kubectl run debug --rm -it --image=postgres:17 -n homelens -- \
+     psql -h <rds-endpoint> -U postgres
+   ```
+3. `kubectl port-forward`가 SSH 터널과 동일한 역할 수행
+4. **비용**: bastion EC2 상시 가동 ~$11/월 + 매일 destroy/apply 사이클과 충돌
+5. **보안**: 22번 포트 오픈 = 추가 공격면. IAM 기반 구조와 불일치
+
+**예외 조건 (현재 해당 없음):** AWS CLI/kubectl 없는 외부 DBA가 상시 DB 직접 접근이 필요한 경우 → AWS SSM Session Manager 도입 검토 (추가 비용 없음, 포트 오픈 불필요)
 
 ---
 
@@ -548,14 +605,20 @@ terraform apply
 - `modules/celery/variables.tf`의 `replicas` default = 0
 - 실제 이미지는 CI/CD에서 배포
 
-### KEDA ScaledObject — minReplicaCount·cooldownPeriod 튜닝 (2026-06-08 반영)
-- **minReplicaCount**: dev/prod 모두 `1` (기존 dev=0 → 변경)
-  - 이유: pod=0이면 로그 확인 불가, 재배포 없이 디버깅 불가
-  - worker 노드는 Celery 전용 taint로 이미 켜져 있으므로 pod 1개 추가 비용 없음
-- **cooldownPeriod**: `60` → `300`초
-  - 이유: Bedrock 호출(Claude)이 최대 30초 이상 소요 → SQS 메시지 소비 직후 큐 depth=0 → 60초 cooldown으로는 KEDA가 Bedrock 호출 중인 pod를 강제 종료 → `status=failed`, `failReason=null` 버그 발생
-  - 300초 cooldown = Bedrock 완료 후 충분한 여유
-- **null_resource triggers 주의**: `cooldownPeriod`, `minReplicaCount` 값을 triggers에 포함시켜야 변경 시 ScaledObject가 재apply됨
+### KEDA ScaledObject — 현재 설정값 (2026-06-12 기준)
+
+| 항목 | dev | prod |
+|------|-----|------|
+| minReplicaCount | 1 | 1 |
+| maxReplicaCount | **25** | 10 |
+| cooldownPeriod | 300초 | 300초 |
+| queueLength (스케일 기준) | 5 | 5 |
+
+- **maxReplicaCount dev 4→25 변경 (2026-06-12)**: CA(max=4 노드)와 연동하여 동시 태스크 ~100개 처리 목적
+  - 25 Pod × 4 threads = 100 태스크. 4노드 × 7Pod = 28 Pod 수용 → 112 태스크 상한
+- **minReplicaCount=1 유지 이유**: pod=0이면 로그 확인 불가, 디버깅 불가
+- **cooldownPeriod=300 이유**: Bedrock 호출이 최대 30초 이상 소요 → 큐 depth=0 직후 Pod 강제 종료 시 `status=failed` 버그 발생 (60초 설정에서 실제 확인됨)
+- **null_resource triggers 주의**: `cooldownPeriod`, `minReplicaCount`, `max_replicas` 값을 triggers에 포함해야 변경 시 ScaledObject가 재apply됨
   ```bash
   # ScaledObject만 재apply
   terraform taint module.celery.null_resource.keda_scaled_object
@@ -584,126 +647,190 @@ terraform apply
   ```
 - **주의**: student07 계정은 `Admin-MFA-Enforce` 정책으로 CLI에서 `logs:FilterLogEvents` 차단됨 → AWS 콘솔에서 조회할 것
 
-### ✅ Prometheus + Grafana 모니터링 구현 완료 (2026-06-08 ~ 2026-06-09)
+### ✅ Prometheus + Grafana 모니터링 구현 완료 (2026-06-08 ~ 2026-06-11 최신화)
 
-#### 구현 개요
+#### 전체 알림 흐름
 
-**시나리오 1 — SQS → Celery → Bedrock → DB 파이프라인**
-- `backend/app/metrics.py`: `BEDROCK_INVOKE_LATENCY`, `DB_SAVE_LATENCY`, `PIPELINE_TOTAL_LATENCY`, `PIPELINE_ERRORS` 정의
-- `backend/app/worker.py`: 각 태스크 구간에서 `.time()` 컨텍스트 매니저로 측정
-- `infra/k8s/celery-deployment.yaml`: Prometheus scrape 어노테이션 + `--pool=threads` 옵션
-- `infra/homelens-terraform/modules/monitoring/dashboards.tf`: `pipeline_dashboard` ConfigMap (4개 패널)
+```
+Prometheus → Alertmanager → Slack #alerts
+    ↑              ↑              ↑
+PrometheusRule  ✅ 활성화     ✅ 연결됨
+(규칙 평가)    (모든 환경)    (warning=노랑 / critical=빨강)
+```
 
-**시나리오 2 — 사용자 접속 (HTTP + DB 쿼리 + 외부 API fallback)**
-- `backend/app/metrics.py` 추가 메트릭:
-  - `HTTP_REQUEST_DURATION` (Histogram, labels: method/endpoint/status_code)
-  - `HTTP_REQUESTS_TOTAL` (Counter)
-  - `HTTP_ERRORS_TOTAL` (Counter)
-  - `DB_QUERY_LATENCY` (Histogram, labels: query_type)
-  - `EXTERNAL_API_CALLS_TOTAL` (Counter, labels: api_type) ← 외부 API fallback 추적
-- `backend/app/main.py`: Prometheus 미들웨어 + UUID 경로 정규화 + `/metrics` 엔드포인트
-- `backend/app/api/v1/endpoints/analysis.py`: DB_QUERY_LATENCY 타이머 3개 + EXTERNAL_API_CALLS_TOTAL 카운터
-- `infra/k8s/fastapi-deployment.yaml`: Prometheus scrape 어노테이션
-- `infra/homelens-terraform/modules/monitoring/dashboards.tf`: `user_access_dashboard` ConfigMap (6개 패널)
-- `infra/k8s/alert-rules.yaml`: PrometheusRule 6개 알림 규칙
+- **PrometheusRule** (`infra/k8s/alert-rules.yaml`): 6개 규칙 적용됨, Prometheus가 15초마다 평가
+- **Alertmanager**: `modules/monitoring/main.tf`에서 `enabled = true` (모든 환경 활성화, 2026-06-11 변경)
+  - Helm: `alertmanager.alertmanagerSpec.secrets = ["homelens-slack-webhook"]` 으로 webhook 마운트
+- **Receiver**: Slack `#alerts` 채널 — warning/critical 구분, 해소 시 자동 재알림
+  - 설정 파일: `infra/k8s/alertmanager-config.yaml`
+  - webhook URL: K8s Secret `homelens-slack-webhook` -n monitoring (코드에 비노출)
+  - `api_url_file: /etc/alertmanager/secrets/homelens-slack-webhook/url` 방식으로 주입
 
-#### 알림 규칙 (infra/k8s/alert-rules.yaml)
+#### Alertmanager Slack 설정 상세
 
-| 알림 이름 | 조건 | 심각도 |
-|-----------|------|--------|
-| PipelineErrorRateHigh | 파이프라인 에러 5분간 3건 이상 | critical |
-| BedrockLatencyHigh | Bedrock p95 > 30s | warning |
-| PipelineTotalLatencyHigh | 파이프라인 전체 p90 > 45s | warning |
-| HttpErrorRateHigh | HTTP 에러율 > 5% | critical |
-| HttpResponseTimeHigh | HTTP p95 > 2s | warning |
-| DbQueryLatencyHigh | DB 쿼리 p95 > 500ms | warning |
+| 항목 | 값 |
+|---|---|
+| warning receiver | 노란색, `:warning:` 아이콘 |
+| critical receiver | 빨간색, `:fire:` 아이콘 |
+| send_resolved | true (알림 해소 시 자동 메시지) |
+| group_wait | 30s (첫 발화 후 30초 대기, 중복 묶기) |
+| group_interval | 5m (동일 그룹 후속 알림 간격) |
+| repeat_interval | 4h (같은 알림 재발화 간격) |
+| inhibit_rules | critical 발화 시 동일 alertname의 warning 억제 |
 
-#### 대시보드 패널 구성
+#### 상시 발화 알림 (정상 — 무시할 것)
 
-**pipeline-latency 대시보드** (4패널):
-1. SQS 큐 대기 지연 (p50/p95/p99)
-2. Bedrock InvokeModel 지연 (p50/p95)
-3. DB 저장 지연 (p50/p95)
-4. 전체 파이프라인 지연 (p50/p90)
+| 알림 | 이유 | 처리 |
+|---|---|---|
+| Watchdog | Alertmanager 정상 동작 heartbeat — 항상 발화가 정상 | 유지 (파이프라인 감시 역할) |
+| KubeSchedulerDown | EKS managed plane — AWS가 관리, metrics 엔드포인트 없음 | **Silence 처리** (1년) |
+| KubeControllerManagerDown | 위와 동일 | **Silence 처리** (1년) |
 
-**user-access 대시보드** (6패널):
-1. HTTP p95/p99 응답시간 (timeseries)
-2. HTTP 에러율 % (timeseries)
-3. 분당 요청 수 (timeseries)
-4. apt_seq DB 쿼리 지연 (timeseries)
-5. 엔드포인트별 p95 응답시간 (bargauge, horizontal)
-6. 외부 API fallback 호출 횟수 (timeseries, orange) ← 신규
+#### ⚠️ destroy/apply 후 필수 재적용 (매일 아침)
 
-#### 트러블슈팅 이력
+`terraform destroy` 시 monitoring 네임스페이스가 재생성되어 아래 두 가지가 초기화됨:
 
-**문제 1 — PromQL `rate()` → NaN**
-- 원인: 드문드문 실행되는 태스크에서 `rate()`는 변화량=0 → NaN
-- 해결: 모든 파이프라인 쿼리를 `increase([1h])`로 변경
+```bash
+# 1. Alertmanager Slack config 재적용 (Helm이 기본 빈 config로 덮어씀)
+kubectl apply -f infra/k8s/alertmanager-config.yaml
 
-**문제 2 — Celery ForkPool 메트릭 분리**
-- 원인: `prefork` 풀은 자식 프로세스 fork → 메트릭이 부모 프로세스에 전파 안 됨 → scrape 시 항상 0
-- 해결: `--pool=threads` 옵션 추가 (스레드 공유 메모리로 해결)
+# 2. EKS control plane 알림 silence 재적용 (Alertmanager 재시작으로 초기화됨)
+ENDS=$(python3 -c "from datetime import datetime,timedelta; print((datetime.utcnow()+timedelta(days=365)).strftime('%Y-%m-%dT%H:%M:%SZ'))")
+NOW=$(python3 -c "from datetime import datetime; print(datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%SZ'))")
+for ALERT in "KubeSchedulerDown" "KubeControllerManagerDown"; do
+  kubectl exec -n monitoring alertmanager-kube-prometheus-stack-alertmanager-0 -c alertmanager -- \
+    wget -qO- --post-data="{\"matchers\":[{\"name\":\"alertname\",\"value\":\"$ALERT\",\"isRegex\":false}],\"startsAt\":\"$NOW\",\"endsAt\":\"$ENDS\",\"createdBy\":\"homelens-admin\",\"comment\":\"EKS managed control plane\"}" \
+    --header='Content-Type: application/json' \
+    'http://localhost:9093/api/v2/silences' > /dev/null
+done
+echo "Silence 재적용 완료"
 
-**문제 3 — 에러율 패널 No data**
-- 원인: `(sum(...) > 0)` 필터가 조용한 구간에서 0값 시리즈 제거
-- 해결: `(sum(...) or vector(0)) / (sum(...) + 1)` 패턴으로 변경
+# 3. Slack webhook secret 재생성 (destroy 시 Secret도 삭제됨)
+kubectl create secret generic homelens-slack-webhook \
+  --from-literal=url='<webhook_url>' \
+  -n monitoring --dry-run=client -o yaml | kubectl apply -f -
+```
 
-**문제 4 — UUID 라벨 카디널리티 폭발**
-- 원인: `/api/v1/reports/{uuid}/status` 경로가 UUID마다 별도 라벨 생성
-- 해결: `main.py`에 UUID regex 정규화 → `{id}`로 치환
+> webhook URL은 팀 내부에서 보관. Slack App: `ourhomelens` → Incoming Webhooks → `#alerts`
 
-**문제 5 — p95=5s 원인 분석**
-- aptSeq 있는 경우: DB 조회 10ms ✅ (목표 2s 달성)
-- aptSeq 없는 경우: DB → 국토부 API fallback → 10s (외부 API 자체가 느림)
-- 모니터링으로 시각화: `EXTERNAL_API_CALLS_TOTAL` 카운터로 fallback 빈도 추적
+#### 알림 규칙 (infra/k8s/alert-rules.yaml) — 현재 적용 기준
+
+| 알림 이름 | 조건 | for | 심각도 |
+|-----------|------|-----|--------|
+| PipelineErrorRateHigh | 5분간 파이프라인 에러 3건 이상 | 5m | critical |
+| BedrockLatencyHigh | Bedrock p95 > **45s** | 5m | warning |
+| PipelineTotalLatencyHigh | 전체 파이프라인 p90 > 35s | 5m | warning |
+| HttpErrorRateHigh | HTTP 에러율 > 5% | 5m | critical |
+| HttpResponseTimeHigh | HTTP p95 > 2s | 5m | warning |
+| DbQueryLatencyHigh | DB 쿼리 p95 > 500ms | 5m | warning |
+
+- `BedrockLatencyHigh` 임계값 30s → **45s 변경** (2026-06-11): 실측 p50이 30-33s여서 30s 기준은 정상 상황에서도 발화 → 45s로 상향, `PipelineTotalLatencyHigh(35s)`가 먼저 잡아주는 구조
+- `for: 5m`: 조건이 5분 연속 참일 때만 발화 (일시적 스파이크 필터링)
+- 알림 규칙만 변경할 때: `kubectl apply -f infra/k8s/alert-rules.yaml`
+- 알림 규칙과 대시보드가 불일치하면 대시보드도 동시에 수정할 것
+
+#### 대시보드 구성 (3개 ConfigMap)
+
+**1. homelens-dev-pipeline-dashboard** — `HomeLens Pipeline Latency — dev`
+| 패널 | 메트릭 | 임계값 |
+|------|--------|--------|
+| SQS 큐 대기 지연 (p50/p95/p99) | `homelens_sqs_consume_duration_seconds_bucket` | — |
+| Bedrock InvokeModel 지연 (p50/p95/p99) | `homelens_bedrock_invoke_duration_seconds_bucket` | yellow=30s / red=45s |
+| DB 저장 지연 (p50/p95/p99) | `homelens_db_save_duration_seconds_bucket` | yellow=1s / red=2s |
+| 전체 파이프라인 지연 (p50/p90/p99) | `homelens_pipeline_total_duration_seconds_bucket` | yellow=30s / red=45s |
+| 파이프라인 처리량 (성공/실패) | `homelens_pipeline_errors_total` | — |
+
+**2. homelens-dev-user-access-dashboard** — `HomeLens User Access — dev`
+| 패널 | 메트릭 |
+|------|--------|
+| HTTP p95/p99 응답시간 | `homelens_http_request_duration_seconds_bucket` |
+| HTTP 에러율 % | `homelens_http_errors_total` / `homelens_http_requests_total` |
+| 분당 요청 수 | `homelens_http_requests_total` |
+| RDS 쿼리 p95 (query_type별) | `homelens_db_query_duration_seconds_bucket` |
+| 엔드포인트별 p95 응답시간 | `homelens_http_request_duration_seconds_bucket` |
+| 외부 API fallback 횟수 | `homelens_external_api_calls_total` |
+| Redis 캐시 히트율 | `homelens_cache_hits_total` / `homelens_cache_misses_total` |
+| FastAPI CPU % (cAdvisor) | `container_cpu_usage_seconds_total{container="fastapi"}` |
+| FastAPI 메모리 MB (cAdvisor) | `container_memory_working_set_bytes{container="fastapi"}` |
+
+- Redis·RDS 패널은 분석 API(`/api/v1/analysis/price` 등) 호출 시에만 데이터 발생
+
+**3. homelens-dev-worker-resource-dashboard** — `HomeLens Worker Resources — dev`
+| 패널 | 메트릭 | 출처 |
+|------|--------|------|
+| Celery Worker CPU % (15초 샘플) | `homelens_worker_cpu_percent` | psutil 백그라운드 스레드 |
+| Celery Worker 메모리 RSS (MB) | `homelens_worker_memory_rss_bytes` | psutil 백그라운드 스레드 |
+| Bedrock 호출 대기시간 p50/p95 | `homelens_bedrock_invoke_duration_seconds_bucket` | — |
+| SQS 큐 깊이 | `homelens_sqs_queue_depth` | boto3 30초 폴링 |
+| Celery Pod CPU (cAdvisor, mCPU) | `container_cpu_usage_seconds_total{container="celery-worker"}` | cAdvisor |
+| Celery Pod 메모리 (MB) | `container_memory_working_set_bytes{container="celery-worker"}` | cAdvisor |
+| Worker 노드 CPU % | node_exporter + kube_pod_info join | node-exporter |
+| Worker 노드 메모리 % | node_exporter + kube_pod_info join | node-exporter |
+
+- **15초 샘플**: `worker.py`의 `_sample_process_resources()` 스레드가 psutil로 15초마다 측정
+- **cAdvisor**: 쿠버네티스 kubelet 내장 컨테이너 메트릭 수집기 (인프라 레이어)
+- Worker 노드 필터링: `kube_pod_info{pod=~"celery-worker.*"}` join으로 동적 식별 (IP 하드코딩 없음)
+
+#### 현재 메트릭 상태 (2026-06-11 기준)
+
+| 메트릭 | 상태 | 실측값 |
+|--------|------|--------|
+| SQS 큐 대기 지연 | ✅ | `sent_at` 기준 측정 (reports.py → worker.py) |
+| Bedrock InvokeModel 지연 | ✅ | p50 ~30-33s |
+| DB 저장 지연 | ✅ | ms 수준 |
+| 전체 파이프라인 지연 | ✅ | p50 ~32-35s (SQS 전송~DB 완료) |
+| HTTP 응답시간 (DB 경로) | ✅ | ~10ms |
+| HTTP 응답시간 (외부 API fallback) | ✅ | ~10s (국토부 API 자체 지연) |
+| DB 쿼리 지연 (query_type별) | ✅ | p95 ~10ms (analysis 엔드포인트 호출 시) |
+| Redis 캐시 히트율 | ✅ | Redis 호출 시 발생 |
+| Celery CPU/메모리 (psutil) | ✅ | 15초 샘플 |
+| SQS 큐 깊이 | ✅ | 30초 폴링 |
+| Worker 노드 CPU/메모리 | ✅ | node-exporter + kube_pod_info join |
 
 #### Grafana 접근 방법
 ```bash
 kubectl port-forward svc/kube-prometheus-stack-grafana 3000:80 -n monitoring
 # http://localhost:3000 → admin / Homelens@2026!
-# 시간 범위: Last 1 hour (파이프라인 대시보드)
-#            Last 5 minutes (사용자 접속 대시보드)
+# 파이프라인 대시보드 → 시간 범위: Last 1 hour
+# 사용자 접속 대시보드 → 시간 범위: Last 5 minutes
+```
+
+#### 대시보드 즉시 반영 방법 (terraform apply 없이)
+```bash
+# ConfigMap 직접 패치 → Grafana sidecar가 30초~1분 내 자동 반영
+kubectl get configmap homelens-dev-pipeline-dashboard -n monitoring -o json \
+  | python3 -c "..." \
+  | kubectl patch configmap homelens-dev-pipeline-dashboard -n monitoring --type=merge --patch-file /dev/stdin
+
+# 단, dashboards.tf도 반드시 같이 수정할 것 (다음 terraform apply 시 덮어쓰기 방지)
 ```
 
 #### 배포 방법
 - Python 코드 변경 (`backend/`): `git push origin dev` → GitHub Actions 자동 빌드/배포
 - k8s 매니페스트 변경 (`infra/k8s/`): `git push origin dev` → ArgoCD 자동 sync
-- Terraform 대시보드 변경 (`dashboards.tf`): `terraform apply -target=module.monitoring` 수동 실행
+- 알림 규칙 변경 (`alert-rules.yaml`): `kubectl apply -f infra/k8s/alert-rules.yaml`
+- 대시보드 변경 (`dashboards.tf`): `terraform apply -target=module.monitoring` 또는 kubectl patch로 즉시 반영
 
-#### 현재 메트릭 상태
+#### 부하 테스트 스크립트
+```bash
+# SQS 메시지 5개 동시 전송 (KEDA 스케일아웃 + Grafana 패널 동시 관찰용)
+bash scripts/test-5-reports.sh             # 기본 5개
+bash scripts/test-5-reports.sh --count 3   # 개수 지정
+bash scripts/test-5-reports.sh --no-poll   # 상태 폴링 없이 전송만
+# FastAPI 포트포워딩이 없으면 자동으로 kubectl port-forward 시작
+```
 
-| 메트릭 | 상태 | 실측값 |
-|--------|------|--------|
-| Bedrock InvokeModel 지연 | ✅ | p50 ~25s (목표 30s 이내) |
-| DB 저장 지연 | ✅ | ms 수준 |
-| 전체 파이프라인 지연 | ✅ | p50 ~27.5s |
-| HTTP 응답시간 (apt_seq DB 경로) | ✅ | ~10ms |
-| HTTP 응답시간 (외부 API fallback) | ✅ 측정됨 | ~10s (국토부 API 자체 지연) |
-| apt_seq DB 쿼리 지연 | ✅ | p95 ~10ms |
-| 외부 API fallback 횟수 | ✅ | `homelens_external_api_calls_total` |
-| SQS 큐 대기 지연 | ❌ 미구현 | worker.py 기록 코드 없음 |
+#### 트러블슈팅 이력
 
-#### [TODO] SQS 큐 대기 지연 메트릭 구현
+**PromQL `rate()` → NaN**: 드문드문 실행되는 태스크에서 변화량=0 → 모든 파이프라인 쿼리를 `increase([1h])`로 변경
 
-`metrics.py`에 `SQS_CONSUME_LATENCY`는 정의됐지만 실제 기록 코드 없음.
+**Celery ForkPool 메트릭 분리**: `prefork` 자식 프로세스 fork → 메트릭이 부모에 전파 안 됨 → `--pool=threads` 옵션으로 해결
 
-1. **`backend/app/api/v1/endpoints/reports.py`** — SQS 전송 시각 파라미터 추가
-   ```python
-   import time
-   generate_report_task.delay(report_id, request.regionId, region_name, lat, lng, time.time())
-   ```
+**에러율 패널 No data**: `(sum(...) > 0)` 필터가 조용한 구간에서 시리즈 제거 → `(sum(...) or vector(0)) / (sum(...) + 1)` 패턴 적용
 
-2. **`backend/app/worker.py`** — 태스크 시그니처에 `sent_at` 추가 + 측정
-   ```python
-   @celery_app.task(name="generate_report_task")
-   def generate_report_task(report_id, region_id, region_name, lat, lng, sent_at=None):
-       if sent_at:
-           SQS_CONSUME_LATENCY.observe(time.time() - sent_at)
-   ```
+**UUID 라벨 카디널리티 폭발**: `/reports/{uuid}/status` 경로가 UUID마다 라벨 생성 → `main.py`에서 UUID regex 정규화 → `{id}`로 치환
 
-3. `git push origin dev` → 자동 배포
-
-4. 검증: `histogram_quantile(0.50, sum(increase(homelens_sqs_consume_duration_seconds_bucket[1h])) by (le))`
+**Worker 노드 메트릭 필터링**: `kube_node_labels`로 노드 role 식별 불가 → `kube_pod_info{pod=~"celery-worker.*"}` + `node_uname_info` join으로 해결
 
 ---
 

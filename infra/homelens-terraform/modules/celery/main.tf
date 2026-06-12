@@ -64,7 +64,7 @@ resource "null_resource" "keda_scaled_object" {
     queue_url      = var.sqs_queue_url
     aws_region     = var.aws_region
     environment    = var.environment
-    max_replicas   = var.environment == "prod" ? 10 : 4
+    max_replicas   = var.environment == "prod" ? 10 : 25
     min_replicas   = 1
     cooldown_period = 300
   }
@@ -82,7 +82,7 @@ resource "null_resource" "keda_scaled_object" {
         scaleTargetRef:
           name: celery-worker
         minReplicaCount: 1
-        maxReplicaCount: ${var.environment == "prod" ? 10 : 4}
+        maxReplicaCount: ${var.environment == "prod" ? 10 : 25}
         cooldownPeriod: 300
         triggers:
         - type: aws-sqs-queue

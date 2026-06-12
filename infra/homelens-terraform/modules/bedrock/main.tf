@@ -2,6 +2,8 @@ locals {
   name_prefix = "${var.project_name}-${var.environment}"
 }
 
+data "aws_caller_identity" "current" {}
+
 # ---------------------------------------------------------------------------
 # CloudWatch — Bedrock 호출 로그 그룹
 # ---------------------------------------------------------------------------
@@ -40,6 +42,7 @@ resource "aws_iam_role_policy" "bedrock_logging" {
       {
         Effect = "Allow"
         Action = [
+          "logs:CreateLogGroup",
           "logs:CreateLogStream",
           "logs:PutLogEvents",
         ]
@@ -49,10 +52,48 @@ resource "aws_iam_role_policy" "bedrock_logging" {
   })
 }
 
+# Bedrock 서비스 주체가 로그 그룹에 직접 쓸 수 있도록 리소스 기반 정책 추가
+# PutModelInvocationLoggingConfiguration 검증 시 이 정책이 없으면 400 ValidationException 발생
+resource "aws_cloudwatch_log_resource_policy" "bedrock_logging" {
+  policy_name = "${local.name_prefix}-bedrock-logs-policy"
+
+  policy_document = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect    = "Allow"
+        Principal = { Service = "bedrock.amazonaws.com" }
+        Action = [
+          "logs:CreateLogGroup",
+          "logs:CreateLogStream",
+          "logs:PutLogEvents",
+        ]
+        Resource = "${aws_cloudwatch_log_group.bedrock.arn}:*"
+        Condition = {
+          StringEquals = {
+            "aws:SourceAccount" = data.aws_caller_identity.current.account_id
+          }
+          ArnLike = {
+            "aws:SourceArn" = "arn:aws:bedrock:${var.aws_region}:${data.aws_caller_identity.current.account_id}:*"
+          }
+        }
+      }
+    ]
+  })
+}
+
+# IAM 역할/정책 생성 후 전파 완료 대기 (destroy→apply 사이클에서 race condition 방지)
+resource "time_sleep" "wait_for_iam" {
+  depends_on      = [aws_iam_role_policy.bedrock_logging]
+  create_duration = "15s"
+}
+
 # ---------------------------------------------------------------------------
 # Bedrock 호출 로깅 설정
 # ---------------------------------------------------------------------------
 resource "aws_bedrock_model_invocation_logging_configuration" "main" {
+  depends_on = [time_sleep.wait_for_iam, aws_cloudwatch_log_resource_policy.bedrock_logging]
+
   logging_config {
     cloudwatch_config {
       log_group_name = aws_cloudwatch_log_group.bedrock.name

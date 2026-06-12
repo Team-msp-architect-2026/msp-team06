@@ -24,13 +24,13 @@ spec:
           expr: |
             histogram_quantile(0.95,
               sum(increase(homelens_bedrock_invoke_duration_seconds_bucket[10m])) by (le)
-            ) > 30
+            ) > 45
           for: 5m
           labels:
             severity: warning
           annotations:
             summary: "Bedrock 호출 지연 목표 초과"
-            description: "Bedrock InvokeModel p95 지연이 30초를 초과했습니다."
+            description: "Bedrock InvokeModel p95 지연이 45초를 초과했습니다."
 
         - alert: PipelineTotalLatencyHigh
           expr: |

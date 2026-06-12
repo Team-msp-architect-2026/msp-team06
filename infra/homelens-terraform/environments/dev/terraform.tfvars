@@ -11,9 +11,9 @@ api_node_max_size      = 3
 
 # EKS — worker node group
 worker_node_instance_type = "t3.medium"
-worker_node_min_size      = 0
-worker_node_desired_size  = 1
-worker_node_max_size      = 2
+worker_node_min_size      = 2
+worker_node_desired_size  = 2
+worker_node_max_size      = 4
 
 # RDS
 rds_instance_class        = "db.t4g.small"

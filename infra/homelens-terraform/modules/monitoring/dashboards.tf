@@ -61,7 +61,7 @@ resource "kubernetes_config_map" "pipeline_dashboard" {
         # ── 패널 2: Bedrock 호출 지연 ─────────────────────────────────────
         {
           id    = 2
-          title = "Bedrock InvokeModel 지연 | 목표: 30s 이내"
+          title = "Bedrock InvokeModel 지연 | 목표: 45s 이내"
           type  = "timeseries"
           gridPos = { h = 8, w = 12, x = 12, y = 0 }
           targets = [
@@ -87,8 +87,8 @@ resource "kubernetes_config_map" "pipeline_dashboard" {
               thresholds = {
                 steps = [
                   { color = "green", value = null },
-                  { color = "yellow", value = 20 },
-                  { color = "red", value = 30 }
+                  { color = "yellow", value = 30 },
+                  { color = "red", value = 45 }
                 ]
               }
             }
@@ -728,10 +728,10 @@ resource "kubernetes_config_map" "worker_resource_dashboard" {
         },
 
         # ── 패널 1-3: Bedrock 호출 대기시간 ─────────────────────────────
-        # p95 > 30s 이면 Bedrock 자체 병목 — Celery 증설보다 요청 조절 필요
+        # p95 > 45s 이면 Bedrock 자체 병목 — Celery 증설보다 요청 조절 필요
         {
           id    = 4
-          title = "Bedrock 호출 대기시간 (p50 / p95) | 목표: p95 30s 이내"
+          title = "Bedrock 호출 대기시간 (p50 / p95) | 목표: p95 45s 이내"
           type  = "timeseries"
           gridPos = { h = 8, w = 12, x = 0, y = 9 }
           targets = [
@@ -753,8 +753,8 @@ resource "kubernetes_config_map" "worker_resource_dashboard" {
               thresholds = {
                 steps = [
                   { color = "green",  value = null },
-                  { color = "yellow", value = 20 },
-                  { color = "red",    value = 30 }
+                  { color = "yellow", value = 30 },
+                  { color = "red",    value = 45 }
                 ]
               }
             }

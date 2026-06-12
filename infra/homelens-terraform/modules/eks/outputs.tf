@@ -38,3 +38,8 @@ output "keda_operator_role_arn" {
   description = "IRSA role ARN for KEDA Operator ServiceAccount"
   value       = aws_iam_role.keda_operator.arn
 }
+
+output "cluster_autoscaler_role_arn" {
+  description = "IRSA role ARN for Cluster Autoscaler"
+  value       = aws_iam_role.cluster_autoscaler.arn
+}

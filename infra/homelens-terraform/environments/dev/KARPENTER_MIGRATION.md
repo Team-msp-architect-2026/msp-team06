@@ -327,8 +327,15 @@ resource "null_resource" "karpenter_nodepool_api" {
                 operator: In
                 values: ["t3.medium", "t3.large"]
         limits:
+          # api 노드풀 예상 Pod 수 (2026-06-11 기준):
+          #   FastAPI(1) + KEDA(3) + ALB Controller(1) + ArgoCD(6)
+          #   + Monitoring: Prometheus(1) + Grafana(1) + Alertmanager(1)
+          #                 + kube-state-metrics(1) + node-exporter(2) + operator(1) = 6~8
+          #   + CoreDNS(2) + aws-node(2) + kube-proxy(2) + rds-proxy(1) = 7
+          # 총합 ~25~28개 → t3.medium 2대(max pod 34개) 기준 넉넉
+          # ※ Alertmanager는 모든 환경에서 활성화됨 (Slack #alerts 연동)
           cpu: "16"
-          memory: "32Gi"
+          memory: "16Gi"
         disruption:
           consolidationPolicy: WhenUnderutilized
           consolidateAfter: 1m
@@ -377,8 +384,12 @@ resource "null_resource" "karpenter_nodepool_worker" {
                 value: worker
                 effect: NoSchedule
         limits:
-          cpu: "16"
-          memory: "32Gi"
+          # worker 노드풀: KEDA maxReplicaCount 기반으로 계산
+          # dev:  maxReplicas=4,  4 × cpu limit 1000m = 4 vCPU,  4 × mem limit 1Gi = 4Gi
+          # prod: maxReplicas=10, 10 × cpu limit 1000m = 10 vCPU, 10 × mem limit 1Gi = 10Gi
+          # → 환경별로 아래 값을 다르게 설정할 것 (현재는 dev 기준)
+          cpu: "4"      # dev: 4 / prod: 10
+          memory: "4Gi" # dev: 4Gi / prod: 10Gi
         disruption:
           consolidationPolicy: WhenEmpty
           consolidateAfter: 30s
@@ -521,6 +532,27 @@ kubectl apply -f ~/aws-auth.yaml
 # Karpenter 노드 프로비저닝 확인
 kubectl get nodeclaim   # Karpenter가 생성한 노드 요청 확인
 kubectl get nodes       # 실제 EC2 노드 확인
+
+# ── Alertmanager Slack 설정 재적용 (destroy 시 초기화됨) ──────────────────────
+# 1. Slack webhook secret 재생성
+kubectl create secret generic homelens-slack-webhook \
+  --from-literal=url='<webhook_url>' \
+  -n monitoring --dry-run=client -o yaml | kubectl apply -f -
+
+# 2. Alertmanager config 재적용 (Helm이 기본 빈 config로 덮어쓰므로 필수)
+kubectl apply -f infra/k8s/alertmanager-config.yaml
+
+# 3. EKS control plane 알림 silence 재적용 (Alertmanager 재시작으로 silences 초기화됨)
+#    KubeSchedulerDown, KubeControllerManagerDown: EKS managed plane이라 항상 발화 → silence 필요
+ENDS=$(python3 -c "from datetime import datetime,timedelta; print((datetime.utcnow()+timedelta(days=365)).strftime('%Y-%m-%dT%H:%M:%SZ'))")
+NOW=$(python3 -c "from datetime import datetime; print(datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%SZ'))")
+for ALERT in "KubeSchedulerDown" "KubeControllerManagerDown"; do
+  kubectl exec -n monitoring alertmanager-kube-prometheus-stack-alertmanager-0 -c alertmanager -- \
+    wget -qO- --post-data="{\"matchers\":[{\"name\":\"alertname\",\"value\":\"$ALERT\",\"isRegex\":false}],\"startsAt\":\"$NOW\",\"endsAt\":\"$ENDS\",\"createdBy\":\"homelens-admin\",\"comment\":\"EKS managed control plane\"}" \
+    --header='Content-Type: application/json' \
+    'http://localhost:9093/api/v2/silences' > /dev/null
+done
+echo "Alertmanager 설정 완료"
 ```
 
 ---

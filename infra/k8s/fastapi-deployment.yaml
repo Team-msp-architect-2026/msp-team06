@@ -6,7 +6,8 @@ metadata:
   labels:
     app: fastapi
 spec:
-  replicas: 1
+  replicas: 2
+  # HPA(fastapi-hpa)가 replicas를 자동 제어하므로 여기 값은 초기값으로만 사용됨
   selector:
     matchLabels:
       app: fastapi

@@ -106,9 +106,14 @@ resource "helm_release" "kube_prometheus_stack" {
         }
       }
 
-      # AlertManager 비활성화 (dev 환경 — 알람 불필요)
+      # Alertmanager — Slack 알림 연동 (모든 환경 활성화)
+      # webhook URL은 K8s Secret "homelens-slack-webhook" -n monitoring 에 저장
+      # config는 infra/k8s/alertmanager-config.yaml 로 별도 관리 (Secret 직접 apply)
       alertmanager = {
-        enabled = var.env == "prod" ? true : false
+        enabled = true
+        alertmanagerSpec = {
+          secrets = ["homelens-slack-webhook"]
+        }
       }
     })
   ]

@@ -99,7 +99,15 @@ resource "aws_eks_node_group" "api" {
 
   depends_on = [aws_iam_role_policy_attachment.eks_node_policies]
 
-  tags = { Name = "${local.name_prefix}-api-node-group" }
+  tags = {
+    Name                                                 = "${local.name_prefix}-api-node-group"
+    "k8s.io/cluster-autoscaler/enabled"                  = "true"
+    "k8s.io/cluster-autoscaler/${local.name_prefix}-eks" = "owned"
+  }
+
+  lifecycle {
+    ignore_changes = [scaling_config[0].desired_size]
+  }
 }
 
 # ---------------------------------------------------------------------------
@@ -132,7 +140,15 @@ resource "aws_eks_node_group" "worker" {
 
   depends_on = [aws_iam_role_policy_attachment.eks_node_policies]
 
-  tags = { Name = "${local.name_prefix}-worker-node-group" }
+  tags = {
+    Name                                                 = "${local.name_prefix}-worker-node-group"
+    "k8s.io/cluster-autoscaler/enabled"                  = "true"
+    "k8s.io/cluster-autoscaler/${local.name_prefix}-eks" = "owned"
+  }
+
+  lifecycle {
+    ignore_changes = [scaling_config[0].desired_size]
+  }
 }
 
 # ---------------------------------------------------------------------------
