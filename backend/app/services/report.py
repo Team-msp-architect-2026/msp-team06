@@ -12,7 +12,7 @@ llm = ChatBedrock(
     model_id=MODEL_ID,
     region_name="eu-west-3",
     model_kwargs={
-        "max_tokens": 4096,
+        "max_tokens": 2500,
         "temperature": 0.3,
     },
 )
@@ -45,25 +45,25 @@ def build_prompt(region_name: str, price_data: dict, news_data: dict, infra_data
     {{
       "sectionKey": "price_trend",
       "sectionTitle": "가격 동향",
-      "content": "부동산을 잘 모르는 사람도 이해할 수 있도록 가격 흐름과 그 배경을 설명. 수치가 있으면 활용하고 없으면 지역 특성과 시장 상황을 바탕으로 서술. 핵심 내용 위주로 충실하게.",
+      "content": "가격 흐름과 배경을 수치 활용해 설명. 데이터 없으면 지역 특성 기반으로 서술.",
       "sortOrder": 1
     }},
     {{
       "sectionKey": "life_env",
       "sectionTitle": "생활 환경",
-      "content": "지하철, 버스 등 교통, 주변 학교, 마트, 병원 등 실생활에 필요한 시설을 구체적으로 설명. 실제로 살 때 어떤 점이 편리하고 불편한지 중심으로 서술.",
+      "content": "교통·학교·편의시설 등 실생활 핵심 시설 설명.",
       "sortOrder": 2
     }},
     {{
       "sectionKey": "local_issues",
       "sectionTitle": "지역 이슈",
-      "content": "재개발, 재건축, 교통 호재, 규제 등 이 지역 가격과 생활에 영향을 줄 수 있는 이슈를 일반인이 이해하기 쉽게 설명. 뉴스 데이터가 있으면 활용하고 없으면 해당 지역의 알려진 이슈를 서술.",
+      "content": "재개발·교통 호재·규제 등 가격과 생활에 영향을 줄 이슈 설명.",
       "sortOrder": 3
     }},
     {{
       "sectionKey": "overall",
       "sectionTitle": "종합 의견",
-      "content": "실제로 이 지역에 살거나 매매를 고려하는 사람 입장에서 알아야 할 핵심 사항 정리. 장단점을 균형 있게 서술.",
+      "content": "거주·매매 고려 시 알아야 할 핵심 사항. 장단점 균형 있게 서술.",
       "sortOrder": 4
     }}
   ]
