@@ -28,7 +28,7 @@ spec:
       containers:
         - name: fastapi
           # CI/CD에서 실제 이미지 태그(Git SHA)로 교체
-          image: 611058323802.dkr.ecr.eu-west-3.amazonaws.com/homelens-fastapi:2915c8f64661a21d7359cf80249397b401280e8b
+          image: 611058323802.dkr.ecr.eu-west-3.amazonaws.com/homelens-fastapi:6d503d0a2fcdb70a2b389cae08af9f5e983f6efb
           imagePullPolicy: Always
           ports:
             - containerPort: 8080
