@@ -1,3 +1,4 @@
+cat > backend/app/services/report.py << 'EOF'
 # HomeLens AI - AI 리포트 생성 서비스 로직
 # LangChain + Amazon Bedrock Claude 연동
 
@@ -45,25 +46,25 @@ def build_prompt(region_name: str, price_data: dict, news_data: dict, infra_data
     {{
       "sectionKey": "price_trend",
       "sectionTitle": "가격 동향",
-      "content": "가격 흐름과 배경을 수치 활용해 설명. 데이터 없으면 지역 특성 기반으로 서술.",
+      "content": "마크다운 형식으로 작성. **소제목**으로 단락 구분, - 항목으로 목록 표현. 가격 흐름과 배경을 수치 활용해 설명. 데이터 없으면 지역 특성 기반으로 서술.",
       "sortOrder": 1
     }},
     {{
       "sectionKey": "life_env",
       "sectionTitle": "생활 환경",
-      "content": "교통·학교·편의시설 등 실생활 핵심 시설 설명.",
+      "content": "마크다운 형식으로 작성. **소제목**으로 단락 구분, - 항목으로 목록 표현. 교통·학교·편의시설 등 실생활 핵심 시설 설명.",
       "sortOrder": 2
     }},
     {{
       "sectionKey": "local_issues",
       "sectionTitle": "지역 이슈",
-      "content": "재개발·교통 호재·규제 등 가격과 생활에 영향을 줄 이슈 설명.",
+      "content": "마크다운 형식으로 작성. **소제목**으로 단락 구분, - 항목으로 목록 표현. 재개발·교통 호재·규제 등 가격과 생활에 영향을 줄 이슈 설명.",
       "sortOrder": 3
     }},
     {{
       "sectionKey": "overall",
       "sectionTitle": "종합 의견",
-      "content": "거주·매매 고려 시 알아야 할 핵심 사항. 장단점 균형 있게 서술.",
+      "content": "마크다운 형식으로 작성. **소제목**으로 단락 구분, - 항목으로 목록 표현. 거주·매매 고려 시 알아야 할 핵심 사항. 장단점 균형 있게 서술.",
       "sortOrder": 4
     }}
   ]
@@ -77,6 +78,7 @@ def build_prompt(region_name: str, price_data: dict, news_data: dict, infra_data
 - 데이터 부족 시 지역 특성과 공개된 정보를 바탕으로 자연스럽게 서술
 - summary는 반드시 2문장 이내
 - 쓸데없는 반복이나 불필요한 문장 없이 핵심 위주로 작성
+- content는 반드시 마크다운 형식으로 작성 (**소제목**, - 목록 활용)
 - JSON 형식 외 다른 텍스트 출력 금지"""
 
 
@@ -119,3 +121,4 @@ async def generate_report(
             ],
             "disclaimer": DISCLAIMER,
         }
+EOF

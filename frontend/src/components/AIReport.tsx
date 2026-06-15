@@ -1,6 +1,7 @@
 // AI 리포트 컴포넌트 - idle/loading/done 상태별 UI 표시
 import React from "react";
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import Markdown from "react-native-markdown-display";
 import { ReportResponse } from "../api/reports";
 import { Report, ReportStatus } from "../types";
 
@@ -46,7 +47,7 @@ const AIReport: React.FC<AIReportProps> = ({ report, onGenerate, status }) => {
       </View>
     );
   }
-  
+
   return (
     <View>
       <View style={styles.rsum}>
@@ -58,9 +59,9 @@ const AIReport: React.FC<AIReportProps> = ({ report, onGenerate, status }) => {
           <Text style={styles.rset}>
             {(sec as any).sectionTitle || (sec as any).title}
           </Text>
-          <Text style={styles.rbody}>
-            {(sec as any).content || (sec as any).body}
-          </Text>
+          <Markdown style={markdownStyles}>
+            {(sec as any).content || (sec as any).body || ""}
+          </Markdown>
         </View>
       ))}
       <Text style={styles.disc}>{report?.disclaimer}</Text>
@@ -69,6 +70,29 @@ const AIReport: React.FC<AIReportProps> = ({ report, onGenerate, status }) => {
       </Text>
     </View>
   );
+};
+
+const markdownStyles = {
+  body: {
+    fontSize: 13,
+    color: "#3B3B38",
+    lineHeight: 22,
+  },
+  strong: {
+    fontWeight: "700" as const,
+    color: "#111111",
+  },
+  bullet_list: {
+    marginTop: 4,
+    marginBottom: 4,
+  },
+  bullet_list_item: {
+    marginBottom: 4,
+  },
+  paragraph: {
+    marginTop: 0,
+    marginBottom: 8,
+  },
 };
 
 const styles = StyleSheet.create({
@@ -92,10 +116,10 @@ const styles = StyleSheet.create({
     padding: 16,
     marginBottom: 12,
   },
-  rsuml: { 
-    fontSize: 15, 
-    color: "#0C447C", 
-    marginBottom: 8, 
+  rsuml: {
+    fontSize: 15,
+    color: "#0C447C",
+    marginBottom: 8,
     fontWeight: "700",
     paddingBottom: 8,
     borderBottomWidth: 1,
@@ -124,7 +148,6 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: "#E5E5E5",
   },
-  rbody: { fontSize: 13, color: "#3B3B38", lineHeight: 22 },
   disc: { fontSize: 11, color: "#AAAAAA", lineHeight: 16, marginTop: 12 },
   rdate: { fontSize: 11, color: "#AAAAAA", marginTop: 4 },
 });
