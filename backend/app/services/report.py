@@ -1,4 +1,3 @@
-cat > backend/app/services/report.py << 'EOF'
 # HomeLens AI - AI 리포트 생성 서비스 로직
 # LangChain + Amazon Bedrock Claude 연동
 
@@ -121,4 +120,3 @@ async def generate_report(
             ],
             "disclaimer": DISCLAIMER,
         }
-EOF
