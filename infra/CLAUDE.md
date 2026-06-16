@@ -409,6 +409,47 @@ terraform apply
 
 ## 주의사항 및 알려진 이슈
 
+### ✅ metrics-server 구현 완료 (2026-06-12)
+- **목적**: HPA(`fastapi-hpa.yaml`, type: Resource)가 CPU/Memory 사용률을 조회하려면 `metrics.k8s.io` API 필요
+  - Prometheus(kube-prometheus-stack)와는 완전히 별개 컴포넌트 — Prometheus는 HPA에 직접 데이터를 주지 않음
+  - 차이: metrics-server는 현재 값만 보관(메모리, 무기록) / Prometheus는 시계열 저장(Grafana 시각화용)
+- **구현 위치**: `modules/eks/main.tf` — `aws_eks_addon "metrics_server"` (Helm 아닌 EKS 관리형 addon 방식)
+  - `amazon-cloudwatch-observability`(monitoring 모듈)와 동일한 addon 패턴
+  - `resolve_conflicts_on_create/update = "OVERWRITE"` — addon 버전은 AWS가 자동 관리
+- **apply**: `terraform apply -target=module.eks` (CA와 같은 모듈이므로 함께 적용됨)
+
+#### 사용 방법
+```bash
+# 1. 설치 확인
+kubectl get deployment metrics-server -n kube-system
+kubectl get pods -n kube-system -l k8s-app=metrics-server
+
+# 2. 노드/Pod 실시간 리소스 사용량 조회 (metrics-server가 있어야 동작)
+kubectl top nodes
+kubectl top pods -n homelens
+
+# 3. HPA 상태 확인 — TARGETS 열이 <unknown>이 아니라 실제 % 값이 보이면 정상
+kubectl get hpa -n homelens fastapi-hpa
+kubectl describe hpa -n homelens fastapi-hpa
+
+# 4. Grafana에서 Pod 개수 변화 확인 (metrics-server와 별개로 이미 동작 중인 경로)
+#    kube-state-metrics가 K8s API에서 Deployment/HPA 상태를 직접 읽어 Prometheus로 전달
+kube_deployment_status_replicas{deployment="fastapi", namespace="homelens"}
+kube_horizontalpodautoscaler_status_desired_replicas{horizontalpodautoscaler="fastapi-hpa"}
+```
+
+#### 트러블슈팅
+
+| 증상 | 원인 | 해결 |
+|------|------|------|
+| `kubectl top nodes` → `error: Metrics API not available` | addon 미설치 또는 Pod 미기동 | `kubectl get pods -n kube-system -l k8s-app=metrics-server`로 상태 확인, `terraform apply -target=module.eks` 재실행 |
+| `kubectl get hpa` → TARGETS가 계속 `<unknown>/70%` | metrics-server Pod가 kubelet에 연결 실패 | 아래 "kubelet 인증서 검증 실패" 항목 참고 |
+| metrics-server Pod가 `CrashLoopBackOff` | kubelet TLS 인증서가 자체 서명 — 기본값으로는 거부됨 | EKS 관리형 addon은 기본적으로 `--kubelet-insecure-tls` 자동 적용되어 있어 보통 발생 안 함. 발생 시 `kubectl logs -n kube-system -l k8s-app=metrics-server`로 원인 확인 |
+| HPA가 Pod를 늘렸다 줄였다 반복 (flapping) | `behavior.scaleUp/scaleDown` stabilizationWindow 짧음 | `fastapi-hpa.yaml`은 이미 scaleUp 60s / scaleDown 300s로 완화 적용됨 — 추가 flapping 시 scaleDown 윈도우를 더 늘릴 것 |
+| addon 설치는 됐는데 `kubectl top` 응답이 1~2분간 비어있음 | metrics-server가 최초 스크레이프 주기(기본 60초) 대기 중 | 정상 동작 — 1~2분 후 재시도 |
+| `terraform apply` 시 `ResourceInUseException: Addon already exists` | destroy 없이 console 등에서 수동 설치된 적 있음 | `aws eks describe-addon --cluster-name homelens-dev-eks --addon-name metrics-server --region eu-west-3`로 확인 후 `terraform import module.eks.aws_eks_addon.metrics_server homelens-dev-eks:metrics-server` |
+| Grafana에 Pod 개수 변화가 안 보임 | metrics-server 문제가 아니라 kube-state-metrics 경로 — HPA 자체가 동작 안 해서 desiredReplicas가 안 바뀌는 것일 수 있음 | 먼저 `kubectl get hpa` TARGETS 값으로 HPA 정상 동작 확인이 선행 조건 |
+
 ### LSP 오탐 (실제 오류 아님)
 - `provider "helm" { kubernetes { ... } }` 블록 → "Unexpected block" 경고
 - `helm_release` 내 `set { }` 블록 → "Unexpected block" 경고
@@ -612,10 +653,13 @@ terraform apply
 | minReplicaCount | 1 | 1 |
 | maxReplicaCount | **25** | 10 |
 | cooldownPeriod | 300초 | 300초 |
-| queueLength (스케일 기준) | 5 | 5 |
+| queueLength (스케일 기준) | **4** | 4 |
 
 - **maxReplicaCount dev 4→25 변경 (2026-06-12)**: CA(max=4 노드)와 연동하여 동시 태스크 ~100개 처리 목적
   - 25 Pod × 4 threads = 100 태스크. 4노드 × 7Pod = 28 Pod 수용 → 112 태스크 상한
+- **queueLength 5→4 변경 (2026-06-16)**: Celery `--concurrency=4`(Pod당 동시 처리 4개)와 일치시킴
+  - 기존 5는 Pod 처리 능력(4)보다 큰 값이라 메시지가 Pod 용량보다 더 쌓여야 스케일업되는 언더프로비저닝 발생
+  - `필요 Pod 수 = ceil(큐 메시지 수 ÷ queueLength)` 공식이므로 4로 맞추면 Pod 처리 능력과 정확히 일치
 - **minReplicaCount=1 유지 이유**: pod=0이면 로그 확인 불가, 디버깅 불가
 - **cooldownPeriod=300 이유**: Bedrock 호출이 최대 30초 이상 소요 → 큐 depth=0 직후 Pod 강제 종료 시 `status=failed` 버그 발생 (60초 설정에서 실제 확인됨)
 - **null_resource triggers 주의**: `cooldownPeriod`, `minReplicaCount`, `max_replicas` 값을 triggers에 포함해야 변경 시 ScaledObject가 재apply됨

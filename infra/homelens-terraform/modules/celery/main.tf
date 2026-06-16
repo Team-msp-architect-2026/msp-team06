@@ -67,6 +67,7 @@ resource "null_resource" "keda_scaled_object" {
     max_replicas   = var.environment == "prod" ? 10 : 25
     min_replicas   = 1
     cooldown_period = 300
+    queue_length   = 4
   }
 
   provisioner "local-exec" {
@@ -88,7 +89,7 @@ resource "null_resource" "keda_scaled_object" {
         - type: aws-sqs-queue
           metadata:
             queueURL: ${var.sqs_queue_url}
-            queueLength: "5"
+            queueLength: "4"
             awsRegion: ${var.aws_region}
             identityOwner: operator
       YAML

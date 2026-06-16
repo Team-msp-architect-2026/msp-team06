@@ -36,13 +36,13 @@ spec:
           expr: |
             histogram_quantile(0.90,
               sum(increase(homelens_pipeline_total_duration_seconds_bucket[10m])) by (le)
-            ) > 35
+            ) > 90
           for: 5m
           labels:
             severity: warning
           annotations:
             summary: "전체 파이프라인 지연 목표 초과"
-            description: "SQS→DB 전체 파이프라인 p90 지연이 35초를 초과했습니다. (news/infra/Bedrock/DB 합산 기준)"
+            description: "SQS→DB 전체 파이프라인 p90 지연이 90초를 초과했습니다. (정상 처리 ~40s + Pod 스케일업 대기 ~60s 합산 기준)"
 
     # ── 시나리오 2: 사용자 접속 (HTTP + DB 쿼리) ──────────────────────────
     - name: homelens.user-access

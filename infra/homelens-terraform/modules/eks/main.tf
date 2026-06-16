@@ -186,6 +186,23 @@ resource "aws_security_group_rule" "redis_from_cluster_sg" {
 }
 
 # ---------------------------------------------------------------------------
+# EKS Addon — metrics-server
+# HPA(autoscaling/v2, type: Resource)가 CPU/Memory 사용률을 조회하는
+# metrics.k8s.io API 제공. Prometheus(kube-prometheus-stack)와는 별개 컴포넌트.
+# ---------------------------------------------------------------------------
+resource "aws_eks_addon" "metrics_server" {
+  cluster_name = aws_eks_cluster.main.name
+  addon_name   = "metrics-server"
+
+  resolve_conflicts_on_create = "OVERWRITE"
+  resolve_conflicts_on_update = "OVERWRITE"
+
+  tags = { Name = "${local.name_prefix}-metrics-server" }
+
+  depends_on = [aws_eks_node_group.api, aws_eks_node_group.worker]
+}
+
+# ---------------------------------------------------------------------------
 # OIDC Provider (IRSA용)
 # ---------------------------------------------------------------------------
 data "tls_certificate" "eks" {
