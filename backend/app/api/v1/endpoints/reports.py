@@ -53,7 +53,7 @@ async def create_report(
         return {
             "reportId": existing_report.id,
             "status": existing_report.status,
-            "estimatedSeconds": 30,
+            "estimatedSeconds": 45,
         }
 
     region_stmt = pg_insert(Region).values(
@@ -110,7 +110,7 @@ async def create_report(
             return {
                 "reportId": existing_report.id,
                 "status": existing_report.status,
-                "estimatedSeconds": 30,
+                "estimatedSeconds": 45,
             }
         raise e
 
@@ -130,7 +130,7 @@ async def create_report(
     return {
         "reportId": report_id,
         "status": "pending",
-        "estimatedSeconds": 30,
+        "estimatedSeconds": 45,
     }
 
 @router.get("/{report_id}/status", response_model=ReportStatusResponse)

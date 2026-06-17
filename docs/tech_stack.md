@@ -4,7 +4,7 @@
 
 | 원칙 | 내용 |
 |------|------|
-| 성능 목표 달성 | 검색 자동완성 500ms, 가격 데이터 2초, AI 리포트 30초 이내 — Redis 캐시 + FastAPI 비동기 + EKS 오토스케일링 조합 |
+| 성능 목표 달성 | 검색 자동완성 500ms, 가격 데이터 2초, AI 리포트 45초 이내 — Redis 캐시 + FastAPI 비동기 + EKS 오토스케일링 조합 |
 | 보안 및 안정성 | WAF + Secrets Manager + IRSA로 API 키와 데이터 보호. 외부 API 키 클라이언트 노출 금지 |
 
 ---
@@ -198,7 +198,7 @@
 ### Managed Prometheus + Grafana + X-Ray
 - 성능 목표 실시간 모니터링 (자동완성 500ms, 가격 2초)
 - 이상 징후 발생 시 즉시 알림
-- X-Ray: AI 리포트 30초 초과·가격 API 2초 초과 시 병목 단계 파악
+- X-Ray: AI 리포트 45초 초과·가격 API 2초 초과 시 병목 단계 파악
 - Grafana 대시보드: `modules/monitoring/dashboards.tf`
 
 ### Route 53
