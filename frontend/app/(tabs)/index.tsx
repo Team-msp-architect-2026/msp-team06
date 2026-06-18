@@ -95,7 +95,9 @@ function AppContent(): React.ReactElement {
           regionName: selectedRegion.name,
           lat: selectedRegion.lat,
           lng: selectedRegion.lng,
+          aptSeq: selectedRegion.aptSeq,
         });
+        setRaReportId(res.reportId);
         setRaReportId(res.reportId);
       } catch (e: unknown){
         console.error("리포트 생성 실패:", e);
@@ -110,7 +112,9 @@ function AppContent(): React.ReactElement {
           regionName: selectedRegion.name,
           lat: selectedRegion.lat,
           lng: selectedRegion.lng,
+          aptSeq: selectedRegion.aptSeq,
         });
+        setRaReportId(res.reportId);
         setRcReportId(res.reportId);
       } catch {
         setRcStatus("idle");
