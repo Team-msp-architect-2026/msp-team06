@@ -27,6 +27,7 @@ async def create_report(
     region_name = getattr(request, "regionName", "") or ""
     lat = getattr(request, "lat", 0.0) or 0.0
     lng = getattr(request, "lng", 0.0) or 0.0
+    apt_seq = getattr(request, "aptSeq", None)
 
     existing_result = await db.execute(
         select(Report).where(
@@ -117,7 +118,7 @@ async def create_report(
     try:
         from app.worker import generate_report_task
         generate_report_task.apply_async(
-            args=[report_id, request.regionId, region_name, lat, lng, time.time()],
+            args=[report_id, request.regionId, region_name, lat, lng, time.time(), apt_seq],
             task_id=report_id,
         )
         print(f"[Report] SQS 전송 성공: {report_id}")

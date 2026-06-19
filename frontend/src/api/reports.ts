@@ -43,8 +43,9 @@ export async function createReport(
   regionName?: string,
   lat?: number,
   lng?: number,
+  aptSeq?: string,
 ): Promise<ReportCreateResponse> {
-  return apiPost<ReportCreateResponse>('/reports', { regionId, regionName, lat, lng });
+  return apiPost<ReportCreateResponse>('/reports', { regionId, regionName, lat, lng, aptSeq });
 }
 
 // AI 리포트 생성 상태 조회 (Polling)

@@ -104,7 +104,7 @@ def get_db_session():
 
 
 @celery_app.task(name="generate_report_task")
-def generate_report_task(report_id: str, region_id: str, region_name: str, lat: float, lng: float, sent_at: float = None):
+def generate_report_task(report_id: str, region_id: str, region_name: str, lat: float, lng: float, sent_at: float = None, apt_seq: str = None):
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
     db = get_db_session()
@@ -161,16 +161,20 @@ def generate_report_task(report_id: str, region_id: str, region_name: str, lat: 
         db.commit()
 
         # 가격 데이터 수집
+        # apt_seq 있으면 단지 단위(매매/전세/월세 정확), 없으면 동 단위 집계
         price_data = {}
         try:
-            from app.services.price import get_price_trend_by_dong_name
+            from app.services.price import get_price_trend_by_dong_name, get_price_trend_by_apt_seq
             from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
             from app.core.config import settings
 
             async def fetch_price():
                 engine = create_async_engine(settings.database_url)
                 async with AsyncSession(engine) as async_db:
-                    data = await get_price_trend_by_dong_name(region_name, "all", "3m", async_db)
+                    if apt_seq:
+                        data = await get_price_trend_by_apt_seq(apt_seq, "all", "3m", async_db)
+                    else:
+                        data = await get_price_trend_by_dong_name(region_name, "all", "3m", async_db)
                     return data
 
             price_result = loop.run_until_complete(fetch_price())

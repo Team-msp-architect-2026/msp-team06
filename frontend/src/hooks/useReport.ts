@@ -8,8 +8,8 @@ import { createReport, getReport, getReportStatus } from '../api/reports';
 export function useCreateReport() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (params: { regionId: string; regionName?: string; lat?: number; lng?: number }) =>
-      createReport(params.regionId, params.regionName, params.lat, params.lng),
+    mutationFn: (params: { regionId: string; regionName?: string; lat?: number; lng?: number; aptSeq?: string }) =>
+      createReport(params.regionId, params.regionName, params.lat, params.lng, params.aptSeq),
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['report', 'status', data.reportId] });
     },
