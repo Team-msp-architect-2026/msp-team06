@@ -52,9 +52,10 @@ helm uninstall argocd -n argocd 2>/dev/null || true
 helm uninstall aws-load-balancer-controller -n kube-system 2>/dev/null || true
 helm uninstall cluster-autoscaler -n kube-system 2>/dev/null || true
 helm uninstall keda -n keda 2>/dev/null || true
+helm uninstall kube-prometheus-stack -n monitoring 2>/dev/null || true
 
 echo "=== Namespace finalizer 강제 제거 (Terminating 고착 시 자동 해제) ==="
-for ns in argocd homelens keda; do
+for ns in argocd homelens keda monitoring; do
   kubectl delete namespace "$ns" --timeout=20s 2>/dev/null || true
   force_delete_namespace "$ns"
 done

@@ -209,6 +209,12 @@ terraform apply \
   -target=module.argocd
 
 # 3단계: 나머지
+# ※ monitoring 적용 전 homelens-slack-webhook secret 사전 생성 (namespace는 Helm이 생성하므로 직전에 수동 생성)
+kubectl create namespace monitoring --dry-run=client -o yaml | kubectl apply -f -
+kubectl create secret generic homelens-slack-webhook \
+  --from-literal=url='<webhook url>' \
+  -n monitoring --dry-run=client -o yaml | kubectl apply -f -
+
 terraform apply \
   -target=module.lambda \
   -target=module.step_functions \
@@ -732,13 +738,20 @@ PrometheusRule  ✅ 활성화     ✅ 연결됨
 
 #### ⚠️ destroy/apply 후 필수 재적용 (매일 아침)
 
-`terraform destroy` 시 monitoring 네임스페이스가 재생성되어 아래 두 가지가 초기화됨:
+`terraform destroy` 시 monitoring 네임스페이스가 재생성되어 아래 세 가지가 초기화됨:
 
 ```bash
-# 1. Alertmanager Slack config 재적용 (Helm이 기본 빈 config로 덮어씀)
-kubectl apply -f infra/k8s/alertmanager-config.yaml
+# 1. Slack webhook secret 재생성 — terraform apply 전에 먼저 생성해야 alertmanager Init:0/1 방지
+#    (3단계 apply 전 단계에서 이미 생성했다면 skip)
+kubectl create secret generic homelens-slack-webhook \
+  --from-literal=url='<webhook_url>' \
+  -n monitoring --dry-run=client -o yaml | kubectl apply -f -
 
-# 2. EKS control plane 알림 silence 재적용 (Alertmanager 재시작으로 초기화됨)
+# 2. Alertmanager Slack config 재적용 — terraform apply 완료 후 적용 (Helm이 기본 config로 덮어쓴 뒤 override)
+kubectl apply -f infra/k8s/alertmanager-config.yaml
+kubectl delete pod alertmanager-kube-prometheus-stack-alertmanager-0 -n monitoring
+
+# 3. EKS control plane 알림 silence 재적용 (Alertmanager 재시작으로 초기화됨)
 ENDS=$(python3 -c "from datetime import datetime,timedelta; print((datetime.utcnow()+timedelta(days=365)).strftime('%Y-%m-%dT%H:%M:%SZ'))")
 NOW=$(python3 -c "from datetime import datetime; print(datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%SZ'))")
 for ALERT in "KubeSchedulerDown" "KubeControllerManagerDown"; do
@@ -748,11 +761,6 @@ for ALERT in "KubeSchedulerDown" "KubeControllerManagerDown"; do
     'http://localhost:9093/api/v2/silences' > /dev/null
 done
 echo "Silence 재적용 완료"
-
-# 3. Slack webhook secret 재생성 (destroy 시 Secret도 삭제됨)
-kubectl create secret generic homelens-slack-webhook \
-  --from-literal=url='<webhook_url>' \
-  -n monitoring --dry-run=client -o yaml | kubectl apply -f -
 ```
 
 > webhook URL은 팀 내부에서 보관. Slack App: `ourhomelens` → Incoming Webhooks → `#alerts`
@@ -763,7 +771,7 @@ kubectl create secret generic homelens-slack-webhook \
 |-----------|------|-----|--------|
 | PipelineErrorRateHigh | 5분간 파이프라인 에러 3건 이상 | 5m | critical |
 | BedrockLatencyHigh | Bedrock p95 > **45s** | 5m | warning |
-| PipelineTotalLatencyHigh | 전체 파이프라인 p90 > 35s | 5m | warning |
+| PipelineTotalLatencyHigh | 전체 파이프라인 p90 > 90s | 5m | warning |
 | HttpErrorRateHigh | HTTP 에러율 > 5% | 5m | critical |
 | HttpResponseTimeHigh | HTTP p95 > 2s | 5m | warning |
 | DbQueryLatencyHigh | DB 쿼리 p95 > 500ms | 5m | warning |
@@ -942,6 +950,16 @@ bash scripts/test-5-reports.sh --no-poll   # 상태 폴링 없이 전송만
   terraform apply -target=module.monitoring
   ```
 - **주의:** monitoring Pod에 worker taint toleration 추가는 잘못된 방향 — worker 노드는 Celery 전용으로 유지
+
+### kube-prometheus-stack — `secrets already exists` 에러 (Helm upgrade 충돌)
+- **증상:** `terraform apply` 시 `secrets "alertmanager-kube-prometheus-stack-alertmanager" already exists` 오류
+- **원인:** Helm release가 failed 상태로 남았을 때 재apply 시, Prometheus Operator가 이미 secret을 재생성한 상태에서 Helm이 다시 create 시도 → 충돌
+- **해결:** `modules/monitoring/main.tf`의 `helm_release`에 `force_update = true` 추가 (2026-06-19 적용)
+  - Helm이 기존 리소스를 삭제 후 재생성하는 방식으로 충돌 우회
+- **추가 확인:** alertmanager pod가 `Init:0/1`으로 멈히면 `homelens-slack-webhook` secret 누락 여부 확인
+  ```bash
+  kubectl describe pod alertmanager-kube-prometheus-stack-alertmanager-0 -n monitoring | grep -A5 Events
+  ```
 
 # HomeLens AI
 

@@ -16,6 +16,7 @@ resource "helm_release" "kube_prometheus_stack" {
 
   create_namespace = true
   timeout          = 900
+  force_update     = true
 
   values = [
     yamlencode({
