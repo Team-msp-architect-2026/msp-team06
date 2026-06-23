@@ -4,6 +4,18 @@ resource "aws_prometheus_workspace" "main" {
     tags = { Env = var.env}
 }
 
+# Prometheus Operator가 helm 설치 직전에 secret을 선점하는 race condition 방지
+# fresh install 시 force_update=true가 적용 안 되므로 null_resource로 사전 삭제
+resource "null_resource" "pre_delete_alertmanager_secret" {
+  triggers = {
+    always = timestamp()
+  }
+
+  provisioner "local-exec" {
+    command = "kubectl delete secret alertmanager-kube-prometheus-stack-alertmanager -n monitoring --ignore-not-found || true"
+  }
+}
+
 # ---------------------------------------------------------------------------
 # kube-prometheus-stack — Prometheus + Grafana (EKS Helm)
 # ---------------------------------------------------------------------------
@@ -17,6 +29,8 @@ resource "helm_release" "kube_prometheus_stack" {
   create_namespace = true
   timeout          = 900
   force_update     = true
+
+  depends_on = [null_resource.pre_delete_alertmanager_secret]
 
   values = [
     yamlencode({

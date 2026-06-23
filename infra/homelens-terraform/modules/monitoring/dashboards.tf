@@ -136,10 +136,10 @@ resource "kubernetes_config_map" "pipeline_dashboard" {
 
         # ── 패널 4: 전체 파이프라인 지연 ──────────────────────────────────
         # 측정: SQS 전송(sent_at) or 태스크 시작 → news/infra/price 수집 → Bedrock → DB 완료
-        # yellow=30s: 이상적 목표, red=45s: 알림 기준(p90 > 35s)
+        # yellow=45s: Bedrock 단독 목표, red=60s: 전체 파이프라인 알림 기준(p90 > 60s)
         {
           id    = 4
-          title = "전체 파이프라인 지연 (SQS→DB 완료) | 목표 p90: 35s 이내"
+          title = "전체 파이프라인 지연 (SQS→DB 완료) | 목표 p90: 60s 이내"
           type  = "timeseries"
           gridPos = { h = 8, w = 12, x = 12, y = 8 }
           targets = [
@@ -165,8 +165,8 @@ resource "kubernetes_config_map" "pipeline_dashboard" {
               thresholds = {
                 steps = [
                   { color = "green", value = null },
-                  { color = "yellow", value = 30 },
-                  { color = "red", value = 45 }
+                  { color = "yellow", value = 45 },
+                  { color = "red", value = 60 }
                 ]
               }
             }
@@ -472,7 +472,7 @@ resource "kubernetes_config_map" "user_access_dashboard" {
           gridPos = { h = 8, w = 12, x = 12, y = 0 }
           targets = [
             {
-              expr         = "100 * (sum(increase(homelens_http_errors_total[5m])) or vector(0)) / (sum(increase(homelens_http_requests_total[5m])) + 1)"
+              expr         = "100 * (sum(increase(homelens_http_errors_total[5m])) or vector(0)) / ((sum(increase(homelens_http_requests_total[5m])) or vector(0)) + 1)"
               legendFormat = "에러율 %"
               refId        = "A"
             }

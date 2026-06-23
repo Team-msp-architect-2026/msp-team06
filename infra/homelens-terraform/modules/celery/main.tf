@@ -67,7 +67,8 @@ resource "null_resource" "keda_scaled_object" {
     max_replicas   = var.environment == "prod" ? 10 : 25
     min_replicas   = 1
     cooldown_period = 300
-    queue_length   = 4
+    queue_length    = 4
+    polling_interval = 10
   }
 
   provisioner "local-exec" {
@@ -82,6 +83,7 @@ resource "null_resource" "keda_scaled_object" {
       spec:
         scaleTargetRef:
           name: celery-worker
+        pollingInterval: 10
         minReplicaCount: 1
         maxReplicaCount: ${var.environment == "prod" ? 10 : 25}
         cooldownPeriod: 300

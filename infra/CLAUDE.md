@@ -209,8 +209,15 @@ terraform apply \
   -target=module.argocd
 
 # 3단계: 나머지
-# ※ monitoring 적용 전 homelens-slack-webhook secret 사전 생성 (namespace는 Helm이 생성하므로 직전에 수동 생성)
+# ※ monitoring 적용 전 사전 작업 (순서 지킬 것)
+# 1) namespace 먼저 생성 (Helm이 생성하므로 --dry-run 방식으로 upsert)
 kubectl create namespace monitoring --dry-run=client -o yaml | kubectl apply -f -
+
+# 2) alertmanager secret 충돌 방지 — destroy 후 재install 시 Prometheus Operator가 먼저 생성해서 Helm과 충돌함
+#    force_update=true는 upgrade 시에만 유효, fresh install 시에는 적용 안 됨 → 미리 삭제 필수
+kubectl delete secret alertmanager-kube-prometheus-stack-alertmanager -n monitoring --ignore-not-found
+
+# 3) slack webhook secret 사전 생성 — 없으면 alertmanager Pod가 Init:0/1 으로 멈춤
 kubectl create secret generic homelens-slack-webhook \
   --from-literal=url='<webhook url>' \
   -n monitoring --dry-run=client -o yaml | kubectl apply -f -
@@ -226,7 +233,16 @@ terraform apply \
 
 terraform plan  # No changes 확인
 
-## Terraform apply 3단계 완료 후 → ArgoCD가 k8s 리소스를 자동 sync
+## Terraform apply 3단계 완료 후 → ArgoCD sync 수동 트리거 필수
+# ※ PrometheusRule CRD는 monitoring(Stage 3) 설치 후 생성됨
+#   ArgoCD는 Stage 2 시점에 sync를 시도해 CRD 미존재로 5회 실패 후 자동 재시도 중단
+#   → 3단계 apply 완료 후 반드시 아래 명령어로 sync 재트리거 필요
+kubectl patch application homelens-dev -n argocd \
+  --type merge \
+  -p '{"operation":{"initiatedBy":{"username":"admin"},"sync":{"syncStrategy":{"apply":{"force":false}}}}}'
+sleep 30
+kubectl get application -n argocd  # Synced 확인
+
 # 1. kubeconfig 업데이트 (Route53 업데이트 및 aws-auth 등록에 필요)
 aws eks update-kubeconfig --name homelens-dev-eks --region eu-west-3 # <-이것만 하면 됨
 # ※ infra/k8s/ 내 모든 파일(configmap, serviceaccount, deployment, service, ingress)은
@@ -771,7 +787,7 @@ echo "Silence 재적용 완료"
 |-----------|------|-----|--------|
 | PipelineErrorRateHigh | 5분간 파이프라인 에러 3건 이상 | 5m | critical |
 | BedrockLatencyHigh | Bedrock p95 > **45s** | 5m | warning |
-| PipelineTotalLatencyHigh | 전체 파이프라인 p90 > 90s | 5m | warning |
+| PipelineTotalLatencyHigh | 전체 파이프라인 p90 > 60s | 5m | warning |
 | HttpErrorRateHigh | HTTP 에러율 > 5% | 5m | critical |
 | HttpResponseTimeHigh | HTTP p95 > 2s | 5m | warning |
 | DbQueryLatencyHigh | DB 쿼리 p95 > 500ms | 5m | warning |
@@ -954,8 +970,11 @@ bash scripts/test-5-reports.sh --no-poll   # 상태 폴링 없이 전송만
 ### kube-prometheus-stack — `secrets already exists` 에러 (Helm upgrade 충돌)
 - **증상:** `terraform apply` 시 `secrets "alertmanager-kube-prometheus-stack-alertmanager" already exists` 오류
 - **원인:** Helm release가 failed 상태로 남았을 때 재apply 시, Prometheus Operator가 이미 secret을 재생성한 상태에서 Helm이 다시 create 시도 → 충돌
-- **해결:** `modules/monitoring/main.tf`의 `helm_release`에 `force_update = true` 추가 (2026-06-19 적용)
-  - Helm이 기존 리소스를 삭제 후 재생성하는 방식으로 충돌 우회
+- **해결:** 3단계 apply **직전** 아래 명령어로 secret 선삭제 (매일 아침 필수)
+  ```bash
+  kubectl delete secret alertmanager-kube-prometheus-stack-alertmanager -n monitoring --ignore-not-found
+  ```
+  - `force_update = true` (2026-06-19 추가)는 Helm **upgrade** 시에만 유효 — destroy 후 fresh install에는 효과 없음
 - **추가 확인:** alertmanager pod가 `Init:0/1`으로 멈히면 `homelens-slack-webhook` secret 누락 여부 확인
   ```bash
   kubectl describe pod alertmanager-kube-prometheus-stack-alertmanager-0 -n monitoring | grep -A5 Events

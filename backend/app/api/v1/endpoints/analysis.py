@@ -64,7 +64,8 @@ async def get_price(
             }
 
     # 2순위: region_id 기반 DB → Redis 조회
-    snapshot = await get_price_snapshot(regionId, db)
+    with DB_QUERY_LATENCY.labels(query_type="price_snapshot").time():
+        snapshot = await get_price_snapshot(regionId, db)
     if snapshot:
         return {
             "avgSalePrice": snapshot.get("avg_sale_price"),
@@ -187,7 +188,8 @@ async def get_price_trend_endpoint(
             }
 
     # 2순위: region_id 기반 DB 조회
-    trend = await get_price_trend(regionId, dealType, period, db)
+    with DB_QUERY_LATENCY.labels(query_type="price_trend").time():
+        trend = await get_price_trend(regionId, dealType, period, db)
     if trend:
         return {
             "trend": trend,
@@ -254,7 +256,8 @@ async def get_price_stats_endpoint(
             }
 
     # 2순위: region_id 기반 DB 조회
-    stats = await get_price_stats(regionId, dealType, period, db)
+    with DB_QUERY_LATENCY.labels(query_type="price_stats").time():
+        stats = await get_price_stats(regionId, dealType, period, db)
     if stats:
         return {
             "minPrice": stats.get("min_price"),
