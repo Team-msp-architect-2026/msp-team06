@@ -944,3 +944,546 @@ resource "kubernetes_config_map" "worker_resource_dashboard" {
 
   depends_on = [helm_release.kube_prometheus_stack]
 }
+# ---------------------------------------------------------------------------
+# Grafana 오토스케일링 통합 대시보드
+# HPA (FastAPI) + KEDA (Celery Worker) + Cluster Autoscaler (Node) 한 화면
+# ---------------------------------------------------------------------------
+resource "kubernetes_config_map" "autoscaling_dashboard" {
+  metadata {
+    name      = "${var.project_name}-${var.env}-autoscaling-dashboard"
+    namespace = "monitoring"
+    labels = {
+      grafana_dashboard = "1"
+    }
+  }
+
+  data = {
+    "autoscaling.json" = jsonencode({
+      title         = "HomeLens 오토스케일링 — ${var.env}"
+      uid           = "homelens-autoscaling-${var.env}"
+      schemaVersion = 30
+      refresh       = "15s"
+      time          = { from = "now-1h", to = "now" }
+
+      panels = [
+
+        # ════════════════════════════════════════════════════════════
+        # 행 0 — 개요 Stat 패널 (현재 상태 한눈에)
+        # ════════════════════════════════════════════════════════════
+        {
+          id      = 1
+          title   = "FastAPI 현재 Pod 수"
+          type    = "stat"
+          gridPos = { h = 4, w = 4, x = 0, y = 0 }
+          targets = [{
+            expr    = "kube_horizontalpodautoscaler_status_current_replicas{horizontalpodautoscaler=\"fastapi-hpa\", namespace=\"homelens\"}"
+            refId   = "A"
+            instant = true
+          }]
+          fieldConfig = {
+            defaults = {
+              unit  = "short"
+              color = { mode = "thresholds" }
+              thresholds = { steps = [
+                { color = "green", value = null },
+                { color = "yellow", value = 2 },
+                { color = "red", value = 4 }
+              ]}
+            }
+          }
+          options = { reduceOptions = { calcs = ["lastNotNull"] }, colorMode = "background" }
+        },
+
+        {
+          id      = 2
+          title   = "FastAPI 목표 Pod 수 (HPA 계산)"
+          type    = "stat"
+          gridPos = { h = 4, w = 4, x = 4, y = 0 }
+          targets = [{
+            expr    = "kube_horizontalpodautoscaler_status_desired_replicas{horizontalpodautoscaler=\"fastapi-hpa\", namespace=\"homelens\"}"
+            refId   = "A"
+            instant = true
+          }]
+          fieldConfig = {
+            defaults = {
+              unit  = "short"
+              color = { mode = "thresholds" }
+              thresholds = { steps = [
+                { color = "green", value = null },
+                { color = "yellow", value = 2 },
+                { color = "red", value = 4 }
+              ]}
+            }
+          }
+          options = { reduceOptions = { calcs = ["lastNotNull"] }, colorMode = "background" }
+        },
+
+        {
+          id      = 3
+          title   = "FastAPI HPA 최대 Pod"
+          type    = "stat"
+          gridPos = { h = 4, w = 4, x = 8, y = 0 }
+          targets = [{
+            expr    = "kube_horizontalpodautoscaler_spec_max_replicas{horizontalpodautoscaler=\"fastapi-hpa\", namespace=\"homelens\"}"
+            refId   = "A"
+            instant = true
+          }]
+          fieldConfig = {
+            defaults = {
+              unit  = "short"
+              color = { fixedColor = "blue", mode = "fixed" }
+            }
+          }
+          options = { reduceOptions = { calcs = ["lastNotNull"] }, colorMode = "value" }
+        },
+
+        {
+          id      = 4
+          title   = "Celery Worker 현재 Pod 수 (KEDA)"
+          type    = "stat"
+          gridPos = { h = 4, w = 4, x = 12, y = 0 }
+          targets = [{
+            expr    = "kube_deployment_status_replicas{deployment=\"celery-worker\", namespace=\"homelens\"}"
+            refId   = "A"
+            instant = true
+          }]
+          fieldConfig = {
+            defaults = {
+              unit  = "short"
+              color = { mode = "thresholds" }
+              thresholds = { steps = [
+                { color = "green", value = null },
+                { color = "yellow", value = 5 },
+                { color = "red", value = 15 }
+              ]}
+            }
+          }
+          options = { reduceOptions = { calcs = ["lastNotNull"] }, colorMode = "background" }
+        },
+
+        {
+          id      = 5
+          title   = "SQS 큐 깊이 (KEDA 트리거)"
+          type    = "stat"
+          gridPos = { h = 4, w = 4, x = 16, y = 0 }
+          targets = [{
+            expr    = "homelens_sqs_queue_depth"
+            refId   = "A"
+            instant = true
+          }]
+          fieldConfig = {
+            defaults = {
+              unit  = "short"
+              color = { mode = "thresholds" }
+              thresholds = { steps = [
+                { color = "green", value = null },
+                { color = "yellow", value = 5 },
+                { color = "red", value = 20 }
+              ]}
+            }
+          }
+          options = { reduceOptions = { calcs = ["lastNotNull"] }, colorMode = "background" }
+        },
+
+        {
+          id      = 6
+          title   = "전체 EKS 노드 수"
+          type    = "stat"
+          gridPos = { h = 4, w = 4, x = 20, y = 0 }
+          targets = [{
+            expr    = "count(kube_node_status_condition{condition=\"Ready\",status=\"true\"})"
+            refId   = "A"
+            instant = true
+          }]
+          fieldConfig = {
+            defaults = {
+              unit  = "short"
+              color = { mode = "thresholds" }
+              thresholds = { steps = [
+                { color = "green", value = null },
+                { color = "yellow", value = 3 },
+                { color = "red", value = 4 }
+              ]}
+            }
+          }
+          options = { reduceOptions = { calcs = ["lastNotNull"] }, colorMode = "background" }
+        },
+
+        # ════════════════════════════════════════════════════════════
+        # 행 1 — HPA: FastAPI CPU 70% 초과 시 스케일아웃
+        # ════════════════════════════════════════════════════════════
+        {
+          id        = 10
+          type      = "row"
+          title     = "HPA — FastAPI 수평 자동 스케일  (CPU 70% 기준 / scaleDown cooldown 300s)"
+          collapsed = false
+          gridPos   = { h = 1, w = 24, x = 0, y = 4 }
+        },
+
+        {
+          id      = 11
+          title   = "FastAPI HPA Replicas 추이 (현재 / 목표 / min / max)"
+          type    = "timeseries"
+          gridPos = { h = 8, w = 12, x = 0, y = 5 }
+          targets = [
+            {
+              expr         = "kube_horizontalpodautoscaler_status_current_replicas{horizontalpodautoscaler=\"fastapi-hpa\", namespace=\"homelens\"}"
+              legendFormat = "현재 replicas"
+              refId        = "A"
+            },
+            {
+              expr         = "kube_horizontalpodautoscaler_status_desired_replicas{horizontalpodautoscaler=\"fastapi-hpa\", namespace=\"homelens\"}"
+              legendFormat = "HPA 목표 replicas"
+              refId        = "B"
+            },
+            {
+              expr         = "kube_horizontalpodautoscaler_spec_min_replicas{horizontalpodautoscaler=\"fastapi-hpa\", namespace=\"homelens\"}"
+              legendFormat = "min (설정)"
+              refId        = "C"
+            },
+            {
+              expr         = "kube_horizontalpodautoscaler_spec_max_replicas{horizontalpodautoscaler=\"fastapi-hpa\", namespace=\"homelens\"}"
+              legendFormat = "max (설정)"
+              refId        = "D"
+            }
+          ]
+          fieldConfig = {
+            defaults = {
+              unit   = "short"
+              color  = { mode = "palette-classic" }
+              custom = { fillOpacity = 5, lineWidth = 2 }
+            }
+          }
+          options = { tooltip = { mode = "multi" } }
+        },
+
+        {
+          id      = 12
+          title   = "FastAPI CPU 사용률 (%) vs HPA 임계값 70%"
+          type    = "timeseries"
+          gridPos = { h = 8, w = 12, x = 12, y = 5 }
+          targets = [
+            {
+              expr         = "100 * sum(rate(container_cpu_usage_seconds_total{namespace=\"homelens\", container=\"fastapi\"}[2m])) / sum(kube_pod_container_resource_requests{namespace=\"homelens\", container=\"fastapi\", resource=\"cpu\"})"
+              legendFormat = "FastAPI CPU 사용률 %"
+              refId        = "A"
+            },
+            {
+              expr         = "vector(70)"
+              legendFormat = "스케일아웃 임계값 (70%)"
+              refId        = "B"
+            }
+          ]
+          fieldConfig = {
+            defaults = {
+              unit  = "percent"
+              min   = 0
+              color = { mode = "palette-classic" }
+              thresholds = { steps = [
+                { color = "green",  value = null },
+                { color = "yellow", value = 60 },
+                { color = "red",    value = 70 }
+              ]}
+            }
+            overrides = [{
+              matcher    = { id = "byName", options = "스케일아웃 임계값 (70%)" }
+              properties = [
+                { id = "color", value = { fixedColor = "red", mode = "fixed" } },
+                { id = "custom.lineStyle", value = { dash = [8, 4], fill = "dash" } }
+              ]
+            }]
+          }
+          options = { tooltip = { mode = "multi" } }
+        },
+
+        # ════════════════════════════════════════════════════════════
+        # 행 2 — KEDA: SQS 큐÷queueLength(4) 기준 스케일
+        # ════════════════════════════════════════════════════════════
+        {
+          id        = 20
+          type      = "row"
+          title     = "KEDA — Celery Worker 자동 스케일  (SQS 큐÷4 / min=1 / max=25 / cooldown=300s)"
+          collapsed = false
+          gridPos   = { h = 1, w = 24, x = 0, y = 13 }
+        },
+
+        {
+          id      = 21
+          title   = "Celery Worker Replicas 추이 (현재 / 가용 / KEDA 계산값)"
+          type    = "timeseries"
+          gridPos = { h = 8, w = 12, x = 0, y = 14 }
+          targets = [
+            {
+              expr         = "kube_deployment_status_replicas{deployment=\"celery-worker\", namespace=\"homelens\"}"
+              legendFormat = "전체 replicas"
+              refId        = "A"
+            },
+            {
+              expr         = "kube_deployment_status_replicas_available{deployment=\"celery-worker\", namespace=\"homelens\"}"
+              legendFormat = "가용(Ready) replicas"
+              refId        = "B"
+            },
+            {
+              expr         = "kube_deployment_spec_replicas{deployment=\"celery-worker\", namespace=\"homelens\"}"
+              legendFormat = "목표(spec) replicas"
+              refId        = "C"
+            },
+            {
+              expr         = "ceil(homelens_sqs_queue_depth / 4)"
+              legendFormat = "KEDA 계산값 ceil(큐÷4)"
+              refId        = "D"
+            }
+          ]
+          fieldConfig = {
+            defaults = {
+              unit   = "short"
+              color  = { mode = "palette-classic" }
+              custom = { fillOpacity = 5, lineWidth = 2 }
+            }
+            overrides = [{
+              matcher    = { id = "byName", options = "KEDA 계산값 ceil(큐÷4)" }
+              properties = [
+                { id = "color", value = { fixedColor = "orange", mode = "fixed" } },
+                { id = "custom.lineStyle", value = { dash = [8, 4], fill = "dash" } }
+              ]
+            }]
+          }
+          options = { tooltip = { mode = "multi" } }
+        },
+
+        {
+          id      = 22
+          title   = "SQS 큐 깊이 vs 현재 Pod 처리 용량 — 큐 > 용량이면 KEDA 스케일아웃"
+          type    = "timeseries"
+          gridPos = { h = 8, w = 12, x = 12, y = 14 }
+          targets = [
+            {
+              expr         = "homelens_sqs_queue_depth"
+              legendFormat = "SQS 대기 메시지 수"
+              refId        = "A"
+            },
+            {
+              expr         = "kube_deployment_status_replicas_available{deployment=\"celery-worker\", namespace=\"homelens\"} * 4"
+              legendFormat = "현재 처리 용량 (Pod수×4)"
+              refId        = "B"
+            }
+          ]
+          fieldConfig = {
+            defaults = {
+              unit  = "short"
+              color = { mode = "palette-classic" }
+              thresholds = { steps = [
+                { color = "green",  value = null },
+                { color = "yellow", value = 4 },
+                { color = "red",    value = 20 }
+              ]}
+            }
+            overrides = [{
+              matcher    = { id = "byName", options = "현재 처리 용량 (Pod수×4)" }
+              properties = [
+                { id = "color", value = { fixedColor = "green", mode = "fixed" } },
+                { id = "custom.lineStyle", value = { dash = [8, 4], fill = "dash" } }
+              ]
+            }]
+          }
+          options = { tooltip = { mode = "multi" } }
+        },
+
+        # ════════════════════════════════════════════════════════════
+        # 행 3 — Cluster Autoscaler: Pending Pod → 노드 추가
+        # ════════════════════════════════════════════════════════════
+        {
+          id        = 30
+          type      = "row"
+          title     = "Cluster Autoscaler — 노드 Scale Out/In  (Pending Pod → 노드추가 2~5분 / 유휴 5분 → 제거 / worker min=2/max=4)"
+          collapsed = false
+          gridPos   = { h = 1, w = 24, x = 0, y = 22 }
+        },
+
+        {
+          id      = 31
+          title   = "EKS 노드 수 변화 — CA Scale Out/In 추이"
+          type    = "timeseries"
+          gridPos = { h = 8, w = 12, x = 0, y = 23 }
+          targets = [
+            {
+              expr         = "count(kube_node_status_condition{condition=\"Ready\",status=\"true\"})"
+              legendFormat = "전체 노드"
+              refId        = "A"
+            },
+            {
+              expr         = "count(kube_node_labels{label_eks_amazonaws_com_nodegroup=\"homelens-${var.env}-worker\"})"
+              legendFormat = "Worker 노드 (CA 대상, min=2/max=4)"
+              refId        = "B"
+            },
+            {
+              expr         = "count(kube_node_labels{label_eks_amazonaws_com_nodegroup=\"homelens-${var.env}-api\"})"
+              legendFormat = "API 노드"
+              refId        = "C"
+            }
+          ]
+          fieldConfig = {
+            defaults = {
+              unit   = "short"
+              color  = { mode = "palette-classic" }
+              custom = { fillOpacity = 10, lineWidth = 2 }
+            }
+          }
+          options = { tooltip = { mode = "multi" } }
+        },
+
+        {
+          id      = 32
+          title   = "Pending / Unschedulable Pod 수 — CA 스케일아웃 트리거 (0이 정상)"
+          type    = "timeseries"
+          gridPos = { h = 8, w = 12, x = 12, y = 23 }
+          targets = [
+            {
+              expr         = "count(kube_pod_status_scheduled{namespace=\"homelens\", condition=\"false\"}) or vector(0)"
+              legendFormat = "homelens Unschedulable Pods (CA 트리거)"
+              refId        = "A"
+            },
+            {
+              expr         = "sum(kube_pod_status_scheduled{condition=\"false\"}) or vector(0)"
+              legendFormat = "전체 Unschedulable Pods"
+              refId        = "B"
+            }
+          ]
+          fieldConfig = {
+            defaults = {
+              unit  = "short"
+              color = { mode = "palette-classic" }
+              thresholds = { steps = [
+                { color = "green",  value = null },
+                { color = "yellow", value = 1 },
+                { color = "red",    value = 3 }
+              ]}
+            }
+            overrides = [{
+              matcher    = { id = "byName", options = "homelens Pending Pods" }
+              properties = [{ id = "color", value = { fixedColor = "red", mode = "fixed" } }]
+            }]
+          }
+          options = { tooltip = { mode = "multi" } }
+        },
+
+        # ════════════════════════════════════════════════════════════
+        # 행 4 — 노드 리소스 할당률 (CA 스케일 판단 근거)
+        # ════════════════════════════════════════════════════════════
+        {
+          id        = 40
+          type      = "row"
+          title     = "노드 리소스 할당률 — CA 스케일 판단 근거  (request 예약량 기준)"
+          collapsed = false
+          gridPos   = { h = 1, w = 24, x = 0, y = 31 }
+        },
+
+        {
+          id      = 41
+          title   = "노드별 CPU 할당률 (%) — 90% 초과 시 CA 스케일아웃 임박"
+          type    = "timeseries"
+          gridPos = { h = 8, w = 12, x = 0, y = 32 }
+          targets = [{
+            expr         = "100 * sum by (node) (kube_pod_container_resource_requests{resource=\"cpu\"}) / on(node) kube_node_status_allocatable{resource=\"cpu\"}"
+            legendFormat = "{{node}}"
+            refId        = "A"
+          }]
+          fieldConfig = {
+            defaults = {
+              unit  = "percent"
+              min   = 0
+              max   = 100
+              color = { mode = "palette-classic" }
+              thresholds = { steps = [
+                { color = "green",  value = null },
+                { color = "yellow", value = 70 },
+                { color = "red",    value = 90 }
+              ]}
+            }
+          }
+          options = { tooltip = { mode = "multi" } }
+        },
+
+        {
+          id      = 42
+          title   = "노드별 메모리 할당률 (%) — 90% 초과 시 CA 스케일아웃 임박"
+          type    = "timeseries"
+          gridPos = { h = 8, w = 12, x = 12, y = 32 }
+          targets = [{
+            expr         = "100 * sum by (node) (kube_pod_container_resource_requests{resource=\"memory\"}) / on(node) kube_node_status_allocatable{resource=\"memory\"}"
+            legendFormat = "{{node}}"
+            refId        = "A"
+          }]
+          fieldConfig = {
+            defaults = {
+              unit  = "percent"
+              min   = 0
+              max   = 100
+              color = { mode = "palette-classic" }
+              thresholds = { steps = [
+                { color = "green",  value = null },
+                { color = "yellow", value = 70 },
+                { color = "red",    value = 90 }
+              ]}
+            }
+          }
+          options = { tooltip = { mode = "multi" } }
+        },
+
+        # ════════════════════════════════════════════════════════════
+        # 행 5 — 스케일링 연쇄 흐름 오버레이
+        # ════════════════════════════════════════════════════════════
+        {
+          id        = 50
+          type      = "row"
+          title     = "스케일링 연쇄 흐름  ① SQS 큐 ↑  →  ② KEDA Pod ↑  →  ③ Pending  →  ④ CA 노드 ↑"
+          collapsed = false
+          gridPos   = { h = 1, w = 24, x = 0, y = 40 }
+        },
+
+        {
+          id      = 51
+          title   = "스케일링 연쇄 오버레이 — SQS 큐 / Celery Pod / Worker 노드 / FastAPI Pod"
+          type    = "timeseries"
+          gridPos = { h = 10, w = 24, x = 0, y = 41 }
+          targets = [
+            {
+              expr         = "homelens_sqs_queue_depth"
+              legendFormat = "① SQS 큐 깊이"
+              refId        = "A"
+            },
+            {
+              expr         = "kube_deployment_status_replicas{deployment=\"celery-worker\", namespace=\"homelens\"}"
+              legendFormat = "② Celery Worker Pod 수 (KEDA)"
+              refId        = "B"
+            },
+            {
+              expr         = "count(kube_node_labels{label_eks_amazonaws_com_nodegroup=\"homelens-${var.env}-worker\"})"
+              legendFormat = "③ Worker 노드 수 (CA)"
+              refId        = "C"
+            },
+            {
+              expr         = "kube_horizontalpodautoscaler_status_current_replicas{horizontalpodautoscaler=\"fastapi-hpa\", namespace=\"homelens\"}"
+              legendFormat = "④ FastAPI Pod 수 (HPA)"
+              refId        = "D"
+            }
+          ]
+          fieldConfig = {
+            defaults = {
+              unit   = "short"
+              color  = { mode = "palette-classic" }
+              custom = { fillOpacity = 8, lineWidth = 2 }
+            }
+          }
+          options = {
+            tooltip = { mode = "multi" }
+            legend  = { displayMode = "table", placement = "bottom", calcs = ["lastNotNull", "min", "max"] }
+          }
+        }
+
+      ]
+    })
+  }
+
+  depends_on = [helm_release.kube_prometheus_stack]
+}
