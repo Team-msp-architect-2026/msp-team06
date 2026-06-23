@@ -48,9 +48,9 @@ class Settings(BaseSettings):
     db_name: str = _rds.get("dbname", os.getenv("DB_NAME", "homelens"))
     db_user: str = _rds.get("username", os.getenv("DB_USER", "homelens_admin"))
     db_password: str = _rds.get("password", os.getenv("DB_PASSWORD", ""))
-    # Redis 연결 설정
-    redis_host: str = os.getenv("REDIS_HOST", "localhost")
-    redis_port: int = 6379
+    # Redis 연결 설정 — Secrets Manager > 환경변수 > 기본값 순으로 참조
+    redis_host: str = _redis.get("host", os.getenv("REDIS_HOST", "localhost"))
+    redis_port: int = int(_redis.get("port", os.getenv("REDIS_PORT", 6379)))
 
     # 외부 API 키 설정
     kakao_api_key: str = _kakao.get("rest_api_key", os.getenv("KAKAO_API_KEY", ""))
@@ -59,6 +59,10 @@ class Settings(BaseSettings):
     molit_api_key: str = _molit.get("confm_key", _molit.get("api_key", _molit.get("service_key", os.getenv("MOLIT_API_KEY", ""))))
     anthropic_api_key: str = ""
     juso_api_key: str = _mois.get("service_key", os.getenv("JUSO_API_KEY", ""))
+
+    @property
+    def redis_url(self) -> str:
+        return f"redis://{self.redis_host}:{self.redis_port}"
 
     @property
     def database_url(self) -> str:
