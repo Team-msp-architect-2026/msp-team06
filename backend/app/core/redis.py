@@ -31,18 +31,20 @@ def _cache_type(key: str) -> str:
 
 
 async def cache_get(key: str) -> Any:
+    cache_type = _cache_type(key)
     try:
         redis = await get_redis()
         if not redis:
+            CACHE_MISSES_TOTAL.labels(cache_type=cache_type).inc()
             return None
         value = await redis.get(key)
-        cache_type = _cache_type(key)
         if value:
             CACHE_HITS_TOTAL.labels(cache_type=cache_type).inc()
             return json.loads(value)
         CACHE_MISSES_TOTAL.labels(cache_type=cache_type).inc()
         return None
     except Exception:
+        CACHE_MISSES_TOTAL.labels(cache_type=cache_type).inc()
         return None
 
 async def cache_set(key: str, value: Any, ttl: int = TTL_PRICE) -> None:

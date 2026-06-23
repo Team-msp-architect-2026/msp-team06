@@ -86,5 +86,12 @@ CACHE_MISSES_TOTAL = Counter(
     labelnames=["cache_type"],
 )
 
+# 시작 시점에 label 조합을 등록해 Prometheus에 시리즈가 즉시 생성되게 한다.
+# 이렇게 해야 최초 히트 전에도 PromQL이 0을 반환하고 "No data"를 피할 수 있다.
+for _ct in ("price", "news", "report", "kapt", "other"):
+    CACHE_HITS_TOTAL.labels(cache_type=_ct)
+    CACHE_MISSES_TOTAL.labels(cache_type=_ct)
+
+
 def start_metrics_server():
     start_http_server(8000)
