@@ -1448,7 +1448,7 @@ resource "kubernetes_config_map" "autoscaling_dashboard" {
           gridPos = { h = 10, w = 24, x = 0, y = 41 }
           targets = [
             {
-              expr         = "homelens_sqs_queue_depth"
+              expr         = "max(homelens_sqs_queue_depth)"
               legendFormat = "① SQS 큐 깊이"
               refId        = "A"
             },
