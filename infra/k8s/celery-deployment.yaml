@@ -36,7 +36,7 @@ spec:
       containers:
         - name: celery-worker
           # CI/CD에서 실제 이미지 태그(Git SHA)로 교체
-          image: 611058323802.dkr.ecr.eu-west-3.amazonaws.com/homelens-celeryworker:a6b86ac11f86df50f2f233c5956a22ae2b61b08a
+          image: 611058323802.dkr.ecr.eu-west-3.amazonaws.com/homelens-celeryworker:b41ed5bea0a2e9c396a782a22afa51cedb2cbf37
           imagePullPolicy: Always
 
           command: ["celery", "-A", "app.worker", "worker", "--loglevel=info", "--concurrency=4", "--pool=threads"]
