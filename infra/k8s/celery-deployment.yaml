@@ -9,8 +9,7 @@ metadata:
   labels:
     app: celery-worker
 spec:
-  # KEDA ScaledObject가 replicas를 자동 제어하므로 여기 값은 무시됨
-  replicas: 0
+  replicas: 1
   selector:
     matchLabels:
       app: celery-worker

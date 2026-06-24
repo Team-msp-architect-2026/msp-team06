@@ -13,7 +13,7 @@ spec:
         - alert: PipelineErrorRateHigh
           expr: |
             increase(homelens_pipeline_errors_total[5m]) > 3
-          for: 5m
+          for: 1m
           labels:
             severity: critical
           annotations:
@@ -54,7 +54,7 @@ spec:
               /
               sum(increase(homelens_http_requests_total[5m]))
             ) > 0.05
-          for: 5m
+          for: 1m
           labels:
             severity: critical
           annotations:
