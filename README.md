@@ -51,24 +51,6 @@
 
 </div>
 
----
-
-## 📑 목차
-
-1. [프로젝트 개요](#프로젝트-개요)
-2. [아키텍처](#아키텍처)
-3. [기술 스택](#기술-스택)
-4. [디렉터리 구조](#디렉터리-구조)
-5. [로컬 개발 환경 구성](#로컬-개발-환경-구성)
-6. [환경 변수](#환경-변수)
-7. [API 사용법](#api-사용법)
-8. [데이터 파이프라인](#데이터-파이프라인)
-9. [캐시 정책](#캐시-정책)
-10. [DB 마이그레이션](#db-마이그레이션)
-11. [위키 문서](#위키-문서)
-
----
-
 ## 📖 프로젝트 개요
 
 HomeLens AI는 서울 아파트 실거래가 데이터를 수집·가공하여 모바일 앱(React Native / Expo)에 제공하는 백엔드 서비스입니다.
@@ -139,39 +121,35 @@ flowchart LR
 
 ```
 msp-team06/
-├── app/                          # React Native (Expo) 앱
+├── frontend/                          # React Native (Expo) 앱
 ├── backend/
-│   ├── app/
-│   │   ├── main.py               # FastAPI 진입점, 라우터 등록, CORS 설정
-│   │   ├── worker.py             # Celery 워커 (AI 리포트 비동기 생성)
-│   │   ├── metrics.py            # Prometheus 메트릭
-│   │   ├── core/
-│   │   │   ├── config.py         # AWS Secrets Manager 기반 설정
-│   │   │   ├── database.py       # SQLAlchemy 비동기 엔진
-│   │   │   └── redis.py          # Redis 연결 및 TTL 상수
-│   │   ├── api/v1/endpoints/
-│   │   │   ├── analysis.py       # 가격 분석 API
-│   │   │   ├── places.py         # 지도·단지 API
-│   │   │   └── news.py           # 뉴스 API
-│   │   ├── models/               # SQLAlchemy ORM 모델
-│   │   ├── services/             # 비즈니스 로직 (Redis → DB → 외부 API)
-│   │   ├── schemas/              # Pydantic 요청/응답 스키마
-│   │   └── utils/classify.py     # 뉴스 impact_type 분류 유틸
-│   ├── Dockerfile
-│   ├── docker-compose.yml        # 로컬 개발용 (DB + Redis)
-│   └── requirements.txt
-└── data-pipeline/
-    ├── alembic/                  # DB 마이그레이션 (5개)
-    └── lambdas/                  # AWS Lambda 함수 (9개)
-        ├── molit_price_ingest/       # 국토부 실거래가 수집
-        ├── normalize_price_data/     # S3 → DB 정규화
-        ├── apt_complex_ingest/       # 아파트 단지 정보 수집
-        ├── news_collector/           # 네이버 뉴스 수집
-        ├── news_summarizer_trigger/  # S3 뉴스 → SQS 분배
-        ├── summarize_news/           # Bedrock AI 뉴스 요약
-        ├── pipeline_step/            # Step Functions 범용 처리기
-        ├── detect_data_update/       # Redis 캐시 무효화
-        └── region_normalizer/        # 법정동코드 정규화
+│   └── app/
+│       ├── main.py                    # FastAPI 진입점, 라우터 등록, CORS 설정
+│       ├── worker.py                  # Celery 워커 (AI 리포트 비동기 생성)
+│       ├── metrics.py                 # Prometheus 메트릭
+│       ├── api/                       # 가격·지도·뉴스 엔드포인트
+│       ├── core/                      # 설정, DB 엔진, Redis 연결
+│       ├── models/                    # SQLAlchemy ORM 모델
+│       ├── services/                  # 비즈니스 로직 (Redis → DB → 외부 API)
+│       ├── schemas/                   # Pydantic 요청/응답 스키마
+│       └── utils/                     # 뉴스 분류 등 유틸
+├── data-pipeline/
+│   ├── alembic/                       # DB 마이그레이션
+│   └── lambdas/                       # AWS Lambda 함수 (9개)
+│       ├── molit_price_ingest/            # 국토부 실거래가 수집
+│       ├── normalize_price_data/          # S3 → DB 정규화, apt_seq·단지명 매칭
+│       ├── apt_complex_ingest/            # 아파트 단지 정보 수집
+│       ├── news_collector/                # 네이버 뉴스 수집
+│       ├── news_summarizer_trigger/       # S3 뉴스 → SQS 분배
+│       ├── summarize_news/                # Bedrock AI 뉴스 요약
+│       ├── pipeline_step/                 # Step Functions 범용 처리기
+│       ├── detect_data_update/            # Redis 캐시 무효화
+│       └── region_normalizer/             # 법정동코드 정규화 (현재 미사용)
+├── infra/
+│   ├── homelens-terraform/            # Terraform IaC (17개 모듈: EKS, RDS, Redis, SQS 등)
+│   └── k8s/                           # Kubernetes manifests
+├── docs/                              # 설계 문서 (ERD, API 명세, 요구사항 등)
+└── scripts/                           # 운영/테스트 스크립트
 ```
 
 ---
@@ -203,7 +181,7 @@ pip install -r requirements.txt
 
 ### 3. 환경 변수 설정
 
-`backend/.env` 파일을 생성합니다. (아래 [환경 변수](#환경-변수) 섹션 참고)
+`backend/.env` 파일을 생성합니다. (아래 환경 변수 섹션 참고)
 
 ### 4. 로컬 DB · Redis 실행
 
@@ -341,7 +319,7 @@ curl -H "X-API-KEY: your_key" \
   "https://api.homelens.ai/api/v1/analysis/report/{report_id}"
 ```
 
-> 전체 요청/응답 스펙은 [Wiki: API 명세서 v5.0](./API-명세서.md) 참고
+> 전체 요청/응답 스펙은 [Wiki: API 명세서](https://github.com/Team-msp-architect-2026/msp-team06/wiki/API-%EB%AA%85%EC%84%B8%EC%84%9C) 참고
 
 ---
 
@@ -380,7 +358,7 @@ POST /analysis/report
                                     └→ reports 테이블 저장
 ```
 
-> Lambda 스펙·메모리·타임아웃 상세는 [Wiki: 배치작업 명세서](./배치작업-명세서.md) 참고
+> Lambda 스펙·메모리·타임아웃 상세는 [Wiki: 배치작업](https://github.com/Team-msp-architect-2026/msp-team06/wiki/%EB%B0%B0%EC%B9%98-%EC%9E%91%EC%97%85) 참고
 
 ---
 
@@ -400,7 +378,7 @@ Redis (AWS ElastiCache, `eu-west-3`)를 Cache-Aside 패턴으로 사용합니다
 
 **캐시 무효화:** `detect_data_update` Lambda가 데이터 업데이트 감지 시 관련 Redis 키를 자동 삭제합니다.
 
-> 상세 정책은 [Wiki: 캐시 & 갱신정책](./캐시-갱신정책.md) 참고
+> 상세 정책은 [Wiki: 캐시 & 갱신정책](https://github.com/Team-msp-architect-2026/msp-team06/wiki/%EC%BA%90%EC%8B%9C-%26-%EA%B0%B1%EC%8B%A0-%EC%A0%95%EC%B1%85) 참고
 
 ---
 
@@ -430,18 +408,21 @@ initial_schema
                 └→ v5_add_apt_seq_columns
 ```
 
-> 전체 스키마(13개 테이블, 55개 인덱스)는 [Wiki: DB 스키마](./DB-스키마.md) 참고
+> 전체 스키마(13개 테이블, 55개 인덱스)는 [Wiki: DB 스키마](https://github.com/Team-msp-architect-2026/msp-team06/wiki/DB-%EC%8A%A4%ED%82%A4%EB%A7%88) 참고
 
 ---
 
 ## 📚 위키 문서
 
-| 문서 | 내용 |
-|------|------|
-| [API 명세서](./API-명세서.md) | 전체 14개 엔드포인트 요청/응답 스펙, v5.0 변경이력 |
-| [DB 스키마](./DB-스키마.md) | 13개 테이블 컬럼 정의, 인덱스, 마이그레이션 이력 |
-| [캐시 & 갱신정책](./캐시-갱신정책.md) | TTL 정책, Redis 키 패턴, 무효화 전략 |
-| [배치작업 명세서](./배치작업-명세서.md) | Lambda 9개 스펙, Step Functions 파이프라인 흐름 |
+전체 문서는 [Wiki](https://github.com/Team-msp-architect-2026/msp-team06/wiki)에서 확인할 수 있습니다.
+
+| 분류 | 문서 |
+|---|---|
+| **서비스 설계** | [화면 명세서](../../wiki/화면-명세서) · [검색 로직](../../wiki/검색-로직) · [AI 리포트](../../wiki/AI-리포트) |
+| **데이터** | [ERD 설계서](../../wiki/ERD-설계서) · [DB 스키마](../../wiki/DB-스키마) · [캐시 & 갱신 정책](../../wiki/캐시-&-갱신-정책) · [배치 작업](../../wiki/배치-작업) · [데이터 품질 정책](../../wiki/데이터-품질-정책) |
+| **API** | [API 명세서](../../wiki/API-명세서) · [호출 제한](../../wiki/호출-제한) · [외부 API 연동](../../wiki/외부-API-연동) |
+| **개발** | [프론트엔드](../../wiki/프론트엔드) · [백엔드](../../wiki/백엔드) · [데이터 저장](../../wiki/데이터-저장) · [데이터 파이프라인](../../wiki/데이터-파이프라인) |
+| **인프라 · 운영** | [인프라 아키텍처](../../wiki/인프라-아키텍처) · [AWS VPC 네트워크](../../wiki/AWS-VPC-네트워크) · [EKS 클러스터](../../wiki/EKS-클러스터) · [CI/CD 파이프라인](../../wiki/CI-CD-파이프라인) · [모니터링 & 로깅](../../wiki/모니터링-&-로깅) · [보안](../../wiki/보안) |
 
 ---
 
