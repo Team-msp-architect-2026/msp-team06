@@ -142,8 +142,7 @@ msp-team06/
 │       ├── news_summarizer_trigger/       # S3 뉴스 → SQS 분배
 │       ├── summarize_news/                # Bedrock AI 뉴스 요약
 │       ├── pipeline_step/                 # Step Functions 범용 처리기
-│       ├── detect_data_update/            # Redis 캐시 무효화
-│       └── region_normalizer/             # 법정동코드 정규화 (현재 미사용)
+│       └── detect_data_update/            # Redis 캐시 무효화
 ├── infra/
 │   ├── homelens-terraform/            # Terraform IaC (17개 모듈: EKS, RDS, Redis, SQS 등)
 │   └── k8s/                           # Kubernetes manifests
