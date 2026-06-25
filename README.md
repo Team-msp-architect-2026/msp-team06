@@ -1,40 +1,59 @@
-# 🏠 HomeLens AI
-1
-> **서울 부동산 AI 분석 서비스** — 실거래가 기반 시세 조회, AI 뉴스 요약, 맞춤형 분석 리포트를 제공하는 모바일 백엔드 플랫폼
+<div align="center">
 
-<!-- 언어 & 프레임워크 -->
+# 🏠 HomeLens AI
+
+### 서울 부동산 AI 분석 서비스
+
+실거래가 기반 시세 조회, AI 뉴스 요약, 맞춤형 분석 리포트를 제공하는 모바일 백엔드 플랫폼
+
+<br>
+
+**Backend**
+
 ![Python](https://img.shields.io/badge/Python-3.11-3776AB?style=flat-square&logo=python&logoColor=white)
 ![FastAPI](https://img.shields.io/badge/FastAPI-0.115-009688?style=flat-square&logo=fastapi&logoColor=white)
 ![SQLAlchemy](https://img.shields.io/badge/SQLAlchemy-2.0-D71F00?style=flat-square&logo=sqlalchemy&logoColor=white)
 ![Pydantic](https://img.shields.io/badge/Pydantic-2.x-E92063?style=flat-square&logo=pydantic&logoColor=white)
+
+**Frontend**
+
 ![React Native](https://img.shields.io/badge/React_Native-Expo-20232A?style=flat-square&logo=react&logoColor=61DAFB)
 
-<!-- 데이터베이스 & 캐시 -->
+**Database & Cache**
+
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-17%20+%20PostGIS-4169E1?style=flat-square&logo=postgresql&logoColor=white)
 ![Redis](https://img.shields.io/badge/Redis-7-DC382D?style=flat-square&logo=redis&logoColor=white)
+![Alembic](https://img.shields.io/badge/Alembic-Migration-6BA539?style=flat-square&logo=sqlalchemy&logoColor=white)
 ![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?style=flat-square&logo=docker&logoColor=white)
 
-<!-- AWS 인프라 -->
+**Async / Messaging**
+
+![Celery](https://img.shields.io/badge/Celery-5.4-37814A?style=flat-square&logo=celery&logoColor=white)
+![AWS SQS](https://img.shields.io/badge/AWS-SQS%20+%20Step%20Functions-FF9900?style=flat-square&logo=amazonsqs&logoColor=white)
+
+**AWS Infrastructure**
+
 ![AWS Lambda](https://img.shields.io/badge/AWS-Lambda%20×9-FF9900?style=flat-square&logo=awslambda&logoColor=white)
 ![AWS EKS](https://img.shields.io/badge/AWS-EKS-FF9900?style=flat-square&logo=amazoneks&logoColor=white)
-![AWS Bedrock](https://img.shields.io/badge/AWS-Bedrock%20Claude-FF9900?style=flat-square&logo=amazonaws&logoColor=white)
-![AWS SQS](https://img.shields.io/badge/AWS-SQS%20+%20Step%20Functions-FF9900?style=flat-square&logo=amazonsqs&logoColor=white)
 ![AWS S3](https://img.shields.io/badge/AWS-S3%20+%20ElastiCache-FF9900?style=flat-square&logo=amazons3&logoColor=white)
 ![AWS EventBridge](https://img.shields.io/badge/AWS-EventBridge-FF9900?style=flat-square&logo=amazonaws&logoColor=white)
+![KEDA](https://img.shields.io/badge/KEDA-Autoscaling-326CE5?style=flat-square&logo=kubernetes&logoColor=white)
 
-<!-- AI -->
+**AI**
+
+![AWS Bedrock](https://img.shields.io/badge/AWS-Bedrock%20Claude-FF9900?style=flat-square&logo=amazonaws&logoColor=white)
 ![LangChain](https://img.shields.io/badge/LangChain-AWS-1C3C3C?style=flat-square&logo=langchain&logoColor=white)
 
-<!-- 기타 -->
-![Celery](https://img.shields.io/badge/Celery-5.4-37814A?style=flat-square&logo=celery&logoColor=white)
-![Alembic](https://img.shields.io/badge/Alembic-Migration-6BA539?style=flat-square&logo=sqlalchemy&logoColor=white)
+**Observability**
+
 ![Prometheus](https://img.shields.io/badge/Prometheus-Metrics-E6522C?style=flat-square&logo=prometheus&logoColor=white)
 ![Grafana](https://img.shields.io/badge/Grafana-Dashboard-F46800?style=flat-square&logo=grafana&logoColor=white)
-![KEDA](https://img.shields.io/badge/KEDA-Autoscaling-326CE5?style=flat-square&logo=kubernetes&logoColor=white)
+
+</div>
 
 ---
 
-## 목차
+## 📑 목차
 
 1. [프로젝트 개요](#프로젝트-개요)
 2. [아키텍처](#아키텍처)
@@ -50,36 +69,42 @@
 
 ---
 
-## 프로젝트 개요
+## 📖 프로젝트 개요
 
 HomeLens AI는 서울 아파트 실거래가 데이터를 수집·가공하여 모바일 앱(React Native / Expo)에 제공하는 백엔드 서비스입니다.
 
 **핵심 기능**
 
-- **실거래가 조회** — 국토부 API 기반 매매·전세·월세 시세, 월별 가격 추이
-- **지도 데이터** — 지역별 평균 시세 히트맵, 아파트 단지 위치 정보
-- **AI 뉴스 요약** — 네이버 뉴스 수집 후 AWS Bedrock(Claude)으로 1~2줄 요약
-- **AI 분석 리포트** — 특정 지역 맞춤 부동산 시장 분석 리포트 비동기 생성
-- **이슈 알림** — 재개발·규제 등 부동산 관련 이슈 자동 분류 및 제공
+- 🏘️ **실거래가 조회** — 국토부 API 기반 매매·전세·월세 시세, 월별 가격 추이
+- 🗺️ **지도 데이터** — 지역별 평균 시세 히트맵, 아파트 단지 위치 정보
+- 📰 **AI 뉴스 요약** — 네이버 뉴스 수집 후 AWS Bedrock(Claude)으로 1~2줄 요약
+- 🤖 **AI 분석 리포트** — 특정 지역 맞춤 부동산 시장 분석 리포트 비동기 생성
+- 🔔 **이슈 알림** — 재개발·규제 등 부동산 관련 이슈 자동 분류 및 제공
 
 ---
 
-## 아키텍처
+## 🏗 아키텍처
 
+```mermaid
+flowchart TD
+    A[React Native 앱<br/>Expo] -->|HTTPS + X-API-KEY| B[FastAPI 백엔드]
+    B -->|캐시 조회| C[Redis Cache<br/>ElastiCache]
+    C -->|Cache Miss| D[RDS PostgreSQL 17<br/>+ PostGIS]
+    D -->|결과 반환| B
 ```
-[React Native 앱 (Expo)]
-        │  HTTPS + X-API-KEY
-        ▼
-[FastAPI 백엔드] ──→ [Redis Cache (ElastiCache)]
-        │                    │ Cache Miss
-        │◄───────────────────┘
-        ▼
-[RDS PostgreSQL 17 + PostGIS]
 
-──── 데이터 파이프라인 (독립 실행) ──────────────────
-EventBridge → Lambda → S3 → Step Functions → Lambda → RDS
-                                    │
-                               SQS → Celery Worker → Bedrock (AI 리포트)
+**데이터 파이프라인 1 — 정기 배치 (EventBridge 스케줄)**
+
+```mermaid
+flowchart LR
+    A[EventBridge] --> B[Lambda] --> C[S3] --> D[Step Functions] --> E[Lambda] --> F[RDS]
+```
+
+**데이터 파이프라인 2 — AI 리포트 (사용자 요청 시 온디맨드)**
+
+```mermaid
+flowchart LR
+    A["POST /reports"] --> B[SQS] --> C[Celery Worker] --> D[Bedrock] --> E[RDS]
 ```
 
 **주요 설계 원칙**
@@ -91,7 +116,7 @@ EventBridge → Lambda → S3 → Step Functions → Lambda → RDS
 
 ---
 
-## 기술 스택
+## 🛠 기술 스택
 
 | 영역 | 기술 |
 |------|------|
@@ -110,7 +135,7 @@ EventBridge → Lambda → S3 → Step Functions → Lambda → RDS
 
 ---
 
-## 디렉터리 구조
+## 📂 디렉터리 구조
 
 ```
 msp-team06/
@@ -151,7 +176,7 @@ msp-team06/
 
 ---
 
-## 로컬 개발 환경 구성
+## 💻 로컬 개발 환경 구성
 
 ### 사전 요구사항
 
@@ -227,7 +252,7 @@ npx expo start
 
 ---
 
-## 환경 변수
+## 🔑 환경 변수
 
 `backend/.env` 파일에 아래 변수를 설정합니다.
 
@@ -265,7 +290,7 @@ API_KEY=your_x_api_key
 
 ---
 
-## API 사용법
+## 🌐 API 사용법
 
 ### Base URL
 
@@ -301,14 +326,14 @@ X-API-KEY: {your_api_key}
 ### 요청 예시
 
 ```bash
-# 강남구 아파트 매매 시세 조회
+# 성수동 아파트 매매 시세 조회
 curl -H "X-API-KEY: your_key" \
-  "https://api.homelens.ai/api/v1/analysis/price?region_id=REGION_11230&deal_type=sale"
+  "https://api.homelens.ai/api/v1/analysis/price?region_id=REGION_11680_DONG_001&deal_type=sale"
 
 # AI 분석 리포트 생성 (비동기 — report_id 반환 후 폴링)
 curl -X POST -H "X-API-KEY: your_key" \
   -H "Content-Type: application/json" \
-  -d '{"region_id": "REGION_11230"}' \
+  -d '{"region_id": "REGION_11680_DONG_001"}' \
   "https://api.homelens.ai/api/v1/analysis/report"
 
 # 리포트 결과 조회
@@ -316,11 +341,11 @@ curl -H "X-API-KEY: your_key" \
   "https://api.homelens.ai/api/v1/analysis/report/{report_id}"
 ```
 
-> 전체 요청/응답 스펙은 [Wiki: API 명세서 v5.0](./API-명세서-v5.md) 참고
+> 전체 요청/응답 스펙은 [Wiki: API 명세서 v5.0](./API-명세서.md) 참고
 
 ---
 
-## 데이터 파이프라인
+## 🔄 데이터 파이프라인
 
 Lambda 함수 9개가 두 가지 파이프라인으로 동작합니다.
 
@@ -359,7 +384,7 @@ POST /analysis/report
 
 ---
 
-## 캐시 정책
+## ⚡ 캐시 정책
 
 Redis (AWS ElastiCache, `eu-west-3`)를 Cache-Aside 패턴으로 사용합니다.
 
@@ -379,7 +404,7 @@ Redis (AWS ElastiCache, `eu-west-3`)를 Cache-Aside 패턴으로 사용합니다
 
 ---
 
-## DB 마이그레이션
+## 🗃 DB 마이그레이션
 
 Alembic으로 스키마를 관리합니다. 마이그레이션 파일은 `data-pipeline/alembic/versions/`에 위치합니다.
 
@@ -405,21 +430,25 @@ initial_schema
                 └→ v5_add_apt_seq_columns
 ```
 
-> 전체 스키마(13개 테이블, 55개 인덱스)는 [Wiki: DB 스키마 v5.0](./DB-스키마-v5.md) 참고
+> 전체 스키마(13개 테이블, 55개 인덱스)는 [Wiki: DB 스키마](./DB-스키마.md) 참고
 
 ---
 
-## 위키 문서
+## 📚 위키 문서
 
 | 문서 | 내용 |
 |------|------|
-| [API 명세서 v5.0](./API-명세서-v5.md) | 전체 14개 엔드포인트 요청/응답 스펙, v5.0 변경이력 |
-| [DB 스키마 v5.0](./DB-스키마-v5.md) | 13개 테이블 컬럼 정의, 인덱스, 마이그레이션 이력 |
+| [API 명세서](./API-명세서.md) | 전체 14개 엔드포인트 요청/응답 스펙, v5.0 변경이력 |
+| [DB 스키마](./DB-스키마.md) | 13개 테이블 컬럼 정의, 인덱스, 마이그레이션 이력 |
 | [캐시 & 갱신정책](./캐시-갱신정책.md) | TTL 정책, Redis 키 패턴, 무효화 전략 |
 | [배치작업 명세서](./배치작업-명세서.md) | Lambda 9개 스펙, Step Functions 파이프라인 흐름 |
 
 ---
 
-## 팀
+<div align="center">
 
-**MSP Architect Team 06** — 2026
+### 팀
+
+**MSP Architect Team 06** · 2026
+
+</div>
