@@ -5,9 +5,18 @@
 ### 서울 부동산 AI 분석 서비스
 
 Homelens AI는 동·아파트명으로 검색 시 실거래가, 주변 인프라, 지역 뉴스, AI 종합 리포트를 한 번에 제공합니다.
+
+
+<img width="1477" height="962" alt="image" src="https://github.com/user-attachments/assets/692e1e3a-4f6c-4680-ac4b-f309bfa71ffb" />
+
 뉴스 한 줄에도 수많은 부동산 용어로 인해 이해하기 어려운 사람들,
+
 수시로 바뀌는 정부 정책을 빠르게 따라가고 싶은 사람들,
-지역별 가격 전망과 주변 인프라를 한 번에 비교해보고 싶어하는 사람들을 위한 플랫폼입니다.
+
+지역별 가격 전망과 주변 인프라를 
+
+한 번에 비교해보고 싶어하는 사람들을 위한 플랫폼입니다.
+
 
 <br>
 
@@ -56,7 +65,7 @@ Homelens AI는 동·아파트명으로 검색 시 실거래가, 주변 인프라
 
 ## 📖 프로젝트 개요
 
-공공 기관 데이터를 사용하여 신뢰성을 기반으로 한 종합 리포트를 출력하도록 설계된 AI기반의 모바일 앱 서비스입니다.
+공공데이터·지도·뉴스를 결합한 AI 부동산 정보 플랫폼을 EKS 기반 컨테이너 아키텍처로 시스템을 운영합니다.
 
 **핵심 기능**
 
@@ -68,31 +77,14 @@ Homelens AI는 동·아파트명으로 검색 시 실거래가, 주변 인프라
 ---
 
 
-## 🏗 아키텍처
+## 🏗 전체 아키텍처
 
-```mermaid
-flowchart TD
-    A[React Native 앱<br/>Expo] -->|HTTPS + X-API-KEY| B[FastAPI 백엔드]
-    B -->|캐시 조회| C[Redis Cache<br/>ElastiCache]
-    C -->|Cache Miss| D[RDS PostgreSQL 17<br/>+ PostGIS]
-    D -->|결과 반환| B
-```
+<img width="1764" height="877" alt="image" src="https://github.com/user-attachments/assets/8c7230fb-fdf1-44e3-a0b1-ac9f66b420af" />
 
-**데이터 파이프라인 1 — 정기 배치 (EventBridge 스케줄)**
-
-```mermaid
-flowchart LR
-    A[EventBridge] --> B[Lambda] --> C[S3] --> D[Step Functions] --> E[Lambda] --> F[RDS]
-```
-
-**데이터 파이프라인 2 — AI 리포트 (사용자 요청 시 온디맨드)**
-
-```mermaid
-flowchart LR
-    A["POST /reports"] --> B[SQS] --> C[Celery Worker] --> D[Bedrock] --> E[RDS]
-```
+---
 
 **주요 설계 원칙**
+
 
 - API 요청 시 Redis → DB → 외부 API 순으로 조회 (Cache-Aside 패턴)
 - 데이터 수집 파이프라인은 EventBridge 스케줄로 백엔드와 완전 분리 실행
@@ -101,7 +93,136 @@ flowchart LR
 
 ---
 
+HomeLens는 다음 설계 원칙을 기반으로 구축되었습니다.
+
+### 1. Cache-Aside 패턴 — Redis → DB → 외부 API 순 조회
+
+API 요청 발생 시 아래 순서로 데이터를 조회하여 외부 API 호출을 최소화합니다.
+
+```
+요청 수신
+  → ① Redis 캐시 조회 (Hit 시 즉시 반환)
+  → ② RDS PostgreSQL 조회 (Hit 시 캐시 갱신 후 반환)
+  → ③ 외부 공공 API 호출 (국토부·카카오·네이버·행안부)
+     → DB 저장 → 캐시 갱신 → 응답 반환
+```
+
+반복 요청에 대한 응답 속도를 개선하고 외부 API 쿼터 소진을 방지합니다.
+
+---
+
+### 2. 데이터 수집 파이프라인의 백엔드 완전 분리
+
+실거래가·뉴스 데이터 수집은 **백엔드 서버와 완전히 분리된 파이프라인**으로 운영됩니다.
+
+```
+EventBridge 스케줄
+  ├── 매일 새벽 (KST 02:00) → 뉴스 수집 파이프라인
+  └── 월 1회             → 실거래가 수집 파이프라인
+         ↓
+  Step Functions (수집 → 정규화 → DB 저장 → AI 요약)
+         ↓
+  Lambda (VPC 외부 배치, 단위 작업 수행)
+         ↓
+  S3 (원본 저장) → RDS (정규화 데이터 저장)
+```
+
+백엔드 서버 부하와 무관하게 데이터를 최신 상태로 유지하며, 파이프라인 장애가 서비스에 영향을 주지 않습니다.
+
+
+---
+
+### 3. AI 리포트 비동기 처리 — SQS + Celery (응답 지연 없음)
+
+AI 리포트 생성(약 30~45초)을 동기 응답에 포함시키지 않고, **큐 기반 비동기 처리**로 분리합니다.
+
+```
+사용자 요청 (POST /reports)
+  → FastAPI가 SQS에 메시지 적재 후 즉시 202 반환
+  → KEDA가 SQS 큐 깊이 감지 → Celery Worker 자동 스케일아웃
+  → Celery Worker: 외부 API 수집 → Bedrock(Claude) 호출 → DB 저장
+  → 사용자 폴링 (GET /reports/{id}/status) → 완료 시 리포트 반환
+```
+
+AI 리포트 생성 중에도 다른 API 요청이 지연 없이 처리되며, **3계층 오토스케일링**(KEDA → HPA → Cluster Autoscaler)으로 부하에 자동 대응합니다.
+
+---
+
+### 4. 모든 시크릿의 중앙화 관리 — AWS Secrets Manager
+
+DB 비밀번호·외부 API 키 등 모든 민감 정보는 코드와 완전히 분리하여 관리합니다.
+
+| 시크릿 경로 | 저장 내용 |
+|---|---|
+| `homelens/{env}/rds/postgres` | DB 호스트·포트·사용자 정보 |
+| `homelens/{env}/redis/auth` | Redis 엔드포인트 |
+| `homelens/{env}/bedrock/config` | 모델 ID·리전·max_tokens |
+| `homelens/{env}/kakao/map-api` | 카카오맵 API 키 |
+| `homelens/{env}/naver/news-api` | 네이버 뉴스 API 키 |
+| `homelens/{env}/molit/real-estate-api` | 국토부 API 키 |
+| `homelens/{env}/mois/address-api` | 행안부 주소 API 키 |
+
+**IRSA(IAM Roles for Service Accounts)** 를 통해 Pod별 최소 권한만 부여하며, 코드 내 AWS 자격증명 하드코딩을 원천 차단합니다.
+
+---
+
+### 5. Infrastructure as Code — Terraform 완전 코드화
+
+NAT Gateway부터 EKS, WAF, 모니터링까지 **모든 인프라를 Terraform으로 선언**하고 13개 모듈로 관리합니다.
+
+- 환경별 독립 구성: `dev` / `staging` / `prod`
+- 원격 상태 관리: S3 백엔드 + DynamoDB 락
+- 민감 변수는 `secrets.auto.tfvars`(gitignore)로 분리
+
+---
+
+### 6. GitOps 기반 자동 배포 — GitHub Actions + ArgoCD
+
+```
+git push origin dev
+  → GitHub Actions: 이미지 빌드 → ECR 푸시 (태그: Git SHA)
+  → ArgoCD: infra/k8s/ 변경 감지 → EKS 롤링 업데이트 자동 적용
+```
+
+`latest` 태그 배포를 금지하고 **Git SHA 고정 태그**를 사용하여 모든 배포 이력을 추적 가능하게 유지합니다.
+
+---
+
+### 7. Zero Trust 보안 — Bastion 없는 완전 IAM 기반 접근
+
+Public Subnet에 EC2 Bastion을 두지 않고, **IAM 자격증명만으로 모든 리소스에 접근**합니다.
+
+| 리소스 | 접근 방식 |
+|---|---|
+| EKS API | `aws eks get-token` (IAM 인증) |
+| Grafana / ArgoCD | `kubectl port-forward` |
+| RDS / Redis | EKS 내 임시 디버그 Pod |
+
+22번 포트를 열지 않아 SSH 기반 공격 표면을 완전히 제거하며, 모든 접근 이력은 CloudTrail에 기록됩니다.
+
+---
+
+
+### 8. 고가용성 — Multi-AZ 이중화
+
+핵심 데이터 계층은 **2개 가용 영역(eu-west-3a / eu-west-3c)에 이중화**하여 단일 장애점을 제거합니다.
+
+```
+eu-west-3a                      eu-west-3c
+├── EKS Worker Node (min=2)     ├── EKS Worker Node
+├── RDS PostgreSQL Primary      ├── RDS Standby (자동 Failover)
+├── ElastiCache Redis Primary   └── ElastiCache Redis Replica
+└── NAT Gateway                 └── NAT Gateway
+
+```
+
+---
+
+
+
 ## 🛠 기술 스택
+
+
 
 | 영역 | 기술 |
 |------|------|
@@ -118,43 +239,9 @@ flowchart LR
 | **모바일 프론트** | React Native (Expo) |
 | **로컬 개발** | Docker Compose (PostGIS 17-3.5, Redis 7) |
 
----
-
-## 📂 디렉터리 구조
-
-```
-msp-team06/
-├── frontend/                          # React Native (Expo) 앱
-├── backend/
-│   └── app/
-│       ├── main.py                    # FastAPI 진입점, 라우터 등록, CORS 설정
-│       ├── worker.py                  # Celery 워커 (AI 리포트 비동기 생성)
-│       ├── metrics.py                 # Prometheus 메트릭
-│       ├── api/                       # 가격·지도·뉴스 엔드포인트
-│       ├── core/                      # 설정, DB 엔진, Redis 연결
-│       ├── models/                    # SQLAlchemy ORM 모델
-│       ├── services/                  # 비즈니스 로직 (Redis → DB → 외부 API)
-│       ├── schemas/                   # Pydantic 요청/응답 스키마
-│       └── utils/                     # 뉴스 분류 등 유틸
-├── data-pipeline/
-│   ├── alembic/                       # DB 마이그레이션
-│   └── lambdas/                       # AWS Lambda 함수 (9개)
-│       ├── molit_price_ingest/            # 국토부 실거래가 수집
-│       ├── normalize_price_data/          # S3 → DB 정규화, apt_seq·단지명 매칭
-│       ├── apt_complex_ingest/            # 아파트 단지 정보 수집
-│       ├── news_collector/                # 네이버 뉴스 수집
-│       ├── news_summarizer_trigger/       # S3 뉴스 → SQS 분배
-│       ├── summarize_news/                # Bedrock AI 뉴스 요약
-│       ├── pipeline_step/                 # Step Functions 범용 처리기
-│       └── detect_data_update/            # Redis 캐시 무효화
-├── infra/
-│   ├── homelens-terraform/            # Terraform IaC (17개 모듈: EKS, RDS, Redis, SQS 등)
-│   └── k8s/                           # Kubernetes manifests
-├── docs/                              # 설계 문서 (ERD, API 명세, 요구사항 등)
-└── scripts/                           # 운영/테스트 스크립트
-```
 
 ---
+
 
 ## 💻 로컬 개발 환경 구성
 
@@ -228,15 +315,19 @@ celery -A app.worker worker --loglevel=info
 # 루트 디렉터리에서
 npm install
 npx expo start
-```
+
 
 ---
 
+```
+
 ## 🔑 환경 변수
+
 
 `backend/.env` 파일에 아래 변수를 설정합니다.
 
 ```dotenv
+
 # ── 실행 환경 ──────────────────────────────────────────
 ENV=dev                          # dev | prod
 
@@ -263,10 +354,13 @@ ADDRESS_API_KEY=your_address_api_key       # 행정안전부 도로명주소
 
 # ── API 보안 ───────────────────────────────────────────
 API_KEY=your_x_api_key
+
 ```
+
 
 > **프로덕션 환경**에서는 `.env` 대신 AWS Secrets Manager를 사용합니다.
 > 시크릿 경로: `homelens/{ENV}/rds/postgres`, `homelens/{ENV}/redis`, `homelens/{ENV}/api-keys`
+
 
 ---
 
