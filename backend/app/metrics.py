@@ -1,0 +1,97 @@
+from prometheus_client import Histogram, Counter, Gauge, start_http_server
+
+# ── 시나리오 1: SQS → Celery → Bedrock → DB 파이프라인 ─────────────────────
+SQS_CONSUME_LATENCY = Histogram(
+    "homelens_sqs_consume_duration_seconds",
+    "SQS 메시지 전송 ~ Celery task 시작 지연",
+    buckets=[0.5, 1, 2, 5, 10, 20, 30, 60]
+)
+BEDROCK_INVOKE_LATENCY = Histogram(
+    "homelens_bedrock_invoke_duration_seconds",
+    "Bedrock InvokeModel 소요시간",
+    buckets=[1, 3, 5, 10, 15, 20, 30, 60]
+)
+DB_SAVE_LATENCY = Histogram(
+    "homelens_db_save_duration_seconds",
+    "DB INSERT→COMMIT 소요시간",
+    buckets=[0.01, 0.05, 0.1, 0.5, 1, 2, 5]
+)
+PIPELINE_TOTAL_LATENCY = Histogram(
+    "homelens_pipeline_total_duration_seconds",
+    "SQS 전송 ~ DB 완료 전체 파이프라인 지연",
+    buckets=[5, 10, 15, 20, 25, 30, 45, 60]
+)
+PIPELINE_ERRORS = Counter(
+    "homelens_pipeline_errors_total",
+    "파이프라인 에러 총 횟수"
+)
+
+# ── 시나리오 2: 사용자 접속 (HTTP + DB 쿼리) ───────────────────────────────
+HTTP_REQUEST_DURATION = Histogram(
+    "homelens_http_request_duration_seconds",
+    "HTTP 요청 응답시간",
+    labelnames=["method", "endpoint", "status_code"],
+    buckets=[0.01, 0.05, 0.1, 0.25, 0.5, 1, 2, 5],
+)
+HTTP_REQUESTS_TOTAL = Counter(
+    "homelens_http_requests_total",
+    "HTTP 요청 총 횟수",
+    labelnames=["method", "endpoint", "status_code"],
+)
+HTTP_ERRORS_TOTAL = Counter(
+    "homelens_http_errors_total",
+    "HTTP 4xx/5xx 에러 총 횟수",
+    labelnames=["method", "endpoint", "status_code"],
+)
+DB_QUERY_LATENCY = Histogram(
+    "homelens_db_query_duration_seconds",
+    "apt_seq 기반 DB 쿼리 응답시간",
+    labelnames=["query_type"],
+    buckets=[0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1],
+)
+EXTERNAL_API_CALLS_TOTAL = Counter(
+    "homelens_external_api_calls_total",
+    "DB 조회 실패 후 외부 API fallback 호출 횟수",
+    labelnames=["api_type"],
+)
+
+# ── 시나리오 3: Celery 워커 프로세스 리소스 ──────────────────────────────────
+# psutil 15초 샘플링 → {process="celery"} 라벨로 FastAPI와 구분
+WORKER_CPU_PERCENT = Gauge(
+    "homelens_worker_cpu_percent",
+    "Celery 워커 프로세스 CPU 사용률 (%)"
+)
+WORKER_MEMORY_RSS_BYTES = Gauge(
+    "homelens_worker_memory_rss_bytes",
+    "Celery 워커 프로세스 메모리 RSS (bytes)"
+)
+
+# ── 시나리오 4: SQS 큐 깊이 ──────────────────────────────────────────────────
+# Celery worker가 30초마다 SQS API 폴링 → 대기열 적체 감지
+SQS_QUEUE_DEPTH = Gauge(
+    "homelens_sqs_queue_depth",
+    "SQS 큐 대기 중인 메시지 수 (ApproximateNumberOfMessages)"
+)
+
+# ── 시나리오 5: Redis 캐시 히트/미스 ─────────────────────────────────────────
+# cache_get() 호출 시 키 프리픽스별(price/news/report) 히트·미스 계수
+CACHE_HITS_TOTAL = Counter(
+    "homelens_cache_hits_total",
+    "Redis 캐시 히트 횟수",
+    labelnames=["cache_type"],
+)
+CACHE_MISSES_TOTAL = Counter(
+    "homelens_cache_misses_total",
+    "Redis 캐시 미스 횟수",
+    labelnames=["cache_type"],
+)
+
+# 시작 시점에 label 조합을 등록해 Prometheus에 시리즈가 즉시 생성되게 한다.
+# 이렇게 해야 최초 히트 전에도 PromQL이 0을 반환하고 "No data"를 피할 수 있다.
+for _ct in ("price", "news", "report", "kapt", "other"):
+    CACHE_HITS_TOTAL.labels(cache_type=_ct)
+    CACHE_MISSES_TOTAL.labels(cache_type=_ct)
+
+
+def start_metrics_server():
+    start_http_server(8000)

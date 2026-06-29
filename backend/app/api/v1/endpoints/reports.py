@@ -1,0 +1,187 @@
+# HomeLens AI - AI 리포트 API 엔드포인트
+# 비동기 생성 방식: POST → Celery → RDS → GET
+import uuid
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select, text
+from sqlalchemy.dialects.postgresql import insert as pg_insert
+import time
+from datetime import datetime, date, timedelta
+from app.core.database import get_db
+from app.models.report import Report, ReportSection
+from app.models.region import Region
+from app.schemas.report import (
+    ReportCreateRequest,
+    ReportCreateResponse,
+    ReportStatusResponse,
+    ReportResponse,
+)
+router = APIRouter()
+
+@router.post("", response_model=ReportCreateResponse)
+async def create_report(
+    request: ReportCreateRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    report_id = str(uuid.uuid4())
+    region_name = getattr(request, "regionName", "") or ""
+    lat = getattr(request, "lat", 0.0) or 0.0
+    lng = getattr(request, "lng", 0.0) or 0.0
+    apt_seq = getattr(request, "aptSeq", None)
+
+    existing_result = await db.execute(
+        select(Report).where(
+            Report.region_id == request.regionId,
+            Report.status.in_(["pending", "processing", "completed"])
+        ).order_by(Report.created_at.desc())
+    )
+    # failed 상태 리포트 삭제 (재생성을 위해)
+    await db.execute(
+        text("DELETE FROM reports WHERE region_id = :region_id AND status = 'failed'"),
+        {"region_id": request.regionId}
+    )
+    await db.commit()
+    existing_report = existing_result.scalar_one_or_none()
+
+    # processing 상태가 10분 이상 지났으면 failed로 처리
+    if existing_report and existing_report.status == "processing":
+        if datetime.now() - existing_report.created_at > timedelta(minutes=10):
+            existing_report.status = "failed"
+            await db.commit()
+            existing_report = None
+
+    if existing_report:
+        return {
+            "reportId": existing_report.id,
+            "status": existing_report.status,
+            "estimatedSeconds": 45,
+        }
+
+    region_stmt = pg_insert(Region).values(
+        id=request.regionId,
+        name=region_name or request.regionId,
+        full_address=region_name or "",
+        legal_dong_code="",
+        lat=lat,
+        lng=lng,
+        property_type="apartment",
+        source_type="complex",
+    ).on_conflict_do_nothing(index_elements=["id"])
+    await db.execute(region_stmt)
+
+    # price_trends 최신 month 기준으로 data_base_date 결정
+    if region_name:
+        latest_month_result = await db.execute(
+            text("""
+                SELECT MAX(pt.month) FROM price_trends pt
+                JOIN locations l ON pt.apt_seq = l.apt_seq
+                WHERE l.address LIKE :region_name
+            """),
+            {"region_name": f"%{region_name}%"}
+        )
+    else:
+        latest_month_result = await db.execute(
+            text("SELECT MAX(month) FROM price_trends WHERE apt_seq IS NOT NULL")
+        )
+    latest_month = latest_month_result.scalar()
+    data_base_date = date(int(latest_month[:4]), int(latest_month[5:7]), 1) if latest_month else date.today()
+
+    try:
+        report = Report(
+            id=report_id,
+            region_id=request.regionId,
+            status="pending",
+            progress_pct=0,
+            data_base_date=data_base_date,
+            created_at=datetime.now(),
+        )
+        db.add(report)
+        await db.commit()
+    except Exception as e:
+        await db.rollback()
+        # unique constraint 충돌 시 기존 리포트 반환
+        existing = await db.execute(
+            select(Report).where(
+                Report.region_id == request.regionId,
+                Report.status.in_(["pending", "processing", "completed"])
+            ).order_by(Report.created_at.desc())
+        )
+        existing_report = existing.scalar_one_or_none()
+        if existing_report:
+            return {
+                "reportId": existing_report.id,
+                "status": existing_report.status,
+                "estimatedSeconds": 45,
+            }
+        raise e
+
+    try:
+        from app.worker import generate_report_task
+        generate_report_task.apply_async(
+            args=[report_id, request.regionId, region_name, lat, lng, time.time(), apt_seq],
+            task_id=report_id,
+        )
+        print(f"[Report] SQS 전송 성공: {report_id}")
+    except Exception as e:
+        print(f"[Report] SQS 전송 실패: {e}")
+        report.status = "failed"
+        report.fail_reason = str(e)
+        await db.commit()
+
+    return {
+        "reportId": report_id,
+        "status": "pending",
+        "estimatedSeconds": 45,
+    }
+
+@router.get("/{report_id}/status", response_model=ReportStatusResponse)
+async def get_report_status(
+    report_id: str,
+    db: AsyncSession = Depends(get_db),
+):
+    result = await db.execute(select(Report).where(Report.id == report_id))
+    report = result.scalar_one_or_none()
+    if not report:
+        raise HTTPException(status_code=404, detail="리포트를 찾을 수 없습니다")
+    return {
+        "reportId": report_id,
+        "status": report.status,
+        "progressPct": report.progress_pct,
+        "completedAt": report.completed_at.isoformat() if report.completed_at else None,
+        "failReason": report.fail_reason,
+    }
+
+@router.get("/{report_id}", response_model=ReportResponse)
+async def get_report(
+    report_id: str,
+    db: AsyncSession = Depends(get_db),
+):
+    result = await db.execute(select(Report).where(Report.id == report_id))
+    report = result.scalar_one_or_none()
+    if not report:
+        raise HTTPException(status_code=404, detail="리포트를 찾을 수 없습니다")
+    if report.status != "completed":
+        raise HTTPException(status_code=404, detail="리포트가 아직 생성 중입니다")
+    sections_result = await db.execute(
+        select(ReportSection)
+        .where(ReportSection.report_id == report_id)
+        .order_by(ReportSection.sort_order)
+    )
+    sections = sections_result.scalars().all()
+    return {
+        "reportId": report_id,
+        "regionId": report.region_id,
+        "summary": report.summary or "",
+        "sections": [
+            {
+                "sectionKey": s.section_key,
+                "sectionTitle": s.section_title,
+                "content": s.content,
+                "sortOrder": s.sort_order,
+            }
+            for s in sections
+        ],
+        "disclaimer": report.disclaimer or "",
+        "generatedAt": report.generated_at.isoformat() if report.generated_at else datetime.now().isoformat(),
+        "dataBaseDate": str(report.data_base_date) if report.data_base_date else str(date.today()),
+    }

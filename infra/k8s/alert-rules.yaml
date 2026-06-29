@@ -1,0 +1,86 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: homelens-alert-rules
+  namespace: monitoring
+  labels:
+    release: kube-prometheus-stack
+spec:
+  groups:
+    # ── 시나리오 1: SQS → Celery → Bedrock → DB 파이프라인 ────────────────
+    - name: homelens.pipeline
+      rules:
+        - alert: PipelineErrorRateHigh
+          expr: |
+            increase(homelens_pipeline_errors_total[5m]) > 3
+          for: 1m
+          labels:
+            severity: critical
+          annotations:
+            summary: "파이프라인 에러율 과다"
+            description: "5분 동안 파이프라인 에러가 3건 이상 발생했습니다."
+
+        - alert: BedrockLatencyHigh
+          expr: |
+            histogram_quantile(0.95,
+              sum(increase(homelens_bedrock_invoke_duration_seconds_bucket[10m])) by (le)
+            ) > 45
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Bedrock 호출 지연 목표 초과"
+            description: "Bedrock InvokeModel p95 지연이 45초를 초과했습니다."
+
+        - alert: PipelineTotalLatencyHigh
+          expr: |
+            histogram_quantile(0.90,
+              sum(increase(homelens_pipeline_total_duration_seconds_bucket[10m])) by (le)
+            ) > 60
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "전체 파이프라인 지연 목표 초과"
+            description: "SQS→DB 전체 파이프라인 p90 지연이 60초를 초과했습니다."
+
+    # ── 시나리오 2: 사용자 접속 (HTTP + DB 쿼리) ──────────────────────────
+    - name: homelens.user-access
+      rules:
+        - alert: HttpErrorRateHigh
+          expr: |
+            (
+              sum(increase(homelens_http_errors_total[5m]))
+              /
+              sum(increase(homelens_http_requests_total[5m]))
+            ) > 0.05
+          for: 1m
+          labels:
+            severity: critical
+          annotations:
+            summary: "HTTP 에러율 5% 초과"
+            description: "FastAPI 전체 요청 중 에러 비율이 5분 이상 5%를 초과했습니다."
+
+        - alert: HttpResponseTimeHigh
+          expr: |
+            histogram_quantile(0.95,
+              sum(increase(homelens_http_request_duration_seconds_bucket[5m])) by (le)
+            ) > 2
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "HTTP p95 응답시간 2초 초과"
+            description: "FastAPI HTTP 요청 p95 응답시간이 5분 이상 2초를 초과했습니다."
+
+        - alert: DbQueryLatencyHigh
+          expr: |
+            histogram_quantile(0.95,
+              sum by (le) (increase(homelens_db_query_duration_seconds_bucket[5m]))
+            ) > 0.5
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "DB 쿼리 p95 지연 500ms 초과"
+            description: "apt_seq 기반 DB 쿼리 p95 지연이 5분 이상 500ms를 초과했습니다."

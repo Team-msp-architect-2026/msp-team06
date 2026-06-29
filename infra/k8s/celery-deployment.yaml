@@ -1,0 +1,66 @@
+# CI/CD 전용 — Terraform이 초기 골격을 생성하고 ignore_changes로 image를 보호하지 않음
+# 실제 이미지 배포 시 kubectl apply -f celery-deployment.yaml 또는
+# kubectl set image deployment/celery-worker celery-worker=<image>:<sha> -n homelens
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: celery-worker
+  namespace: homelens
+  labels:
+    app: celery-worker
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: celery-worker
+  template:
+    metadata:
+      labels:
+        app: celery-worker
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8000"
+        prometheus.io/path: "/metrics" 
+    spec:
+      serviceAccountName: celery-worker
+
+      nodeSelector:
+        role: worker
+      tolerations:
+        - key: dedicated
+          value: worker
+          operator: Equal
+          effect: NoSchedule
+
+      containers:
+        - name: celery-worker
+          # CI/CD에서 실제 이미지 태그(Git SHA)로 교체
+          image: 611058323802.dkr.ecr.eu-west-3.amazonaws.com/homelens-celeryworker:b41ed5bea0a2e9c396a782a22afa51cedb2cbf37
+          imagePullPolicy: Always
+
+          command: ["celery", "-A", "app.worker", "worker", "--loglevel=info", "--concurrency=4", "--pool=threads"]
+
+          envFrom:
+            - configMapRef:
+                name: homelens-config
+          env:
+            - name: CELERY_BROKER_URL
+              value: "sqs://"
+            - name: AWS_REGION
+              value: "eu-west-3"
+
+          resources:
+            requests:
+              cpu: "250m"
+              memory: "512Mi"
+            limits:
+              cpu: "1000m"
+              memory: "1Gi"
+
+          livenessProbe:
+            exec:
+              command: ["python", "-c", "import os; os.kill(1, 0)"]
+            initialDelaySeconds: 60
+            periodSeconds: 120
+            timeoutSeconds: 10
+            failureThreshold: 3

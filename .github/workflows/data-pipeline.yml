@@ -1,0 +1,52 @@
+name: Data Pipeline Deploy
+
+on:
+  push:
+    branches:
+      - dev
+    paths:
+      - 'data-pipeline/**'
+      - '.github/workflows/data-pipeline.yml'
+
+env:
+  AWS_REGION: eu-west-3
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  deploy-lambdas:
+    name: Deploy Lambda Functions
+    runs-on: ubuntu-latest
+    steps:
+      - name: 코드 체크아웃
+        uses: actions/checkout@v4
+
+      - name: AWS 인증 (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::611058323802:role/homelens-github-actions-deploy-role
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Lambda 함수 배포 (전체)
+        working-directory: data-pipeline/lambdas
+        run: |
+          for lambda_dir in */; do
+            lambda_name="${lambda_dir%/}"
+            function_name="homelens-dev-${lambda_name//_/-}"
+            echo "📦 $function_name 배포 중..."
+            cd $lambda_name
+            mkdir -p dist
+            cp handler.py dist/
+            pip install psycopg2-binary redis -t ./dist/ -q 2>/dev/null || true
+            cd dist
+            zip -r ../../${lambda_name}.zip .
+            cd ../..
+            aws lambda update-function-code \
+              --function-name $function_name \
+              --zip-file fileb://${lambda_name}.zip \
+              --region ${{ env.AWS_REGION }} \
+            && echo "✅ $function_name 배포 완료" \
+            || echo "⚠️ $function_name 없음 - 건너뜀"
+          done

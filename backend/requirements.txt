@@ -1,0 +1,22 @@
+# 프로젝트 패키지 목록
+# pip install -r requirements.txt 로 한 번에 설치 가능
+
+fastapi==0.115.0
+uvicorn==0.30.6
+sqlalchemy==2.0.35
+asyncpg==0.29.0
+alembic==1.13.3
+pydantic-settings==2.5.2
+python-dotenv==1.0.1
+httpx==0.27.2
+celery[sqs]==5.4.0
+kombu[sqs]==5.4.0
+redis==5.1.1
+anthropic==0.34.2
+xmltodict==1.0.4
+boto3==1.35.0
+psycopg2-binary==2.9.9
+prometheus-client>=0.20.0
+psutil>=5.9.0
+langchain-aws>=0.2.0
+langchain-core>=0.3.0

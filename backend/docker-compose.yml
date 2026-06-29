@@ -1,0 +1,25 @@
+# 로컬 개발용 DB/Redis 컨테이너 설정
+# PostgreSQL + PostGIS, Redis 컨테이너 실행
+# docker-compose up -d 로 로컬 DB 환경 구성
+
+services:
+  db:
+    image: postgis/postgis:17-3.5
+    container_name: homelens-db
+    environment:
+      POSTGRES_DB: homelens_dev
+      POSTGRES_USER: homelens
+      POSTGRES_PASSWORD: homelens1234
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7
+    container_name: homelens-redis
+    ports:
+      - "6379:6379"
+
+volumes:
+  postgres_data:

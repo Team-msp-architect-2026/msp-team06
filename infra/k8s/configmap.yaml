@@ -1,0 +1,23 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: homelens-config
+  namespace: homelens
+data:
+  AWS_REGION: "eu-west-3"
+  ENVIRONMENT: "dev"
+
+  # 애플리케이션이 런타임에 boto3로 읽어올 Secrets Manager 경로 (실제 값 아님)
+  RDS_SECRET_NAME: "homelens/dev/rds/postgres"
+  REDIS_SECRET_NAME: "homelens/dev/redis/auth"
+  KAKAO_SECRET_NAME: "homelens/dev/kakao/map-api"
+  NAVER_SECRET_NAME: "homelens/dev/naver/news-api"
+  MOLIT_SECRET_NAME: "homelens/dev/molit/real-estate-api"
+  MOLIT_APT_LIST_ENDPOINT: "https://apis.data.go.kr/1613000/AptListService3"
+  MOLIT_APT_TRADE_ENDPOINT: "https://apis.data.go.kr/1613000/RTMSDataSvcAptTradeDev"
+  MOLIT_APT_RENT_ENDPOINT: "https://apis.data.go.kr/1613000/RTMSDataSvcAptRent"
+  MOIS_SECRET_NAME: "homelens/dev/mois/address-api"
+  BEDROCK_SECRET_NAME: "homelens/dev/bedrock/config"
+
+  # terraform output -json | jq -r '.sqs_report_queue_url.value' 로 확인 후 채울 것
+  REPORT_QUEUE_URL: ""

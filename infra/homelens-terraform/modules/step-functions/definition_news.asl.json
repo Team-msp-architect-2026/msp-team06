@@ -1,0 +1,49 @@
+{
+    "Comment" : "뉴스 수집 -> AI 요약 트리거 파이프라인",
+    "StartAt": "CollectNews",
+    "States": {
+        "CollectNews": {
+            "Type": "Task",
+            "Resource": "${news_collector_arn}",
+            "Next": "SummarizeTrigger",
+            "Retry": [
+                {
+                    "ErrorEquals": ["Lambda.ServiceException", "Lambda.TooManyRequestsException"],
+                    "IntervalSeconds": 30,
+                    "MaxAttempts": 3,
+                    "BackoffRate": 2
+                }
+            ],
+            "Catch": [
+                {
+                    "ErrorEquals": ["States.ALL"],
+                    "Next": "PipelineFailed"
+                }
+            ]
+        },
+        "SummarizeTrigger": {
+            "Type": "Task",
+            "Resource": "${news_summarizer_trigger_arn}",
+            "End": true,
+            "Retry": [
+            {
+                "ErrorEquals": ["Lambda.ServiceException"],
+                "IntervalSeconds": 30,
+                "MaxAttempts": 3,
+                "BackoffRate": 2
+            }
+            ],
+            "Catch": [
+                {
+                    "ErrorEquals": ["States.ALL"],
+                    "Next": "PipelineFailed"
+                }
+            ]
+        },
+        "PipelineFailed": {
+            "Type": "Fail",
+            "Error": "PipelineFailed",
+            "Cause": "뉴스 파이프라인 실패 - CloudWatch Logs 확인" 
+        }
+    }
+}

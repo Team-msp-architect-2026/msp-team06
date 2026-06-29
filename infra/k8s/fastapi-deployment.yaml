@@ -1,0 +1,66 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: fastapi
+  namespace: homelens
+  labels:
+    app: fastapi
+spec:
+  replicas: 2
+  # HPA(fastapi-hpa)가 replicas를 자동 제어하므로 여기 값은 초기값으로만 사용됨
+  selector:
+    matchLabels:
+      app: fastapi
+  template:
+    metadata:
+      labels:
+        app: fastapi
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8080"
+        prometheus.io/path: "/metrics"
+    spec:
+      serviceAccountName: fastapi
+
+      # api 노드그룹에만 배치 — worker 노드는 dedicated=worker:NoSchedule 테인트가 있어 자동 배제됨
+      # worker 노드그룹 taint 때문에 별도 nodeSelector 없어도 api 노드에만 스케줄링됨
+
+      containers:
+        - name: fastapi
+          # CI/CD에서 실제 이미지 태그(Git SHA)로 교체
+          image: 611058323802.dkr.ecr.eu-west-3.amazonaws.com/homelens-fastapi:b41ed5bea0a2e9c396a782a22afa51cedb2cbf37
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8080
+
+          command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8080"]
+
+          envFrom:
+            - configMapRef:
+                name: homelens-config
+
+          resources:
+            requests:
+              cpu: "250m"
+              memory: "256Mi"
+            limits:
+              cpu: "1000m"
+              memory: "1Gi"
+
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 15
+            periodSeconds: 20
+            timeoutSeconds: 5
+            failureThreshold: 3
+
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
